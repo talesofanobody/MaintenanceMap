@@ -31,6 +31,9 @@ body {
   padding: 10px 20px;
   background: var(--gray-900);
   color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .app-title {
@@ -38,6 +41,46 @@ body {
   text-decoration: none;
   font-weight: 700;
   font-size: 18px;
+}
+
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-header-user {
+  color: var(--gray-400);
+  font-size: 13px;
+}
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+}
+
+.auth-card h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.auth-card h2 {
+  font-size: 15px;
+  margin: 0 0 12px;
+  color: var(--gray-700);
+  font-weight: 600;
+}
+
+.auth-card form {
+  margin-bottom: 0;
 }
 
 .app-main {

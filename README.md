@@ -3,10 +3,12 @@
 A self-hosted, single-user web app for tracking property maintenance issues on a map. Draw a
 property's border over satellite imagery, drop pins for issues (or let the app place them from a
 photo's GPS metadata), track priority/status/work orders, and generate a printable report.
+Login-protected, so it's safe to expose beyond your local machine when you're ready to.
 
 ## Stack
 
 - **Server**: Node.js, Express, TypeScript, Prisma ORM, SQLite, Multer (uploads), `exifr` (EXIF parsing)
+- **Auth**: `express-session` (Prisma-backed store) + `bcryptjs`, single account, cookie-based sessions
 - **Client**: React, TypeScript, Vite, Leaflet + `leaflet-draw` (property border drawing), `react-leaflet`
 - **Satellite imagery**: Esri World Imagery tiles — free, no API key or billing account required
 - **Address search**: OpenStreetMap Nominatim — free, no API key required
@@ -33,6 +35,10 @@ npm run dev               # http://localhost:5173
 Open http://localhost:5173. The client dev server proxies `/api` requests to the server on port
 4000 (see `client/vite.config.ts`).
 
+The first time you open the app, you'll be asked to create the one account it supports (username +
+password). From then on you'll need to sign in. There's no "forgot password" flow — if you lose the
+password, delete the `User` row from `server/prisma/dev.db` (or wipe the DB) and set up again.
+
 Uploaded photos are stored on disk in `server/uploads/` (git-ignored). The SQLite database file
 is `server/prisma/dev.db` (also git-ignored) — back it up if you want to keep your data, since
 nothing here is stored off-machine.
@@ -46,6 +52,27 @@ cd client && npm run build                # outputs static files to client/dist/
 
 The client build is static and can be served by any static file host, as long as `/api/*`
 requests are proxied or otherwise routed to the server process.
+
+## Deploying remotely
+
+The auth layer makes it reasonable to expose this beyond your local machine, but a few things
+are on you as the deployer:
+
+- **Set `SESSION_SECRET`** (see `server/.env.example` for how to generate one) and **`NODE_ENV=production`**.
+  The server refuses to start in production without a session secret, and won't mark cookies
+  `Secure` unless `NODE_ENV=production` is set.
+- **Serve over HTTPS.** Session cookies are marked `Secure` in production, so the browser won't
+  send them over plain HTTP — put this behind a reverse proxy (Caddy, nginx, Cloudflare Tunnel,
+  etc.) that terminates TLS.
+- **Put the client and API on the same origin** if you can (reverse-proxy `/api/*` to the Node
+  process alongside the static client build). This sidesteps CORS and cross-site cookie rules
+  entirely — the recommended setup. If they must be on different origins, set `CLIENT_ORIGIN` in
+  `server/.env` to the client's exact origin and expect to also loosen the session cookie's
+  `sameSite` setting (`server/src/index.ts`), which weakens CSRF protection somewhat.
+- **Set `TRUST_PROXY=1`** in `server/.env` if you're behind a reverse proxy, so Express reads the
+  real client IP and secure cookies behave correctly.
+- Login attempts are rate-limited (10 per 15 minutes per IP) but there's no account lockout or
+  2FA — reasonable for a single personal account, not for anything more sensitive.
 
 ## How it works
 
@@ -70,6 +97,8 @@ requests are proxied or otherwise routed to the server process.
 
 ## Data model
 
+- `User`: username, bcrypt password hash — there is ever only one row
+- `Session`: server-side session store backing the login cookie (housekept automatically)
 - `Property`: name, address, notes, boundary (GeoJSON polygon), center lat/lng
 - `Issue`: title, description, action needed, priority, status, work order flag/number, comments,
   lat/lng, belongs to a property
@@ -87,8 +116,9 @@ imagery resolution isn't sufficient for your properties.
 
 ## Known limitations (MVP scope)
 
-- Single user, no authentication — anyone with access to the running server can see/edit
-  everything. Fine for local personal use; would need an auth layer before exposing it to a network.
+- Single account by design — one username/password for the whole app, no per-user data
+  separation. If you later need multiple people with separate logins, that's a real rework
+  (a `User` foreign key on `Property`, scoped queries throughout), not a config change.
 - No automated tests yet.
 - Property boundary/centroid are simple averages, not projected-CRS calculations — fine at
   building/lot scale, not for large or high-latitude parcels.

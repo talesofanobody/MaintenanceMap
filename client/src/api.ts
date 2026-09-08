@@ -4,6 +4,7 @@ const BASE = "/api";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
+    credentials: "include",
     headers: options?.body && !(options.body instanceof FormData) ? { "Content-Type": "application/json" } : undefined,
     ...options,
   });
@@ -15,7 +16,20 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+export interface AuthStatus {
+  authenticated: boolean;
+  needsSetup: boolean;
+  username?: string;
+}
+
 export const api = {
+  getAuthStatus: () => request<AuthStatus>("/auth/me"),
+  setupAccount: (username: string, password: string) =>
+    request<AuthStatus>("/auth/setup", { method: "POST", body: JSON.stringify({ username, password }) }),
+  login: (username: string, password: string) =>
+    request<AuthStatus>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+  logout: () => request<void>("/auth/logout", { method: "POST" }),
+
   listProperties: () => request<Property[]>("/properties"),
   createProperty: (data: { name: string; address?: string; notes?: string }) =>
     request<Property>("/properties", { method: "POST", body: JSON.stringify(data) }),

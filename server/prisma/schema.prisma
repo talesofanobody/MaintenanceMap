@@ -7,6 +7,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Session {
+  id        String   @id
+  data      String
+  expiresAt DateTime
+}
+
 model Property {
   id        String   @id @default(cuid())
   name      String
