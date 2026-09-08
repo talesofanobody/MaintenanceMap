@@ -74,26 +74,97 @@ are on you as the deployer:
 - Login attempts are rate-limited (10 per 15 minutes per IP) but there's no account lockout or
   2FA — reasonable for a single personal account, not for anything more sensitive.
 
-## How it works
+## Using the app
 
-1. **Properties** (`/`) — create a property (name + optional address). Each property has its own
-   border, issues, and report.
-2. **Workspace** (`/properties/:id`) — the main map view:
-   - Use the polygon tool (top-right of the map) to draw the property border over satellite
-     imagery, then click **Save Border** to persist it. Use the edit/delete tools to adjust it
-     later.
-   - Use the address search box to fly the map to an address (via Nominatim geocoding) before
-     drawing.
-   - Click **+ Add Issue**, then click anywhere on the map to drop a pin. Fill in the description,
-     what needs to be done, priority (Low/Medium/High/Urgent), status (Pending/In Progress/
-     Completed), whether a work order was created and its number, and comments. Attach photos —
-     the location can also be set automatically from a photo's GPS EXIF data if the pin hasn't
-     been placed yet.
-   - Click any existing pin to edit it, reposition it, add/remove photos, or delete it.
-   - Filter the map by status or priority using the toolbar dropdowns.
-3. **Report** (`/properties/:id/report`) — a printable summary: counts by status/priority, the
-   property map with all issue pins, and a full table of issues (with thumbnails). Use **Print /
-   Save as PDF** (browser print) to export it.
+### 1. Sign in
+
+The first time anyone opens the app, they land on a **Create your account** form instead of a
+login form — that's how the app knows no account exists yet. Pick a username and password (8+
+characters) and submit; you're signed in immediately. Every time after that, opening the app
+shows a plain **Sign in** form. Sessions last 30 days, so you generally won't be asked again on
+the same browser. Sign out with the button in the top-right corner of the header at any time.
+
+There's no "forgot password" recovery flow (see [Running locally](#running-locally) above for what
+to do if you lose it).
+
+### 2. Create a property
+
+You land on the **Properties** list (`/`) after signing in. Click **+ Add Property**, give it a
+name (required) and an address (optional, just a label — it isn't geocoded automatically here),
+and click **Create Property**. It appears as a card in the list, showing whether a border has
+been drawn yet and how many issues it has. Click the card (not the buttons) to open its workspace.
+Each property card also has a **Report** shortcut and a **Delete** button (which asks you to
+confirm, and deletes all of that property's issues and photos with it — this cannot be undone).
+
+### 3. Find the property on the map
+
+Inside a property's workspace, the map opens zoomed out over the middle of the US by default (or
+wherever the property was last centered, once you've saved a border). Use the **address search
+box** in the toolbar: type an address and press **Search** (or Enter), pick a result from the
+dropdown, and the map flies there. This uses OpenStreetMap's free Nominatim geocoder — no account
+needed, but it's a courtesy service, so don't rely on it for rapid repeated searches. You can also
+just scroll/drag/zoom the satellite imagery manually.
+
+### 4. Draw the property border
+
+Three small icon buttons sit in the top-right of the map itself (these come from the map's drawing
+toolbar, not the app's toolbar above it):
+
+- **Pentagon icon** — start drawing a polygon. Click to place each corner, then click the first
+  point again (or double-click the last point) to close the shape.
+- **Pencil icon** — edit the shape you already drew: drag its corners, then click the checkmark
+  that appears to confirm.
+- **Trash icon** — select and remove the shape.
+
+Only one border polygon is kept per property — drawing a new one replaces whatever was there
+before. None of this is saved automatically: as soon as you draw, edit, or delete the shape, a
+blue banner appears at the top saying **"Border changed and not yet saved"** with a **Save
+Border** button. Click it to persist the change (or reload the page to discard it).
+
+### 5. Add an issue
+
+Click **+ Add Issue** in the toolbar. A banner tells you to click the map to place a pin — do
+that first, or upload a geotagged photo (see below) and let it set the location for you. Either
+way, a panel slides in on the right with:
+
+- **Location** — shows the current pin coordinates, with a **Reposition on map** /
+  **Click map to place pin** button that lets you click a new spot at any time, even after the
+  panel is already open.
+- **Title** (required), **Description**, **What needs to be done**
+- **Priority** — Low / Medium / High / Urgent
+- **Status** — Pending / In Progress / Completed
+- **Work order created** checkbox, which reveals a **Work order number** field when checked
+- **Comments**
+- **Photos** — attach one or more. If you haven't set a location yet and the first photo you add
+  has GPS data in its EXIF metadata, the pin is placed there automatically (you'll see a note
+  confirming it) — you can still drag it elsewhere afterward with **Reposition on map**. Photos
+  without GPS data, or added after a location is already set, just attach normally.
+
+Click **Create Issue** to save. The pin appears on the map immediately, colored by priority (green
+= low, yellow = medium, orange = high, red = urgent) with a small glyph showing status (`!`
+pending, `…` in progress, `✓` completed).
+
+### 6. Edit or remove an issue
+
+Click any existing pin to reopen the same panel, pre-filled, now titled **Edit Issue**. Change any
+field and click **Save Changes**. You can reposition it the same way as during creation, add more
+photos (these upload immediately, no separate save step), or remove a photo with the small ✕ on
+its thumbnail. **Delete Issue** at the bottom removes the issue and all its photos (with a
+confirmation prompt).
+
+### 7. Filter the map
+
+The **All statuses** / **All priorities** dropdowns in the toolbar filter which pins are shown on
+the map. This is a view-only filter — it doesn't affect the report, which always includes every
+issue.
+
+### 8. Generate a report
+
+Click **View Report** (from the workspace toolbar or a property card) to open
+`/properties/:id/report`: a count of issues by status and by priority, the property map with all
+pins plotted, and a full table (priority, status, description, action needed, work order, comments,
+photo thumbnails) for every issue. Click **Print / Save as PDF** to open your browser's print
+dialog — choose "Save as PDF" there for a file, or print it directly.
 
 ## Data model
 
