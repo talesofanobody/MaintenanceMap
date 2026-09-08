@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Property {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  notes     String?
+  // GeoJSON Polygon geometry, stored as JSON text: { "type": "Polygon", "coordinates": [...] }
+  boundary  String?
+  centerLat Float?
+  centerLng Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  issues    Issue[]
+}
+
+model Issue {
+  id               String   @id @default(cuid())
+  propertyId       String
+  property         Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  actionNeeded     String?
+  priority         String   @default("medium") // low | medium | high | urgent
+  status           String   @default("pending") // pending | in_progress | completed
+  workOrderCreated Boolean  @default(false)
+  workOrderNumber  String?
+  comments         String?
+  lat              Float
+  lng              Float
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  photos           Photo[]
+
+  @@index([propertyId])
+}
+
+model Photo {
+  id        String    @id @default(cuid())
+  issueId   String
+  issue     Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  filename  String
+  hasGps    Boolean   @default(false)
+  gpsLat    Float?
+  gpsLng    Float?
+  takenAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([issueId])
+}
