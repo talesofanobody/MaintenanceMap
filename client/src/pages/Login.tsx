@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
+import { BrandMark } from "../App";
 
 export default function Login() {
   const { state, login, setup } = useAuth();
@@ -37,12 +38,15 @@ export default function Login() {
   return (
     <div className="auth-page">
       <div className="card auth-card">
-        <h1>🗺️ MaintenanceMap</h1>
+        <div className="auth-brand">
+          <BrandMark />
+          <h1>MaintenanceMap</h1>
+        </div>
         <h2>{isSetup ? "Create your account" : "Sign in"}</h2>
         {isSetup && (
           <p className="muted small">
-            No account exists yet. Create the one account this app uses — you'll sign in with it from now on,
-            including remotely if you deploy this somewhere with internet access.
+            No account exists yet. This app uses a single account — pick the username and password you'll sign in with
+            from now on, including from your phone.
           </p>
         )}
 
@@ -51,7 +55,7 @@ export default function Login() {
         <form className="form" onSubmit={handleSubmit}>
           <label>
             Username
-            <input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus autoComplete="username" />
+            <input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus autoComplete="username" autoCapitalize="none" />
           </label>
           <label>
             Password
@@ -73,8 +77,8 @@ export default function Login() {
               />
             </label>
           )}
-          <button type="submit" className="btn btn-primary" disabled={submitting}>
-            {submitting ? "Please wait…" : isSetup ? "Create Account" : "Sign In"}
+          <button type="submit" className="btn btn-primary btn-large" disabled={submitting}>
+            {submitting ? "Please wait…" : isSetup ? "Create account" : "Sign in"}
           </button>
         </form>
       </div>

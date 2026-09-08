@@ -59,8 +59,9 @@ model Photo {
   id        String    @id @default(cuid())
   issueId   String
   issue     Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  filename  String
-  hasGps    Boolean   @default(false)
+  filename      String
+  thumbFilename String?
+  hasGps        Boolean   @default(false)
   gpsLat    Float?
   gpsLng    Float?
   takenAt   DateTime?

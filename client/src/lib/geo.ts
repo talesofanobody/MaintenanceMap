@@ -25,3 +25,15 @@ export function centroidOf(latlngs: L.LatLng[]): { lat: number; lng: number } {
   );
   return { lat: sum.lat / latlngs.length, lng: sum.lng / latlngs.length };
 }
+
+export function boundsOf(latlngs: L.LatLngExpression[]): L.LatLngBounds {
+  return L.latLngBounds(latlngs as L.LatLngTuple[]);
+}
+
+// Outer ring used to shade everything outside a property border.
+export const WORLD_RING: L.LatLngExpression[] = [
+  [-89.9, -179.9],
+  [-89.9, 179.9],
+  [89.9, 179.9],
+  [89.9, -179.9],
+];

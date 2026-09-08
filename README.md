@@ -8,8 +8,11 @@ Login-protected, so it's safe to expose beyond your local machine when you're re
 ## Stack
 
 - **Server**: Node.js, Express, TypeScript, Prisma ORM, SQLite, Multer (uploads), `exifr` (EXIF parsing)
+- **Photos**: `heic-convert` (iPhone HEIC → JPEG) + `sharp` (auto-rotate, resize, thumbnails) — every upload is
+  normalised to web-friendly JPEGs on the server
 - **Auth**: `express-session` (Prisma-backed store) + `bcryptjs`, single account, cookie-based sessions
-- **Client**: React, TypeScript, Vite, Leaflet + `leaflet-draw` (property border drawing), `react-leaflet`
+- **Client**: React, TypeScript, Vite, Leaflet + `leaflet-draw` (property border drawing), `react-leaflet`,
+  `heic2any` (in-browser HEIC previews, loaded on demand)
 - **Satellite imagery**: Esri World Imagery tiles — free, no API key or billing account required
 - **Address search**: OpenStreetMap Nominatim — free, no API key required
 
@@ -39,9 +42,13 @@ The first time you open the app, you'll be asked to create the one account it su
 password). From then on you'll need to sign in. There's no "forgot password" flow — if you lose the
 password, delete the `User` row from `server/prisma/dev.db` (or wipe the DB) and set up again.
 
-Uploaded photos are stored on disk in `server/uploads/` (git-ignored). The SQLite database file
-is `server/prisma/dev.db` (also git-ignored) — back it up if you want to keep your data, since
+Uploaded photos are stored on disk in `server/uploads/` (git-ignored) as a full-size JPEG (capped
+at 2048px) plus a thumbnail — the original HEIC/PNG is not kept. The SQLite database file is
+`server/prisma/dev.db` (also git-ignored) — back both up if you want to keep your data, since
 nothing here is stored off-machine.
+
+If you already have a database from an earlier version, run `npm run prisma:migrate` again in
+`server/` to apply new migrations.
 
 ### Production-style build
 
@@ -89,82 +96,101 @@ to do if you lose it).
 
 ### 2. Create a property
 
-You land on the **Properties** list (`/`) after signing in. Click **+ Add Property**, give it a
-name (required) and an address (optional, just a label — it isn't geocoded automatically here),
-and click **Create Property**. It appears as a card in the list, showing whether a border has
-been drawn yet and how many issues it has. Click the card (not the buttons) to open its workspace.
-Each property card also has a **Report** shortcut and a **Delete** button (which asks you to
-confirm, and deletes all of that property's issues and photos with it — this cannot be undone).
+You land on the **Properties** list (`/`) after signing in. On a fresh install this is a welcome
+screen explaining the three steps; otherwise click **+ Add property**. Give it a name (required)
+and an address (optional — it's a label for the report, not geocoded automatically), and click
+**Create property**. It appears as a card showing whether a border has been drawn yet and how
+many issues it has. Tap the card to open its map. Each card also has **Report** and **Delete**
+(which asks you to confirm, and deletes all of that property's issues and photos with it — this
+cannot be undone).
 
-### 3. Find the property on the map
+### 3. Follow the getting-started guide
 
-Inside a property's workspace, the map opens zoomed out over the middle of the US by default (or
-wherever the property was last centered, once you've saved a border). Use the **address search
-box** in the toolbar: type an address and press **Search** (or Enter), pick a result from the
-dropdown, and the map flies there. This uses OpenStreetMap's free Nominatim geocoder — no account
-needed, but it's a courtesy service, so don't rely on it for rapid repeated searches. You can also
-just scroll/drag/zoom the satellite imagery manually.
+A new property opens with a **Getting started** card on the map that walks you through the next
+three steps and ticks them off as you go: find the property, draw the border, log the first issue.
+Each step has a button that does the right thing (start drawing, save the border, add an issue).
+Close it with ✕ whenever you like — the **? Guide** button in the toolbar brings it back — and
+once the property is set up it stops appearing on its own.
 
-### 4. Draw the property border
+### 4. Find the property on the map
 
-Three small icon buttons sit in the top-right of the map itself (these come from the map's drawing
-toolbar, not the app's toolbar above it):
+The map opens zoomed out by default (or fitted to the property once a border is saved). Either:
 
-- **Pentagon icon** — start drawing a polygon. Click to place each corner, then click the first
-  point again (or double-click the last point) to close the shape.
-- **Pencil icon** — edit the shape you already drew: drag its corners, then click the checkmark
-  that appears to confirm.
+- type into the **address search** box and pick a result (OpenStreetMap's free Nominatim geocoder —
+  no account needed, but it's a courtesy service, so it isn't for rapid-fire searching), or
+- tap the **◎ locate** button to jump to where you're standing — the natural choice on a phone at
+  the property (your browser will ask for location permission; this needs HTTPS or localhost).
+
+You can also just drag and pinch/scroll the satellite imagery by hand. Zooming in close is enough
+for the guide to count this step as done.
+
+### 5. Draw the property border
+
+Three small icon buttons sit in the top-right corner of the map itself (they belong to the map's
+drawing toolbar, not the app toolbar above it). The polygon button pulses while the guide is on
+this step:
+
+- **Pentagon icon** — start drawing. Tap each corner of the property, then tap the first corner
+  again (or double-tap the last one) to close the shape.
+- **Pencil icon** — reshape the border: drag its corners, then tap the tick to confirm.
 - **Trash icon** — select and remove the shape.
 
-Only one border polygon is kept per property — drawing a new one replaces whatever was there
-before. None of this is saved automatically: as soon as you draw, edit, or delete the shape, a
-blue banner appears at the top saying **"Border changed and not yet saved"** with a **Save
-Border** button. Click it to persist the change (or reload the page to discard it).
+Only one border is kept per property — drawing a new one replaces the old. Nothing is saved
+automatically: after any draw/edit/delete a floating **Border changed — not saved yet** banner
+appears with a **Save border** button. Once saved, everything outside the border is shaded so the
+property stands out, and the map opens fitted to it from then on.
 
-### 5. Add an issue
+### 6. Add an issue
 
-Click **+ Add Issue** in the toolbar. A banner tells you to click the map to place a pin — do
-that first, or upload a geotagged photo (see below) and let it set the location for you. Either
-way, a panel slides in on the right with:
+Tap **+ Add issue**. A banner asks you to tap the map where the issue is; on a phone the form
+slides up as a bottom sheet, on a desktop it opens on the right. You can also skip the tap and
+add a photo first — if it was taken on-site (iPhone photos carry GPS data), the pin is placed
+from the photo and the map flies there. The form has:
 
-- **Location** — shows the current pin coordinates, with a **Reposition on map** /
-  **Click map to place pin** button that lets you click a new spot at any time, even after the
-  panel is already open.
+- **Location** — the pin's coordinates, with **Move pin** / **Place pin** to tap a new spot at any
+  time (on a phone the sheet gets out of the way while you tap).
 - **Title** (required), **Description**, **What needs to be done**
-- **Priority** — Low / Medium / High / Urgent
-- **Status** — Pending / In Progress / Completed
-- **Work order created** checkbox, which reveals a **Work order number** field when checked
+- **Priority** — Low / Medium / High / Urgent, as tappable chips. The priority sets the pin's
+  shape and colour: green circle **i** (low), yellow circle **!** (medium), orange triangle **!**
+  (high), red octagon **!!** (urgent).
+- **Status** — Pending / In Progress / Completed. In-progress and completed pins carry a small
+  blue or green badge.
+- **Work order created**, which reveals a **Work order number** field
 - **Comments**
-- **Photos** — attach one or more. If you haven't set a location yet and the first photo you add
-  has GPS data in its EXIF metadata, the pin is placed there automatically (you'll see a note
-  confirming it) — you can still drag it elsewhere afterward with **Reposition on map**. Photos
-  without GPS data, or added after a location is already set, just attach normally.
+- **📷 Add photos** — JPEG, PNG, WebP and iPhone **HEIC** are all accepted. HEIC photos are
+  converted to JPEG on the server so they display everywhere (and show a preview in the form
+  while you're still filling it in), sideways photos are rotated upright automatically, and each
+  photo gets a thumbnail so pages with many photos stay fast. Tap any thumbnail to view it
+  full-size.
 
-Click **Create Issue** to save. The pin appears on the map immediately, colored by priority (green
-= low, yellow = medium, orange = high, red = urgent) with a small glyph showing status (`!`
-pending, `…` in progress, `✓` completed).
+Tap **Create issue**. The pin appears immediately, numbered in the order issues were logged — the
+same numbers appear in the report.
 
-### 6. Edit or remove an issue
+### 7. Edit or remove an issue
 
-Click any existing pin to reopen the same panel, pre-filled, now titled **Edit Issue**. Change any
-field and click **Save Changes**. You can reposition it the same way as during creation, add more
-photos (these upload immediately, no separate save step), or remove a photo with the small ✕ on
-its thumbnail. **Delete Issue** at the bottom removes the issue and all its photos (with a
-confirmation prompt).
+Tap any pin to reopen the same form pre-filled as **Edit issue**. Change anything and tap
+**Save changes**. Extra photos added here upload straight away; remove one with the ✕ on its
+thumbnail. **Delete** removes the issue and its photos (with a confirmation prompt).
 
-### 7. Filter the map
+### 8. Filter the map
 
-The **All statuses** / **All priorities** dropdowns in the toolbar filter which pins are shown on
-the map. This is a view-only filter — it doesn't affect the report, which always includes every
-issue.
+The status and priority dropdowns filter which pins are shown; a small banner tells you how many
+are hidden. It's a view-only filter — the report always includes every issue.
 
-### 8. Generate a report
+### 9. Generate the report
 
-Click **View Report** (from the workspace toolbar or a property card) to open
-`/properties/:id/report`: a count of issues by status and by priority, the property map with all
-pins plotted, and a full table (priority, status, description, action needed, work order, comments,
-photo thumbnails) for every issue. Click **Print / Save as PDF** to open your browser's print
-dialog — choose "Save as PDF" there for a file, or print it directly.
+**Report** (toolbar, property card, or the guide's final step) opens `/properties/:id/report`,
+laid out as an A4 document:
+
+- **Page 1** — property name and address, issue counts by priority, and the map fitted to the
+  property with everything outside the border shaded out, every issue pinned and numbered, and a
+  legend explaining the pin shapes and status badges.
+- **Following pages** — one card per issue, most severe first: number, title, priority and
+  status, description, what needs to be done, work order, comments, photo thumbnails, and when it
+  was logged.
+
+**Print / Save as PDF** opens the browser's print dialog already set to A4 — pick "Save as PDF"
+for a file. Tip: give the map a second to finish loading imagery before printing.
 
 ## Data model
 

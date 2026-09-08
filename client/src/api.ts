@@ -66,4 +66,5 @@ export const api = {
   },
   deletePhoto: (id: string) => request<void>(`/photos/${id}`, { method: "DELETE" }),
   photoUrl: (id: string) => `${BASE}/photos/${id}/file`,
+  photoThumbUrl: (id: string) => `${BASE}/photos/${id}/thumb`,
 };

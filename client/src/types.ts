@@ -5,6 +5,7 @@ export interface Photo {
   id: string;
   issueId: string;
   filename: string;
+  thumbFilename: string | null;
   hasGps: boolean;
   gpsLat: number | null;
   gpsLng: number | null;
@@ -53,10 +54,17 @@ export const PRIORITIES: Priority[] = ["low", "medium", "high", "urgent"];
 export const STATUSES: Status[] = ["pending", "in_progress", "completed"];
 
 export const PRIORITY_COLORS: Record<Priority, string> = {
-  low: "#2e7d32",
-  medium: "#f9a825",
-  high: "#ef6c00",
-  urgent: "#c62828",
+  low: "#16a34a",
+  medium: "#eab308",
+  high: "#f97316",
+  urgent: "#dc2626",
+};
+
+export const PRIORITY_DESCRIPTIONS: Record<Priority, string> = {
+  low: "Cosmetic or minor — schedule when convenient",
+  medium: "Needs attention — plan within the month",
+  high: "Deteriorating or affecting use — act soon",
+  urgent: "Safety, structural or high-risk — act now",
 };
 
 export const STATUS_LABELS: Record<Status, string> = {
@@ -70,4 +78,11 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
   medium: "Medium",
   high: "High",
   urgent: "Urgent / High Risk",
+};
+
+export const PRIORITY_SHORT_LABELS: Record<Priority, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  urgent: "Urgent",
 };
