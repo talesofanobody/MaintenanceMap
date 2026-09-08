@@ -6,6 +6,7 @@ import { api } from "../api";
 import type { Issue, Priority, Property, Status } from "../types";
 import { PRIORITIES, PRIORITY_DESCRIPTIONS, PRIORITY_LABELS, STATUS_LABELS } from "../types";
 import { boundsOf, geoJsonToLatLngs, WORLD_RING } from "../lib/geo";
+import { durationMs, formatDate, formatDuration, formatDurationMs } from "../lib/dates";
 import { issueDivIcon, pinSvg } from "../components/issueIcon";
 import { SATELLITE_ATTRIBUTION, SATELLITE_URL } from "./PropertyWorkspace";
 
@@ -27,10 +28,6 @@ function FitReportMap({ bounds }: { bounds: L.LatLngBounds | null }) {
     };
   }, [map, bounds]);
   return null;
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
 export default function Report() {
@@ -68,7 +65,15 @@ export default function Report() {
       byPriority[i.priority] += 1;
       byStatus[i.status] += 1;
     }
-    return { byPriority, byStatus, open: byStatus.pending + byStatus.in_progress };
+    const resolved = issues.filter((i) => i.status === "completed" && i.closedAt);
+    const avgResolveMs = resolved.length
+      ? resolved.reduce((sum, i) => sum + durationMs(i.createdAt, i.closedAt!), 0) / resolved.length
+      : null;
+    const openIssues = issues.filter((i) => i.status !== "completed");
+    const oldestOpen = openIssues.length
+      ? openIssues.reduce((oldest, i) => (i.createdAt < oldest.createdAt ? i : oldest))
+      : null;
+    return { byPriority, byStatus, open: byStatus.pending + byStatus.in_progress, avgResolveMs, resolvedCount: resolved.length, oldestOpen };
   }, [issues]);
 
   const boundaryLatLngs = useMemo(() => (property?.boundary ? geoJsonToLatLngs(property.boundary) : null), [property]);
@@ -113,6 +118,12 @@ export default function Report() {
             <span>
               {issues.length} issue{issues.length === 1 ? "" : "s"} · {counts.open} open · {counts.byStatus.completed} completed
             </span>
+            {counts.avgResolveMs !== null && (
+              <span>
+                Avg. time to resolve: {formatDurationMs(counts.avgResolveMs)} ({counts.resolvedCount} closed)
+              </span>
+            )}
+            {counts.oldestOpen && <span>Oldest open issue: {formatDuration(counts.oldestOpen.createdAt)}</span>}
           </div>
         </header>
 
@@ -223,11 +234,33 @@ export default function Report() {
                   </div>
                   <div>
                     <dt>Work order</dt>
-                    <dd>{issue.workOrderCreated ? issue.workOrderNumber || "Created (no number)" : "Not raised"}</dd>
+                    <dd>
+                      {!issue.workOrderCreated ? (
+                        "Not raised"
+                      ) : issue.workOrderUrl ? (
+                        <a href={issue.workOrderUrl} target="_blank" rel="noopener noreferrer" className="eam-link">
+                          {issue.workOrderNumber || "Open in EAM"} ↗
+                        </a>
+                      ) : (
+                        issue.workOrderNumber || "Created (no number)"
+                      )}
+                    </dd>
                   </div>
                   <div>
                     <dt>Comments</dt>
                     <dd>{issue.comments || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Logged</dt>
+                    <dd>{formatDate(issue.createdAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>{issue.status === "completed" && issue.closedAt ? "Closed" : "Open for"}</dt>
+                    <dd>
+                      {issue.status === "completed" && issue.closedAt
+                        ? `${formatDate(issue.closedAt)} · resolved in ${formatDuration(issue.createdAt, issue.closedAt)}`
+                        : formatDuration(issue.createdAt)}
+                    </dd>
                   </div>
                 </dl>
 
@@ -240,8 +273,7 @@ export default function Report() {
                 )}
 
                 <footer className="issue-card-footer">
-                  <span>Logged {formatDate(issue.createdAt)}</span>
-                  {issue.updatedAt !== issue.createdAt && <span>Updated {formatDate(issue.updatedAt)}</span>}
+                  {issue.updatedAt !== issue.createdAt && <span>Last updated {formatDate(issue.updatedAt)}</span>}
                   <span>
                     {issue.lat.toFixed(5)}, {issue.lng.toFixed(5)}
                   </span>

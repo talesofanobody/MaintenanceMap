@@ -45,9 +45,11 @@ model Issue {
   status           String   @default("pending") // pending | in_progress | completed
   workOrderCreated Boolean  @default(false)
   workOrderNumber  String?
+  workOrderUrl     String?
   comments         String?
   lat              Float
   lng              Float
+  closedAt         DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   photos           Photo[]

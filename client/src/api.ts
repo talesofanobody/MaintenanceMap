@@ -50,9 +50,11 @@ export const api = {
     status?: Status;
     workOrderCreated?: boolean;
     workOrderNumber?: string;
+    workOrderUrl?: string | null;
     comments?: string;
     lat: number;
     lng: number;
+    closedAt?: string | null;
   }) => request<Issue>("/issues", { method: "POST", body: JSON.stringify(data) }),
   updateIssue: (id: string, data: Partial<Issue>) =>
     request<Issue>(`/issues/${id}`, { method: "PUT", body: JSON.stringify(data) }),

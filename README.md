@@ -155,7 +155,13 @@ from the photo and the map flies there. The form has:
   (high), red octagon **!!** (urgent).
 - **Status** — Pending / In Progress / Completed. In-progress and completed pins carry a small
   blue or green badge.
-- **Work order created**, which reveals a **Work order number** field
+- **Timeline** — when the issue was logged; while it's open, how long it has been open. Marking it
+  **Completed** records a **Closed on** date (today by default, adjustable if you're logging it
+  after the fact) and shows the time it took to resolve. Reopening clears the close date.
+- **Work order created**, which reveals a **Work order number** field and an optional **EAM link**
+  — paste the work order's page from your EAM (Maximo, HxGN, SAP PM, …) and an
+  **Open in EAM ↗** link appears, which opens the work order in a new tab. Only `http(s)` links
+  are accepted.
 - **Comments**
 - **📷 Add photos** — JPEG, PNG, WebP and iPhone **HEIC** are all accepted. HEIC photos are
   converted to JPEG on the server so they display everywhere (and show a preview in the form
@@ -186,8 +192,11 @@ laid out as an A4 document:
   property with everything outside the border shaded out, every issue pinned and numbered, and a
   legend explaining the pin shapes and status badges.
 - **Following pages** — one card per issue, most severe first: number, title, priority and
-  status, description, what needs to be done, work order, comments, photo thumbnails, and when it
-  was logged.
+  status, description, what needs to be done, work order (linked to the EAM when a link was
+  added — the link survives in the saved PDF), comments, when it was logged, and either how long
+  it has been open or when it was closed and how long it took to resolve. Photo thumbnails follow.
+- The header also gives the average time to resolve across closed issues and the age of the
+  oldest open one.
 
 **Print / Save as PDF** opens the browser's print dialog already set to A4 — pick "Save as PDF"
 for a file. Tip: give the map a second to finish loading imagery before printing.
@@ -197,8 +206,8 @@ for a file. Tip: give the map a second to finish loading imagery before printing
 - `User`: username, bcrypt password hash — there is ever only one row
 - `Session`: server-side session store backing the login cookie (housekept automatically)
 - `Property`: name, address, notes, boundary (GeoJSON polygon), center lat/lng
-- `Issue`: title, description, action needed, priority, status, work order flag/number, comments,
-  lat/lng, belongs to a property
+- `Issue`: title, description, action needed, priority, status, work order flag/number/EAM link,
+  comments, lat/lng, closed-at timestamp (managed from the status), belongs to a property
 - `Photo`: filename, GPS presence/lat/lng, taken-at timestamp (from EXIF), belongs to an issue
 
 ## Notes on swapping in Google Maps later

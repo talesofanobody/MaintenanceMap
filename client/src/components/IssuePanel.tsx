@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { readPhotoGps } from "../lib/photoGps";
+import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
 import type { Issue, Photo, Priority, Status } from "../types";
 import { PRIORITIES, PRIORITY_SHORT_LABELS, STATUSES, STATUS_LABELS } from "../types";
 import PhotoLightbox from "./PhotoLightbox";
@@ -41,6 +42,18 @@ async function makePreview(file: File): Promise<string | null> {
   }
 }
 
+function looksLikeUrl(value: string): boolean {
+  const v = value.trim();
+  if (!v) return true;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(v) ? v : `https://${v}`;
+  try {
+    const u = new URL(withScheme);
+    return (u.protocol === "http:" || u.protocol === "https:") && u.hostname.includes(".");
+  } catch {
+    return false;
+  }
+}
+
 export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestReposition, onLocationDetected, onClose, onSaved }: Props) {
   const isEdit = !!issue;
   const [title, setTitle] = useState(issue?.title ?? "");
@@ -50,7 +63,10 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
   const [status, setStatus] = useState<Status>(issue?.status ?? "pending");
   const [workOrderCreated, setWorkOrderCreated] = useState(issue?.workOrderCreated ?? false);
   const [workOrderNumber, setWorkOrderNumber] = useState(issue?.workOrderNumber ?? "");
+  const [workOrderUrl, setWorkOrderUrl] = useState(issue?.workOrderUrl ?? "");
   const [comments, setComments] = useState(issue?.comments ?? "");
+  const [closedDate, setClosedDate] = useState(toDateInputValue(issue?.closedAt));
+  const [closedDateTouched, setClosedDateTouched] = useState(false);
   const [lat, setLat] = useState<number | null>(issue?.lat ?? draftLatLng?.lat ?? null);
   const [lng, setLng] = useState<number | null>(issue?.lng ?? draftLatLng?.lng ?? null);
   const [locationNote, setLocationNote] = useState<string | null>(null);
@@ -74,6 +90,9 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
   const effectiveLat = draftLatLng?.lat ?? lat;
   const effectiveLng = draftLatLng?.lng ?? lng;
   const hasLocation = effectiveLat !== null && effectiveLng !== null;
+  const photoCount = staged.length + existingPhotos.length;
+  const urlValid = looksLikeUrl(workOrderUrl);
+  const closedIso = status === "completed" ? (closedDateTouched || !issue?.closedAt ? dateInputToIso(closedDate) : issue.closedAt) : null;
 
   async function handleFiles(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -133,6 +152,13 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
     setExistingPhotos((prev) => prev.filter((p) => p.id !== id));
   }
 
+  function changeStatus(next: Status) {
+    setStatus(next);
+    if (next === "completed" && !issue?.closedAt && !closedDateTouched) {
+      setClosedDate(toDateInputValue(null));
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -148,6 +174,10 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
       setError("Set a location: tap the map to place the pin, or add a photo taken on-site.");
       return;
     }
+    if (workOrderCreated && !urlValid) {
+      setError("The EAM link doesn't look like a web address.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -159,9 +189,11 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
         status,
         workOrderCreated,
         workOrderNumber: workOrderCreated ? workOrderNumber.trim() || undefined : undefined,
+        workOrderUrl: workOrderCreated ? workOrderUrl.trim() || null : null,
         comments: comments.trim() || undefined,
         lat: finalLat,
         lng: finalLng,
+        closedAt: closedIso,
       };
 
       if (isEdit && issue) {
@@ -220,6 +252,45 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Roof leak, north corner" autoFocus />
         </label>
 
+        <div className="field">
+          <span className="field-label">
+            Photos{photoCount > 0 && <span className="field-count">{photoCount}</span>}
+          </span>
+          {photoCount > 0 && (
+            <div className="photo-grid">
+              {staged.map((s) => (
+                <div className="photo-thumb" key={s.id}>
+                  {s.previewUrl ? (
+                    <img src={s.previewUrl} alt="" onClick={() => setLightbox(s.previewUrl)} />
+                  ) : (
+                    <div className="photo-placeholder">{s.converting ? "Preparing…" : "HEIC"}</div>
+                  )}
+                  <button type="button" className="photo-remove" onClick={() => removeStaged(s.id)} aria-label="Remove photo">
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {existingPhotos.map((p) => (
+                <div className="photo-thumb" key={p.id}>
+                  <img src={api.photoThumbUrl(p.id)} alt="" onClick={() => setLightbox(api.photoUrl(p.id))} />
+                  <button type="button" className="photo-remove" onClick={() => removeExistingPhoto(p.id)} aria-label="Remove photo">
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <label className="btn btn-secondary file-btn">
+            <input type="file" accept="image/*,.heic,.heif" multiple onChange={handleFiles} />
+            📷 {photoCount > 0 ? "Add more photos" : "Add photos"}
+          </label>
+          {uploading > 0 ? (
+            <span className="hint">Uploading {uploading} photo{uploading === 1 ? "" : "s"}…</span>
+          ) : (
+            <span className="muted small">JPEG, PNG and iPhone HEIC photos are all fine. Tap a photo to view it full-size.</span>
+          )}
+        </div>
+
         <label>
           Description
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="What's wrong?" />
@@ -258,7 +329,7 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
                 role="radio"
                 aria-checked={status === s}
                 className={`chip chip-status-${s} ${status === s ? "selected" : ""}`}
-                onClick={() => setStatus(s)}
+                onClick={() => changeStatus(s)}
               >
                 {STATUS_LABELS[s]}
               </button>
@@ -266,56 +337,78 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
           </div>
         </div>
 
+        <div className="timeline-box">
+          <div className="timeline-row">
+            <span className="timeline-label">Logged</span>
+            <span>{issue ? formatDateTime(issue.createdAt) : "When you save this issue"}</span>
+          </div>
+          {status === "completed" ? (
+            <>
+              <label className="timeline-row timeline-input">
+                <span className="timeline-label">Closed on</span>
+                <input
+                  type="date"
+                  value={closedDate}
+                  max={toDateInputValue(null)}
+                  onChange={(e) => {
+                    setClosedDate(e.target.value);
+                    setClosedDateTouched(true);
+                  }}
+                />
+              </label>
+              {issue && closedIso && (
+                <div className="timeline-row">
+                  <span className="timeline-label">Resolved in</span>
+                  <span className="timeline-strong">{formatDuration(issue.createdAt, closedIso)}</span>
+                </div>
+              )}
+            </>
+          ) : (
+            issue && (
+              <div className="timeline-row">
+                <span className="timeline-label">Open for</span>
+                <span className="timeline-strong">{formatDuration(issue.createdAt)}</span>
+              </div>
+            )
+          )}
+        </div>
+
         <label className="checkbox-row">
           <input type="checkbox" checked={workOrderCreated} onChange={(e) => setWorkOrderCreated(e.target.checked)} />
           Work order created
         </label>
         {workOrderCreated && (
-          <label>
-            Work order number
-            <input value={workOrderNumber} onChange={(e) => setWorkOrderNumber(e.target.value)} placeholder="e.g. WO-2024-118" />
-          </label>
+          <div className="work-order-fields">
+            <label>
+              Work order number
+              <input value={workOrderNumber} onChange={(e) => setWorkOrderNumber(e.target.value)} placeholder="e.g. WO-2024-118" />
+            </label>
+            <label>
+              EAM link <span className="muted">(optional)</span>
+              <input
+                type="text"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                value={workOrderUrl}
+                onChange={(e) => setWorkOrderUrl(e.target.value)}
+                placeholder="Paste the work order's page from your EAM"
+                className={workOrderUrl && !urlValid ? "is-invalid" : ""}
+              />
+            </label>
+            {workOrderUrl && urlValid && (
+              <a className="eam-link" href={/^[a-z]+:\/\//i.test(workOrderUrl.trim()) ? workOrderUrl.trim() : `https://${workOrderUrl.trim()}`} target="_blank" rel="noopener noreferrer">
+                Open {workOrderNumber.trim() || "work order"} in EAM ↗
+              </a>
+            )}
+          </div>
         )}
 
         <label>
           Comments
           <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2} placeholder="Additional notes" />
         </label>
-
-        <div className="field">
-          <span className="field-label">Photos</span>
-          <label className="btn btn-secondary file-btn">
-            <input type="file" accept="image/*,.heic,.heif" multiple onChange={handleFiles} />
-            📷 Add photos
-          </label>
-          <span className="muted small">JPEG, PNG and iPhone HEIC photos are all fine.</span>
-          {uploading > 0 && <span className="hint">Uploading {uploading} photo{uploading === 1 ? "" : "s"}…</span>}
-        </div>
-
-        {(staged.length > 0 || existingPhotos.length > 0) && (
-          <div className="photo-grid">
-            {staged.map((s) => (
-              <div className="photo-thumb" key={s.id}>
-                {s.previewUrl ? (
-                  <img src={s.previewUrl} alt="" onClick={() => setLightbox(s.previewUrl)} />
-                ) : (
-                  <div className="photo-placeholder">{s.converting ? "Preparing…" : "HEIC"}</div>
-                )}
-                <button type="button" className="photo-remove" onClick={() => removeStaged(s.id)} aria-label="Remove photo">
-                  ✕
-                </button>
-              </div>
-            ))}
-            {existingPhotos.map((p) => (
-              <div className="photo-thumb" key={p.id}>
-                <img src={api.photoThumbUrl(p.id)} alt="" onClick={() => setLightbox(api.photoUrl(p.id))} />
-                <button type="button" className="photo-remove" onClick={() => removeExistingPhoto(p.id)} aria-label="Remove photo">
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
 
         <div className="side-panel-actions">
           <button type="submit" className="btn btn-primary" disabled={saving || uploading > 0}>

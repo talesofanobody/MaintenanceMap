@@ -23,9 +23,11 @@ export interface Issue {
   status: Status;
   workOrderCreated: boolean;
   workOrderNumber: string | null;
+  workOrderUrl: string | null;
   comments: string | null;
   lat: number;
   lng: number;
+  closedAt: string | null;
   createdAt: string;
   updatedAt: string;
   photos: Photo[];
