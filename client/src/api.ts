@@ -69,7 +69,11 @@ export const api = {
     estimatedHours?: number | null;
     actualHours?: number | null;
     scheduledFor?: string | null;
+    dueDate?: string | null;
   }) => request<Issue>("/issues", { method: "POST", body: JSON.stringify(data) }),
+
+  exportIssuesUrl: (propertyId?: string) => `${BASE}/export/issues.csv${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ""}`,
+  exportTechniciansUrl: () => `${BASE}/export/technicians.csv`,
 
   listTechnicians: () => request<Technician[]>("/technicians"),
   createTechnician: (data: TechnicianInput) => request<Technician>("/technicians", { method: "POST", body: JSON.stringify(data) }),

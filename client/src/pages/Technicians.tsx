@@ -189,11 +189,16 @@ export default function Technicians() {
           <h1>Technicians</h1>
           <p className="muted">Set each person's working hours, then assign issues to them — free time is worked out from what's scheduled.</p>
         </div>
-        {!adding && (
-          <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
-            + Add technician
-          </button>
-        )}
+        <div className="page-header-actions">
+          <a className="btn btn-secondary" href={api.exportTechniciansUrl()} download>
+            Export CSV
+          </a>
+          {!adding && (
+            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+              + Add technician
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <div className="banner banner-error">{error}</div>}
@@ -316,14 +321,19 @@ export default function Technicians() {
                 {t.assignments.length > 0 && (
                   <ul className="assignment-list">
                     {[...t.assignments]
-                      .sort((a, b) => (a.scheduledFor ?? "9999").localeCompare(b.scheduledFor ?? "9999"))
+                      .sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || (a.scheduledFor ?? "9999").localeCompare(b.scheduledFor ?? "9999"))
                       .slice(0, 6)
                       .map((a) => (
                         <li key={a.id}>
                           <span className={`pill pill-${a.priority}`}>{PRIORITY_SHORT_LABELS[a.priority]}</span>
                           <Link to={`/properties/${a.propertyId}`}>{a.title}</Link>
                           <span className="muted small">
-                            {a.scheduledFor ? relativeDay(a.scheduledFor, today) : "Unscheduled"}
+                            {a.scheduledFor ? `Start ${relativeDay(a.scheduledFor, today).toLowerCase()}` : "Unscheduled"}
+                            {a.dueDate && (
+                              <span className={a.dueDate < today ? "text-danger" : ""}>
+                                {` · due ${relativeDay(a.dueDate, today).toLowerCase()}`}
+                              </span>
+                            )}
                             {a.estimatedHours ? ` · ${formatHours(a.estimatedHours)}` : ""}
                             {a.status === "in_progress" ? " · in progress" : ""}
                           </span>

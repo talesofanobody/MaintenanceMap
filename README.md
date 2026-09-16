@@ -192,11 +192,14 @@ against their capacity and how much is **free**, plus unscheduled backlog and ov
 their open assignments. Removing a technician leaves their issues unassigned; deactivating keeps
 the history but takes them off the boards.
 
-In the issue form, the **Assignment** box lets you pick the technician, an **estimated duration**
-in hours and a **scheduled day**. As you type it tells you how much of that technician's day is
-still free — and warns when the estimate would overbook them. When an issue is completed you can
-also record the **actual hours** for time tracking, and the report shows assignee, schedule,
-estimate and actual per issue.
+In the issue form, the **Schedule** box holds a **start date** and a **due date**. Every issue
+gets a due date: it's filled in automatically from the priority's turnaround (urgent: same day,
+high: 3 days, medium: 14 days, low: 30 days — counted from the start date if you set one,
+otherwise today) and you can change it. The **Assignment** box below picks the technician and an
+**estimated duration** in hours; as you type it tells you how much of that technician's start day
+is still free and warns when the estimate would overbook them. When an issue is completed you can
+also record the **actual hours** for time tracking. The report shows assignee, start/due dates,
+estimate and actual per issue, and anything past its due date is flagged in red.
 
 ### 10. Dashboards and TV mode
 
@@ -208,11 +211,14 @@ bottom of urgent/high issues. Press **F** or use the button for fullscreen. Four
   (12 seconds each, worst first) with a card showing priority, status, who's assigned (or an
   "unassigned" flag), schedule, estimate, how long it's been open, work order and a photo. "Up
   next" shows what's coming.
-- **Board** — a departure-board style list, one section per technician: TIME (TODAY / TMRW /
-  OVERDUE / UNSCHED, with the estimate), TECH, ISSUE, LOCATION, PRIORITY and STATUS. Each section
-  header shows today's load and free hours; overdue times blink, urgent rows are red, in-progress
-  rows pulse green, and an UNASSIGNED section lists work still needing a technician. Long lists
-  page automatically.
+- **Board** — a departure-board style list. By default it's **grouped by priority, ordered by due
+  date** within each group; switch to **grouped by technician** (with today's load and free hours
+  in each section header, and an UNASSIGNED section for work still needing someone). Columns are
+  DUE (OVERDUE / DUE TODAY / DUE TMRW / DUE FRI 20, with the start day and estimate underneath),
+  TECH, ISSUE, LOCATION, PRIORITY and STATUS. Overdue rows blink, urgent rows are red, in-progress
+  rows pulse green, and long lists page automatically. Filter by technician or property with the
+  dropdowns — the choice goes into the URL (`?group=technician&tech=…&property=…`), so a TV can be
+  pointed at one technician's or one property's board, and the same filters apply to the live map.
 - **Summary** — KPIs (open, urgent, high, in progress, overdue, unassigned, closed in the last 7
   days, average time to resolve), today's crew capacity bars, a "needs attention" list, and open
   issues per property.
@@ -222,7 +228,16 @@ bottom of urgent/high issues. Press **F** or use the button for fullscreen. Four
 The dashboards use the same login as everything else — sign in once on the TV's browser and the
 30-day session keeps it live.
 
-### 11. Generate the report
+### 11. Export to CSV
+
+**Export CSV** in the top-right of the header downloads every issue across all properties as a
+spreadsheet: property, issue number, title, priority, status, technician and trade, start and due
+dates, logged/closed timestamps, days to resolve, estimated and actual hours, work order details
+and EAM link, description, action, comments, coordinates, and photo counts/paths. Each property's
+report has a **Download CSV** button for just that property, and the Technicians page exports the
+crew with their weekly hours and workload. Files open directly in Excel, Numbers or Google Sheets.
+
+### 12. Generate the report
 
 **Report** (toolbar, property card, or the guide's final step) opens `/properties/:id/report`,
 laid out as an A4 document:
@@ -248,7 +263,7 @@ for a file. Tip: give the map a second to finish loading imagery before printing
 - `Technician`: name, trade, phone, colour, active flag, working hours per weekday
 - `Issue`: title, description, action needed, priority, status, work order flag/number/EAM link,
   comments, lat/lng, closed-at timestamp (managed from the status), assigned technician,
-  estimated/actual hours, scheduled day; belongs to a property
+  estimated/actual hours, start date, due date (always set); belongs to a property
 - `Photo`: filename, GPS presence/lat/lng, taken-at timestamp (from EXIF), belongs to an issue
 
 ## Notes on swapping in Google Maps later

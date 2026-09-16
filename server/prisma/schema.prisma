@@ -69,8 +69,10 @@ model Issue {
   technician       Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
   estimatedHours   Float?
   actualHours      Float?
-  // Calendar day the work is planned for, as YYYY-MM-DD in the user's local time.
+  // Calendar days as YYYY-MM-DD in the user's local time: when work is planned to start,
+  // and when it must be done by.
   scheduledFor     String?
+  dueDate          String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   photos           Photo[]

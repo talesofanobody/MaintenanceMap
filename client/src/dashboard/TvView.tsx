@@ -83,7 +83,7 @@ export default function TvView() {
       </div>
       <div className="tv-body" key={`${current.key}-${round}`}>
         {current.key === "map" && <MapDashboard />}
-        {current.key === "board" && <DepartureBoard />}
+        {current.key === "board" && <DepartureBoard showControls={false} />}
         {current.key === "summary" && <SummaryBoard />}
       </div>
     </div>

@@ -2,7 +2,7 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
-import { capacityOn, committedOn, formatHours, relativeDay, todayStr } from "../lib/capacity";
+import { capacityOn, committedOn, defaultDueDate, formatHours, relativeDay, SLA_DAYS, todayStr } from "../lib/capacity";
 import type { Issue, Photo, Priority, Status, Technician } from "../types";
 import { PRIORITIES, PRIORITY_SHORT_LABELS, STATUSES, STATUS_LABELS } from "../types";
 import PhotoLightbox from "./PhotoLightbox";
@@ -79,6 +79,8 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
   const [estimatedHours, setEstimatedHours] = useState(issue?.estimatedHours != null ? String(issue.estimatedHours) : "");
   const [actualHours, setActualHours] = useState(issue?.actualHours != null ? String(issue.actualHours) : "");
   const [scheduledFor, setScheduledFor] = useState(issue?.scheduledFor ?? "");
+  const [dueDate, setDueDate] = useState(issue?.dueDate ?? (issue ? "" : defaultDueDate("medium")));
+  const [dueTouched, setDueTouched] = useState(!!issue);
   const [lat, setLat] = useState<number | null>(issue?.lat ?? draftLatLng?.lat ?? null);
   const [lng, setLng] = useState<number | null>(issue?.lng ?? draftLatLng?.lng ?? null);
   const [locationNote, setLocationNote] = useState<string | null>(null);
@@ -105,6 +107,12 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
       .then(setTechnicians)
       .catch(() => setTechnicians([]));
   }, []);
+
+  // Until the user picks a due date themselves, keep it in step with the priority's
+  // turnaround, counted from the start date (or today).
+  useEffect(() => {
+    if (!dueTouched) setDueDate(defaultDueDate(priority, scheduledFor || null));
+  }, [priority, scheduledFor, dueTouched]);
 
   const effectiveLat = draftLatLng?.lat ?? lat;
   const effectiveLng = draftLatLng?.lng ?? lng;
@@ -226,6 +234,10 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
       setError("Estimated hours must be a number.");
       return;
     }
+    if (dueDate && scheduledFor && dueDate < scheduledFor) {
+      setError("The due date can't be before the start date.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -246,6 +258,7 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
         estimatedHours: estimate,
         actualHours: status === "completed" ? parseHours(actualHours) : null,
         scheduledFor: scheduledFor || null,
+        dueDate: dueDate || null,
       };
 
       if (isEdit && issue) {
@@ -390,6 +403,31 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
         </div>
 
         <div className="assignment-box">
+          <span className="field-label">Schedule</span>
+          <div className="form-row">
+            <label>
+              Start date
+              <input type="date" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} />
+            </label>
+            <label>
+              Due date
+              <input
+                type="date"
+                value={dueDate}
+                min={scheduledFor || undefined}
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  setDueTouched(true);
+                }}
+                className={dueDate && scheduledFor && dueDate < scheduledFor ? "is-invalid" : ""}
+              />
+            </label>
+          </div>
+          <span className="muted small">
+            {dueTouched
+              ? `Turnaround for ${PRIORITY_SHORT_LABELS[priority].toLowerCase()} priority is ${SLA_DAYS[priority] === 0 ? "same day" : `${SLA_DAYS[priority]} days`}.`
+              : `Due date set automatically from priority (${SLA_DAYS[priority] === 0 ? "same day" : `${SLA_DAYS[priority]} days`}) — change it if you need to.`}
+          </span>
           <span className="field-label">Assignment</span>
           <label>
             Technician
@@ -407,16 +445,10 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
           {technicians.length === 0 && (
             <span className="muted small">No technicians yet — add them under Technicians in the top menu.</span>
           )}
-          <div className="form-row">
-            <label>
-              Estimated hours
-              <input type="number" min={0} step={0.5} inputMode="decimal" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} placeholder="e.g. 2" />
-            </label>
-            <label>
-              Scheduled for
-              <input type="date" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} />
-            </label>
-          </div>
+          <label>
+            Estimated hours
+            <input type="number" min={0} step={0.5} inputMode="decimal" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} placeholder="e.g. 2" />
+          </label>
           {capacityHint && <span className={`hint ${capacityHint.tone === "warn" ? "hint-warn" : ""}`}>{capacityHint.text}</span>}
         </div>
 

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { PRIORITY_SHORT_LABELS } from "../types";
 import { formatDurationMs } from "../lib/dates";
 import { formatHours, initials, loadSummary, relativeDay, todayStr } from "../lib/capacity";
-import { averageResolveMs, completedRecently, openIssues, SEVERITY } from "./derive";
+import { averageResolveMs, completedRecently, isOverdue, openIssues, SEVERITY } from "./derive";
 import { useDashboard } from "./useDashboardData";
 
 export default function SummaryBoard() {
@@ -19,7 +19,7 @@ export default function SummaryBoard() {
       high: open.filter((i) => i.priority === "high").length,
       inProgress: open.filter((i) => i.status === "in_progress").length,
       unassigned: open.filter((i) => !i.technicianId).length,
-      overdue: open.filter((i) => i.scheduledFor && i.scheduledFor < today).length,
+      overdue: open.filter((i) => isOverdue(i, today)).length,
       closedWeek: closed.length,
       avgResolve: averageResolveMs(closed),
     };
@@ -29,7 +29,7 @@ export default function SummaryBoard() {
         const mine = open.filter((i) => i.technicianId === t.id);
         return { t, mine, load: loadSummary(t.weeklyHours, mine, today) };
       });
-    const attention = open.filter((i) => i.priority === "urgent" || i.priority === "high" || (i.scheduledFor && i.scheduledFor < today)).slice(0, 8);
+    const attention = open.filter((i) => i.priority === "urgent" || i.priority === "high" || isOverdue(i, today)).slice(0, 8);
     const properties = data.properties
       .map((p) => {
         const mine = open.filter((i) => i.propertyId === p.id);
@@ -116,12 +116,12 @@ export default function SummaryBoard() {
           {attention.length === 0 && <p className="dash-muted">Nothing urgent, high-priority or overdue.</p>}
           <ul className="attention-list">
             {attention.map((i) => (
-              <li key={i.id} className={i.scheduledFor && i.scheduledFor < today ? "overdue" : ""}>
+              <li key={i.id} className={isOverdue(i, today) ? "overdue" : ""}>
                 <span className={`dash-tag dash-tag-${i.priority}`}>{PRIORITY_SHORT_LABELS[i.priority].toUpperCase()}</span>
                 <span className="attention-title">{i.title}</span>
                 <span className="dash-muted">
                   {i.property.name} · {i.technician ? i.technician.name : "Unassigned"}
-                  {i.scheduledFor ? ` · ${relativeDay(i.scheduledFor, today)}` : ""}
+                  {i.dueDate ? ` · ${isOverdue(i, today) ? "overdue, was due" : "due"} ${relativeDay(i.dueDate, today).toLowerCase()}` : ""}
                 </span>
               </li>
             ))}

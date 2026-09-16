@@ -9,7 +9,9 @@ import { formatDuration } from "../lib/dates";
 import { formatHours, initials, relativeDay, todayStr } from "../lib/capacity";
 import { issueDivIcon, pinSvg } from "../components/issueIcon";
 import { SATELLITE_ATTRIBUTION, SATELLITE_URL } from "../pages/PropertyWorkspace";
-import { issueNumbers, openIssues } from "./derive";
+import { applyFilters, isOverdue, issueNumbers, openIssues } from "./derive";
+import { useBoardFilters } from "./DepartureBoard";
+import { formatDate } from "../lib/dates";
 import { useDashboard } from "./useDashboardData";
 
 const DWELL_MS = 12000;
@@ -28,7 +30,8 @@ function FocusIssue({ issue, fallback }: { issue: DashboardIssue | null; fallbac
 
 export default function MapDashboard() {
   const { data } = useDashboard();
-  const issues = useMemo(() => (data ? openIssues(data) : []), [data]);
+  const [filters] = useBoardFilters();
+  const issues = useMemo(() => (data ? applyFilters(openIssues(data), filters) : []), [data, filters]);
   const numbers = useMemo(() => (data ? issueNumbers(data) : new Map<string, number>()), [data]);
   const [index, setIndex] = useState(0);
   const [cycle, setCycle] = useState(0);
@@ -136,26 +139,32 @@ export default function MapDashboard() {
 
           <dl className="dash-card-facts">
             <div>
-              <dt>Scheduled</dt>
-              <dd className={current.scheduledFor && current.scheduledFor < todayStr() ? "dash-overdue" : ""}>
-                {current.scheduledFor
-                  ? current.scheduledFor < todayStr()
-                    ? `Overdue · ${relativeDay(current.scheduledFor)}`
-                    : relativeDay(current.scheduledFor)
-                  : "Not yet"}
+              <dt>Due</dt>
+              <dd className={isOverdue(current, todayStr()) ? "dash-overdue" : ""}>
+                {current.dueDate ? `${isOverdue(current, todayStr()) ? "Overdue · " : ""}${relativeDay(current.dueDate)}` : "No due date"}
               </dd>
+            </div>
+            <div>
+              <dt>Start</dt>
+              <dd>{current.scheduledFor ? relativeDay(current.scheduledFor) : "Unscheduled"}</dd>
             </div>
             <div>
               <dt>Estimate</dt>
               <dd>{current.estimatedHours != null ? formatHours(current.estimatedHours) : "—"}</dd>
             </div>
             <div>
-              <dt>Open for</dt>
-              <dd>{formatDuration(current.createdAt)}</dd>
+              <dt>Logged</dt>
+              <dd>
+                {formatDate(current.createdAt)} · {formatDuration(current.createdAt)} ago
+              </dd>
             </div>
             <div>
               <dt>Work order</dt>
               <dd>{current.workOrderCreated ? current.workOrderNumber || "Raised" : "None"}</dd>
+            </div>
+            <div>
+              <dt>Location</dt>
+              <dd>{current.property.name}</dd>
             </div>
           </dl>
 

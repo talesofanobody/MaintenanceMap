@@ -28,6 +28,7 @@ export interface Assignment {
   estimatedHours: number | null;
   actualHours: number | null;
   scheduledFor: string | null;
+  dueDate: string | null;
   propertyId: string;
 }
 
@@ -63,6 +64,7 @@ export interface Issue {
   estimatedHours: number | null;
   actualHours: number | null;
   scheduledFor: string | null;
+  dueDate: string | null;
   createdAt: string;
   updatedAt: string;
   photos: Photo[];

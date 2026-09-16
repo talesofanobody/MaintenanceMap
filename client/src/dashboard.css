@@ -535,13 +535,102 @@
   font-family: var(--d-font-mono);
 }
 
+.board-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 0 14px 14px;
+  font-family: var(--font);
+}
+
+.board-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--d-muted);
+}
+
+.dash-select {
+  min-height: 36px;
+  padding: 0 32px 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--d-border);
+  background: var(--d-surface-2)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2393a4c3' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 10px center;
+  color: var(--d-text);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.board-controls-summary {
+  margin-left: auto;
+  align-self: center;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--d-muted);
+}
+
 .board-head,
 .board-row,
 .board-section {
   display: grid;
-  grid-template-columns: 130px 70px minmax(0, 1.8fr) minmax(0, 1fr) 120px 170px;
+  grid-template-columns: 190px 70px minmax(0, 1.8fr) minmax(0, 1fr) 120px 170px;
   gap: 14px;
   align-items: center;
+}
+
+.board-priority-mark {
+  width: 14px;
+  height: 30px;
+  border-radius: 4px;
+  background: var(--d-muted);
+}
+
+.board-priority-mark.pri-urgent,
+.board-section.pri-urgent .board-section-name {
+  background: var(--d-red);
+}
+
+.board-priority-mark.pri-high {
+  background: var(--d-orange);
+}
+
+.board-priority-mark.pri-medium {
+  background: var(--d-yellow);
+}
+
+.board-priority-mark.pri-low {
+  background: var(--d-green);
+}
+
+.board-section.kind-priority .board-section-name {
+  background: transparent;
+}
+
+.board-section.pri-urgent .board-section-name {
+  color: var(--d-red);
+}
+
+.board-section.pri-high .board-section-name {
+  color: var(--d-orange);
+}
+
+.board-section.pri-medium .board-section-name {
+  color: var(--d-yellow);
+}
+
+.board-section.pri-low .board-section-name {
+  color: var(--d-green);
 }
 
 .board-head {

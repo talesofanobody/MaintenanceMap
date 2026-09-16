@@ -1,18 +1,23 @@
 import type { DashboardData, DashboardIssue, Priority, Technician } from "../types";
+import { PRIORITIES } from "../types";
 import { addDays, loadSummary, todayStr, type LoadSummary } from "../lib/capacity";
 import { durationMs } from "../lib/dates";
 
 export const SEVERITY: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 
+// Boards and the live map all use the same order: priority first, then whatever is
+// due soonest, then the earliest start, then age.
+export function sortIssues(a: DashboardIssue, b: DashboardIssue): number {
+  return (
+    SEVERITY[a.priority] - SEVERITY[b.priority] ||
+    (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") ||
+    (a.scheduledFor ?? "9999").localeCompare(b.scheduledFor ?? "9999") ||
+    a.createdAt.localeCompare(b.createdAt)
+  );
+}
+
 export function openIssues(data: DashboardData): DashboardIssue[] {
-  return data.issues
-    .filter((i) => i.status !== "completed")
-    .sort(
-      (a, b) =>
-        SEVERITY[a.priority] - SEVERITY[b.priority] ||
-        (a.scheduledFor ?? "9999").localeCompare(b.scheduledFor ?? "9999") ||
-        a.createdAt.localeCompare(b.createdAt)
-    );
+  return data.issues.filter((i) => i.status !== "completed").sort(sortIssues);
 }
 
 // Issue numbers match the ones shown in each property's workspace and report.
@@ -33,50 +38,91 @@ export function issueNumbers(data: DashboardData): Map<string, number> {
   return numbers;
 }
 
-export type TimeCell = { label: string; tone: "overdue" | "today" | "soon" | "later" | "unscheduled" };
+export type Tone = "overdue" | "today" | "soon" | "later" | "unscheduled";
 
-export function timeCell(issue: DashboardIssue, today = todayStr()): TimeCell {
-  if (!issue.scheduledFor) return { label: "UNSCHED", tone: "unscheduled" };
-  if (issue.scheduledFor < today) return { label: "OVERDUE", tone: "overdue" };
-  if (issue.scheduledFor === today) return { label: "TODAY", tone: "today" };
-  if (issue.scheduledFor === addDays(today, 1)) return { label: "TMRW", tone: "soon" };
-  const [y, m, d] = issue.scheduledFor.split("-").map(Number);
-  const date = new Date(y, m - 1, d, 12);
-  const label = date.toLocaleDateString(undefined, { weekday: "short", day: "numeric" }).toUpperCase();
-  return { label, tone: issue.scheduledFor <= addDays(today, 6) ? "soon" : "later" };
+export interface TimeCell {
+  label: string;
+  tone: Tone;
 }
 
-const TONE_ORDER: Record<TimeCell["tone"], number> = { overdue: 0, today: 1, soon: 2, later: 3, unscheduled: 4 };
+function dayLabel(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y, m - 1, d, 12).toLocaleDateString(undefined, { weekday: "short", day: "numeric" }).toUpperCase();
+}
 
-export function boardOrder(a: DashboardIssue, b: DashboardIssue, today = todayStr()): number {
-  const ta = timeCell(a, today);
-  const tb = timeCell(b, today);
-  return (
-    TONE_ORDER[ta.tone] - TONE_ORDER[tb.tone] ||
-    (a.scheduledFor ?? "9999").localeCompare(b.scheduledFor ?? "9999") ||
-    (a.status === "in_progress" ? -1 : 0) - (b.status === "in_progress" ? -1 : 0) ||
-    SEVERITY[a.priority] - SEVERITY[b.priority]
-  );
+export function isOverdue(issue: DashboardIssue, today = todayStr()): boolean {
+  const marker = issue.dueDate ?? issue.scheduledFor;
+  return !!marker && marker < today && issue.status !== "completed";
+}
+
+export function dueCell(issue: DashboardIssue, today = todayStr()): TimeCell {
+  const due = issue.dueDate;
+  if (!due) return { label: "NO DUE", tone: "unscheduled" };
+  if (due < today) return { label: "OVERDUE", tone: "overdue" };
+  if (due === today) return { label: "DUE TODAY", tone: "today" };
+  if (due === addDays(today, 1)) return { label: "DUE TMRW", tone: "soon" };
+  return { label: `DUE ${dayLabel(due)}`, tone: due <= addDays(today, 6) ? "soon" : "later" };
+}
+
+export function startCell(issue: DashboardIssue, today = todayStr()): string {
+  const start = issue.scheduledFor;
+  if (!start) return "UNSCHED";
+  if (start === today) return "START TODAY";
+  if (start === addDays(today, 1)) return "START TMRW";
+  if (start < today) return `STARTED ${dayLabel(start)}`;
+  return `START ${dayLabel(start)}`;
+}
+
+export type GroupMode = "priority" | "technician";
+
+export interface BoardFilters {
+  group: GroupMode;
+  technicianId?: string;
+  propertyId?: string;
 }
 
 export interface BoardSection {
   key: string;
-  technician: Omit<Technician, "assignments"> | null;
+  kind: "priority" | "technician" | "unassigned";
+  priority?: Priority;
+  technician?: Omit<Technician, "assignments">;
   load: LoadSummary | null;
   rows: DashboardIssue[];
 }
 
-export function buildBoard(data: DashboardData, today = todayStr()): BoardSection[] {
-  const open = openIssues(data);
-  const sections: BoardSection[] = data.technicians
-    .filter((t) => t.active)
-    .map((t) => {
-      const rows = open.filter((i) => i.technicianId === t.id).sort((a, b) => boardOrder(a, b, today));
-      return { key: t.id, technician: t, load: loadSummary(t.weeklyHours, rows, today), rows };
-    });
+export function applyFilters(issues: DashboardIssue[], filters: Pick<BoardFilters, "technicianId" | "propertyId">): DashboardIssue[] {
+  return issues.filter(
+    (i) =>
+      (!filters.technicianId || (filters.technicianId === "unassigned" ? !i.technicianId : i.technicianId === filters.technicianId)) &&
+      (!filters.propertyId || i.propertyId === filters.propertyId)
+  );
+}
+
+export function buildBoard(data: DashboardData, today = todayStr(), filters: BoardFilters = { group: "priority" }): BoardSection[] {
+  const open = applyFilters(openIssues(data), filters);
+
+  if (filters.group === "priority") {
+    return PRIORITIES.slice()
+      .reverse()
+      .map((priority) => ({
+        key: priority,
+        kind: "priority" as const,
+        priority,
+        load: null,
+        rows: open.filter((i) => i.priority === priority),
+      }))
+      .filter((s) => s.rows.length > 0);
+  }
+
+  const activeTechs = data.technicians.filter((t) => t.active && (!filters.technicianId || filters.technicianId === t.id));
+  const sections: BoardSection[] = activeTechs.map((t) => {
+    const rows = open.filter((i) => i.technicianId === t.id);
+    const allMine = data.issues.filter((i) => i.technicianId === t.id && i.status !== "completed");
+    return { key: t.id, kind: "technician" as const, technician: t, load: loadSummary(t.weeklyHours, allMine, today), rows };
+  });
   const unassigned = open.filter((i) => !i.technicianId || !data.technicians.some((t) => t.id === i.technicianId && t.active));
-  if (unassigned.length > 0) {
-    sections.push({ key: "unassigned", technician: null, load: null, rows: unassigned.sort((a, b) => boardOrder(a, b, today)) });
+  if (unassigned.length > 0 && (!filters.technicianId || filters.technicianId === "unassigned")) {
+    sections.push({ key: "unassigned", kind: "unassigned", load: null, rows: unassigned });
   }
   return sections;
 }

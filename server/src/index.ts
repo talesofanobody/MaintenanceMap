@@ -7,6 +7,9 @@ import { photosRouter } from "./routes/photos";
 import { authRouter } from "./routes/auth";
 import { techniciansRouter } from "./routes/technicians";
 import { dashboardRouter } from "./routes/dashboard";
+import { exportRouter } from "./routes/export";
+import { prisma } from "./db";
+import { dayFrom, SLA_DAYS } from "./lib/validation";
 import { requireAuth } from "./middleware/requireAuth";
 import { PrismaSessionStore, purgeExpiredSessions } from "./lib/sessionStore";
 
@@ -56,6 +59,18 @@ app.use("/api/issues", requireAuth, issuesRouter);
 app.use("/api/photos", requireAuth, photosRouter);
 app.use("/api/technicians", requireAuth, techniciansRouter);
 app.use("/api/dashboard", requireAuth, dashboardRouter);
+app.use("/api/export", requireAuth, exportRouter);
+
+// Issues created before due dates existed get one from their priority's turnaround,
+// counted from the day they were logged.
+async function backfillDueDates() {
+  const missing = await prisma.issue.findMany({ where: { dueDate: null }, select: { id: true, priority: true, createdAt: true } });
+  for (const issue of missing) {
+    await prisma.issue.update({ where: { id: issue.id }, data: { dueDate: dayFrom(issue.createdAt, SLA_DAYS[issue.priority] ?? 14) } });
+  }
+  if (missing.length) console.log(`Backfilled due dates for ${missing.length} issue(s).`);
+}
+backfillDueDates().catch((err) => console.error("due date backfill failed", err));
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

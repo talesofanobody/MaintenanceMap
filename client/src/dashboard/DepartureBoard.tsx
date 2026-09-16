@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { PRIORITY_SHORT_LABELS } from "../types";
+import { useSearchParams } from "react-router-dom";
+import { PRIORITY_LABELS, PRIORITY_SHORT_LABELS } from "../types";
 import { formatHours, initials, todayStr } from "../lib/capacity";
-import { buildBoard, statusBoardLabel, timeCell, type BoardSection } from "./derive";
+import { buildBoard, dueCell, isOverdue, startCell, statusBoardLabel, type BoardFilters, type BoardSection, type GroupMode } from "./derive";
 import { useDashboard } from "./useDashboardData";
 
 const ROWS_PER_PAGE = 13;
@@ -37,10 +38,35 @@ function paginate(lines: Line[]): Line[][] {
   return pages.length ? pages : [[]];
 }
 
-export default function DepartureBoard() {
+// Grouping and filters live in the URL (?group=technician&tech=…&property=…) so a
+// TV can be pointed at exactly the board it should show.
+export function useBoardFilters(): [BoardFilters, (next: Partial<BoardFilters>) => void] {
+  const [params, setParams] = useSearchParams();
+  const group: GroupMode = params.get("group") === "technician" ? "technician" : "priority";
+  const filters: BoardFilters = {
+    group,
+    technicianId: params.get("tech") || undefined,
+    propertyId: params.get("property") || undefined,
+  };
+  const update = (next: Partial<BoardFilters>) => {
+    const merged = { ...filters, ...next };
+    const p = new URLSearchParams(params);
+    if (merged.group === "priority") p.delete("group");
+    else p.set("group", merged.group);
+    if (merged.technicianId) p.set("tech", merged.technicianId);
+    else p.delete("tech");
+    if (merged.propertyId) p.set("property", merged.propertyId);
+    else p.delete("property");
+    setParams(p, { replace: true });
+  };
+  return [filters, update];
+}
+
+export default function DepartureBoard({ showControls = true }: { showControls?: boolean }) {
   const { data } = useDashboard();
   const today = todayStr();
-  const sections = useMemo(() => (data ? buildBoard(data, today) : []), [data, today]);
+  const [filters, setFilters] = useBoardFilters();
+  const sections = useMemo(() => (data ? buildBoard(data, today, filters) : []), [data, today, filters]);
   const pages = useMemo(() => paginate(flatten(sections)), [sections]);
   const [page, setPage] = useState(0);
 
@@ -61,11 +87,52 @@ export default function DepartureBoard() {
 
   const lines = pages[page] ?? [];
   const totalRows = sections.reduce((n, s) => n + s.rows.length, 0);
+  const overdueTotal = sections.reduce((n, s) => n + s.rows.filter((i) => isOverdue(i, today)).length, 0);
 
   return (
     <div className="board">
+      {showControls && (
+        <div className="board-controls">
+          <label>
+            Group by
+            <select className="dash-select" value={filters.group} onChange={(e) => setFilters({ group: e.target.value as GroupMode })}>
+              <option value="priority">Priority, then due date</option>
+              <option value="technician">Technician</option>
+            </select>
+          </label>
+          <label>
+            Technician
+            <select className="dash-select" value={filters.technicianId ?? ""} onChange={(e) => setFilters({ technicianId: e.target.value || undefined })}>
+              <option value="">Everyone</option>
+              {data.technicians
+                .filter((t) => t.active)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              <option value="unassigned">Unassigned only</option>
+            </select>
+          </label>
+          <label>
+            Property
+            <select className="dash-select" value={filters.propertyId ?? ""} onChange={(e) => setFilters({ propertyId: e.target.value || undefined })}>
+              <option value="">All properties</option>
+              {data.properties.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="board-controls-summary">
+            {totalRows} open{overdueTotal ? ` · ${overdueTotal} overdue` : ""}
+          </span>
+        </div>
+      )}
+
       <div className="board-head">
-        <span className="board-col-time">TIME</span>
+        <span className="board-col-time">DUE</span>
         <span className="board-col-tech">TECH</span>
         <span className="board-col-issue">ISSUE</span>
         <span className="board-col-loc">LOCATION</span>
@@ -73,35 +140,43 @@ export default function DepartureBoard() {
         <span className="board-col-status">STATUS</span>
       </div>
 
-      {totalRows === 0 && sections.length === 0 && (
+      {totalRows === 0 && (
         <div className="dash-empty">
           <h2>Nothing on the board</h2>
-          <p>Add technicians and assign open issues to see daily tasks here.</p>
+          <p>{filters.technicianId || filters.propertyId ? "No open issues match these filters." : "Log issues and assign them to see daily tasks here."}</p>
         </div>
       )}
 
-      <div className="board-body" key={page}>
+      <div className="board-body" key={`${page}-${filters.group}`}>
         {lines.map((line, idx) => {
           if (line.kind === "section") {
-            const t = line.section.technician;
-            const load = line.section.load;
+            const s = line.section;
+            const sectionOverdue = s.rows.filter((i) => isOverdue(i, today)).length;
             return (
-              <div className="board-section" key={`s-${line.section.key}`} style={{ animationDelay: `${idx * 45}ms` }}>
-                {t ? (
+              <div className={`board-section kind-${s.kind} ${s.priority ? `pri-${s.priority}` : ""}`} key={`s-${s.key}`} style={{ animationDelay: `${idx * 45}ms` }}>
+                {s.kind === "technician" && s.technician ? (
                   <>
-                    <span className="avatar" style={{ background: t.color }}>
-                      {initials(t.name)}
+                    <span className="avatar" style={{ background: s.technician.color }}>
+                      {initials(s.technician.name)}
                     </span>
-                    <span className="board-section-name">{t.name.toUpperCase()}</span>
-                    {t.trade && <span className="board-section-trade">{t.trade.toUpperCase()}</span>}
-                    {load && (
-                      <span className={`board-section-load ${load.today.committed > load.today.capacity ? "over" : ""}`}>
-                        {load.today.capacity === 0
+                    <span className="board-section-name">{s.technician.name.toUpperCase()}</span>
+                    {s.technician.trade && <span className="board-section-trade">{s.technician.trade.toUpperCase()}</span>}
+                    {s.load && (
+                      <span className={`board-section-load ${s.load.today.committed > s.load.today.capacity ? "over" : ""}`}>
+                        {s.load.today.capacity === 0
                           ? "OFF TODAY"
-                          : `TODAY ${formatHours(load.today.committed)} / ${formatHours(load.today.capacity)} · ${formatHours(load.today.free)} FREE`}
-                        {load.overdueCount > 0 && ` · ${load.overdueCount} OVERDUE`}
+                          : `TODAY ${formatHours(s.load.today.committed)} / ${formatHours(s.load.today.capacity)} · ${formatHours(s.load.today.free)} FREE`}
+                        {sectionOverdue > 0 && ` · ${sectionOverdue} OVERDUE`}
                       </span>
                     )}
+                  </>
+                ) : s.kind === "priority" && s.priority ? (
+                  <>
+                    <span className={`board-priority-mark pri-${s.priority}`} />
+                    <span className="board-section-name">{PRIORITY_LABELS[s.priority].toUpperCase()}</span>
+                    <span className="board-section-trade">
+                      {s.rows.length} OPEN{sectionOverdue ? ` · ${sectionOverdue} OVERDUE` : ""}
+                    </span>
                   </>
                 ) : (
                   <>
@@ -124,19 +199,24 @@ export default function DepartureBoard() {
               </div>
             );
           }
-          const { issue, section } = line;
-          const time = timeCell(issue, today);
+          const { issue } = line;
+          const due = dueCell(issue, today);
           return (
             <div
-              className={`board-row tone-${time.tone} priority-${issue.priority} status-${issue.status}`}
+              className={`board-row tone-${due.tone} priority-${issue.priority} status-${issue.status}`}
               key={issue.id}
               style={{ animationDelay: `${idx * 45}ms` }}
             >
               <span className="board-col-time">
-                <span className="board-time">{time.label}</span>
-                {issue.estimatedHours != null && <span className="board-est">{formatHours(issue.estimatedHours)}</span>}
+                <span className="board-time">{due.label}</span>
+                <span className="board-est">
+                  {startCell(issue, today)}
+                  {issue.estimatedHours != null && ` · ${formatHours(issue.estimatedHours)}`}
+                </span>
               </span>
-              <span className="board-col-tech">{section.technician ? initials(section.technician.name) : "—"}</span>
+              <span className="board-col-tech" title={issue.technician?.name}>
+                {issue.technician ? initials(issue.technician.name) : "—"}
+              </span>
               <span className="board-col-issue">
                 {issue.title.toUpperCase()}
                 {issue.workOrderNumber && <span className="board-wo">{issue.workOrderNumber}</span>}

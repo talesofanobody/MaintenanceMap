@@ -1,10 +1,26 @@
-import type { Assignment, Status } from "../types";
+import type { Assignment, Priority, Status } from "../types";
 
 export interface WorkItem {
   id: string;
   status: Status;
   estimatedHours: number | null;
   scheduledFor: string | null;
+  dueDate?: string | null;
+}
+
+// Default turnaround per priority; mirrors the server's fallback.
+export const SLA_DAYS: Record<Priority, number> = { urgent: 0, high: 3, medium: 14, low: 30 };
+
+export function defaultDueDate(priority: Priority, fromDay?: string | null): string {
+  return addDays(fromDay || todayStr(), SLA_DAYS[priority]);
+}
+
+export function daysBetween(fromDay: string, toDay: string): number {
+  const parse = (s: string) => {
+    const [y, m, d] = s.split("-").map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((parse(toDay) - parse(fromDay)) / 86400000);
 }
 
 export interface DayLoad {
@@ -82,7 +98,10 @@ export function loadSummary(weeklyHours: number[], items: WorkItem[] | Assignmen
   const weekCommitted = days.reduce((sum, d) => sum + committedOn(open, d), 0);
 
   const backlog = open.filter((i) => !i.scheduledFor);
-  const overdue = open.filter((i) => i.scheduledFor && i.scheduledFor < today);
+  const overdue = open.filter((i) => {
+    const marker = i.dueDate ?? i.scheduledFor;
+    return marker !== null && marker !== undefined && marker < today;
+  });
 
   return {
     today: { capacity: todayCapacity, committed: todayCommitted, free: Math.max(0, todayCapacity - todayCommitted) },

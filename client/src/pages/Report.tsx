@@ -101,6 +101,9 @@ export default function Report() {
         </Link>
         <div className="report-actions-right">
           <span className="muted small hide-mobile">Prints on A4 — choose "Save as PDF" in the print dialog for a file.</span>
+          <a className="btn btn-secondary btn-small" href={api.exportIssuesUrl(property.id)} download>
+            Download CSV
+          </a>
           <button type="button" className="btn btn-primary btn-small" onClick={() => window.print()}>
             Print / Save as PDF
           </button>
@@ -263,7 +266,19 @@ export default function Report() {
                       ) : (
                         "Unassigned"
                       )}
-                      {issue.scheduledFor && ` · ${relativeDay(issue.scheduledFor)}`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Start · Due</dt>
+                    <dd>
+                      {issue.scheduledFor ? relativeDay(issue.scheduledFor) : "Unscheduled"} ·{" "}
+                      {issue.dueDate ? (
+                        <span className={issue.status !== "completed" && issue.dueDate < new Date().toISOString().slice(0, 10) ? "text-danger" : ""}>
+                          due {relativeDay(issue.dueDate).toLowerCase()}
+                        </span>
+                      ) : (
+                        "no due date"
+                      )}
                     </dd>
                   </div>
                   <div>

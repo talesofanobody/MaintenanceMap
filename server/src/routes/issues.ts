@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { parseOptionalDay, parseOptionalHours, ValidationError } from "../lib/validation";
+import { defaultDueDate, parseOptionalDay, parseOptionalHours, ValidationError } from "../lib/validation";
 
 export const issuesRouter = Router();
 
@@ -59,16 +59,23 @@ interface ParsedExtras {
   estimatedHours: number | null | undefined;
   actualHours: number | null | undefined;
   scheduledFor: string | null | undefined;
+  dueDate: string | null | undefined;
 }
 
 async function parseExtras(body: any): Promise<ParsedExtras> {
+  const scheduledFor = parseOptionalDay(body.scheduledFor, "scheduledFor");
+  const dueDate = parseOptionalDay(body.dueDate, "dueDate");
+  if (scheduledFor && dueDate && dueDate < scheduledFor) {
+    throw new ValidationError("due date can't be before the start date");
+  }
   return {
     url: normalizeUrl(body.workOrderUrl),
     closed: parseDate(body.closedAt, "closedAt"),
     technicianId: await parseTechnicianId(body.technicianId),
     estimatedHours: parseOptionalHours(body.estimatedHours, "estimatedHours"),
     actualHours: parseOptionalHours(body.actualHours, "actualHours"),
-    scheduledFor: parseOptionalDay(body.scheduledFor, "scheduledFor"),
+    scheduledFor,
+    dueDate,
   };
 }
 
@@ -114,13 +121,14 @@ issuesRouter.post("/", async (req, res) => {
   if (!property) return res.status(404).json({ error: "property not found" });
 
   const finalStatus = status ?? "pending";
+  const finalPriority = priority ?? "medium";
   const issue = await prisma.issue.create({
     data: {
       propertyId,
       title,
       description: description ?? null,
       actionNeeded: actionNeeded ?? null,
-      priority: priority ?? "medium",
+      priority: finalPriority,
       status: finalStatus,
       workOrderCreated: !!workOrderCreated,
       workOrderNumber: workOrderNumber ?? null,
@@ -133,6 +141,9 @@ issuesRouter.post("/", async (req, res) => {
       estimatedHours: extras.estimatedHours ?? null,
       actualHours: finalStatus === "completed" ? extras.actualHours ?? null : null,
       scheduledFor: extras.scheduledFor ?? null,
+      // Every issue carries a due date so boards can order by it; fall back to the
+      // priority's turnaround from the start date (or today).
+      dueDate: extras.dueDate ?? defaultDueDate(finalPriority, extras.scheduledFor ?? null),
     },
     include: ISSUE_INCLUDE,
   });
@@ -193,6 +204,9 @@ issuesRouter.put("/:id", async (req, res) => {
       ...(extras.technicianId !== undefined ? { technicianId: extras.technicianId } : {}),
       ...(extras.estimatedHours !== undefined ? { estimatedHours: extras.estimatedHours } : {}),
       ...(extras.scheduledFor !== undefined ? { scheduledFor: extras.scheduledFor } : {}),
+      ...(extras.dueDate !== undefined
+        ? { dueDate: extras.dueDate ?? defaultDueDate(priority ?? existing.priority, extras.scheduledFor ?? existing.scheduledFor) }
+        : {}),
       ...(nextStatus === "completed"
         ? extras.actualHours !== undefined
           ? { actualHours: extras.actualHours }

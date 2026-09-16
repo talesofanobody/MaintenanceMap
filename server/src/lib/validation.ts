@@ -33,6 +33,23 @@ export function parseOptionalDay(value: unknown, field: string): string | null |
   return value;
 }
 
+// Default turnaround per priority, used when an issue is saved without a due date.
+export const SLA_DAYS: Record<string, number> = { urgent: 0, high: 3, medium: 14, low: 30 };
+
+export function dayFrom(date: Date, offsetDays: number): string {
+  const d = new Date(date.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+export function defaultDueDate(priority: string, baseDay?: string | null): string {
+  const offset = SLA_DAYS[priority] ?? 14;
+  if (baseDay && DATE_ONLY.test(baseDay)) {
+    const [y, m, d] = baseDay.split("-").map(Number);
+    return dayFrom(new Date(Date.UTC(y, m - 1, d)), offset);
+  }
+  return dayFrom(new Date(), offset);
+}
+
 export function parseWeeklyHours(value: unknown): number[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value) || value.length !== 7) throw new ValidationError("weeklyHours must have 7 entries (Monday first)");

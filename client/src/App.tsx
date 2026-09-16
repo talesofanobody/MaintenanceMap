@@ -1,5 +1,6 @@
 import { HashRouter, Link, NavLink, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { api } from "./api";
 import Login from "./pages/Login";
 import PropertiesList from "./pages/PropertiesList";
 import PropertyWorkspace from "./pages/PropertyWorkspace";
@@ -41,6 +42,9 @@ function MainLayout({ username, onLogout }: { username: string; onLogout: () => 
           </nav>
         </div>
         <div className="app-header-right">
+          <a className="btn btn-ghost btn-small hide-mobile" href={api.exportIssuesUrl()} download title="Download every issue across all properties as a spreadsheet">
+            Export CSV
+          </a>
           <span className="app-header-user hide-mobile">{username}</span>
           <button type="button" className="btn btn-ghost btn-small" onClick={onLogout}>
             Sign out
