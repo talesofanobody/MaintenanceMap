@@ -18,6 +18,28 @@ model User {
   mustChangePassword Boolean     @default(false)
   lastLoginAt        DateTime?
   createdAt          DateTime    @default(now())
+  notifications      Notification[]
+}
+
+// A short message for one signed-in person: a job assigned to them, something due
+// or overdue, a status change on their work. Dedupe keys stop the scheduler from
+// repeating the same reminder every run.
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  at         DateTime  @default(now())
+  kind       String
+  title      String
+  body       String?
+  issueId    String?
+  propertyId String?
+  dedupeKey  String?
+  readAt     DateTime?
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt])
+  @@index([userId, at])
 }
 
 model Activity {

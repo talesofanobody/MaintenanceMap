@@ -11,6 +11,7 @@ import Access from "./pages/Access";
 import Account from "./pages/Account";
 import Activity from "./pages/Activity";
 import DashboardLayout from "./dashboard/DashboardLayout";
+import NotificationBell from "./notifications/NotificationBell";
 import MapDashboard from "./dashboard/MapDashboard";
 import DepartureBoard from "./dashboard/DepartureBoard";
 import SummaryBoard from "./dashboard/SummaryBoard";
@@ -49,6 +50,7 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
           </nav>
         </div>
         <div className="app-header-right">
+          <NotificationBell />
           {isAdmin && (
             <a className="btn btn-ghost btn-small hide-mobile" href={api.exportIssuesUrl()} download title="Download every issue across all properties as a spreadsheet">
               Export CSV

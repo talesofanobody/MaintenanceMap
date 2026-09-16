@@ -14,6 +14,8 @@ import { ADMIN_ONLY, attachUser, requireAuth } from "./middleware/requireAuth";
 import { usersRouter } from "./routes/users";
 import { activityRouter } from "./routes/activity";
 import { PrismaSessionStore, purgeExpiredSessions } from "./lib/sessionStore";
+import { notificationsRouter } from "./routes/notifications";
+import { startScheduler } from "./lib/scheduler";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -60,6 +62,7 @@ app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRouter);
 app.use("/api/users", requireAuth, ADMIN_ONLY, usersRouter);
 app.use("/api/activity", requireAuth, activityRouter);
+app.use("/api/notifications", requireAuth, notificationsRouter);
 app.use("/api/properties", requireAuth, propertiesRouter);
 app.use("/api/issues", requireAuth, issuesRouter);
 app.use("/api/photos", requireAuth, photosRouter);
@@ -83,6 +86,9 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   console.error(err);
   res.status(500).json({ error: err.message || "internal error" });
 });
+
+// Turns due/start dates into reminders every 15 minutes.
+startScheduler();
 
 purgeExpiredSessions();
 setInterval(purgeExpiredSessions, 6 * 60 * 60 * 1000).unref();

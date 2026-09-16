@@ -46,6 +46,28 @@ export interface ActivityEntry {
   details: string | null;
 }
 
+export type NotificationKind =
+  | "assigned"
+  | "new_issue"
+  | "status"
+  | "priority"
+  | "starts_today"
+  | "due_soon"
+  | "due_today"
+  | "overdue"
+  | "unassigned";
+
+export interface AppNotification {
+  id: string;
+  at: string;
+  kind: NotificationKind;
+  title: string;
+  body: string | null;
+  issueId: string | null;
+  propertyId: string | null;
+  readAt: string | null;
+}
+
 export interface TechnicianRef {
   id: string;
   name: string;

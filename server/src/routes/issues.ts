@@ -3,6 +3,9 @@ import { prisma } from "../db";
 import { defaultDueDate, parseOptionalDay, parseOptionalHours, ValidationError } from "../lib/validation";
 import { ADMIN_ONLY, CAN_EDIT } from "../middleware/requireAuth";
 import { describeChanges, logActivity } from "../lib/activity";
+import { adminUserIds, issueLine, notifyUsers, priorityWord, technicianUserId } from "../lib/notify";
+
+const STATUS_WORD: Record<string, string> = { pending: "pending", in_progress: "in progress", completed: "completed" };
 
 // Fields a technician may change on an issue assigned to them.
 const TECHNICIAN_FIELDS = ["status", "actualHours", "comments", "closedAt", "description", "actionNeeded"] as const;
@@ -171,6 +174,15 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
     propertyId: issue.propertyId,
     summary: `Logged "${issue.title}" (${issue.priority}${issue.technician ? `, assigned to ${issue.technician.name}` : ""})`,
   });
+
+  // Tell the assigned technician, and let admins know when someone else logs work.
+  const actor = req.user!.id;
+  const line = issueLine(issue, property.name);
+  const meta = { issueId: issue.id, propertyId: issue.propertyId };
+  await notifyUsers([await technicianUserId(issue.technicianId)], { ...meta, kind: "assigned", title: `New job: ${issue.title}`, body: line }, actor);
+  if (req.user!.role !== "admin") {
+    await notifyUsers(await adminUserIds(), { ...meta, kind: "new_issue", title: `${req.user!.username} logged "${issue.title}"`, body: line }, actor);
+  }
   res.status(201).json(issue);
 });
 
@@ -277,8 +289,40 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
       details: { changes },
     });
   }
+
+  await notifyAboutUpdate(req.user!.id, req.user!.username, existing, issue);
   res.json(issue);
 });
+
+type IssueRow = { id: string; title: string; propertyId: string; technicianId: string | null; status: string; priority: string; scheduledFor: string | null; dueDate: string | null };
+
+// Who needs to hear about a change: the technician it now belongs to, and admins when
+// a status moves. The person who made the change never gets told about their own edit.
+async function notifyAboutUpdate(actorId: string, actorName: string, before: IssueRow, after: IssueRow): Promise<void> {
+  const property = await prisma.property.findUnique({ where: { id: after.propertyId }, select: { name: true } });
+  const line = issueLine(after, property?.name);
+  const meta = { issueId: after.id, propertyId: after.propertyId };
+  const techUser = await technicianUserId(after.technicianId);
+  const statusChanged = before.status !== after.status;
+
+  if (after.technicianId && after.technicianId !== before.technicianId) {
+    await notifyUsers([techUser], { ...meta, kind: "assigned", title: `Assigned to you: ${after.title}`, body: line }, actorId);
+  } else if (techUser) {
+    if (statusChanged) {
+      await notifyUsers([techUser], { ...meta, kind: "status", title: `${after.title} is now ${STATUS_WORD[after.status] ?? after.status}`, body: `${actorName} · ${line}` }, actorId);
+    }
+    if (before.priority !== after.priority) {
+      await notifyUsers([techUser], { ...meta, kind: "priority", title: `Priority now ${priorityWord(after.priority)}: ${after.title}`, body: line }, actorId);
+    }
+    if (before.dueDate !== after.dueDate || before.scheduledFor !== after.scheduledFor) {
+      await notifyUsers([techUser], { ...meta, kind: "status", title: `Rescheduled: ${after.title}`, body: line }, actorId);
+    }
+  }
+
+  if (statusChanged) {
+    await notifyUsers(await adminUserIds(), { ...meta, kind: "status", title: `${actorName} marked "${after.title}" ${STATUS_WORD[after.status] ?? after.status}`, body: line }, actorId);
+  }
+}
 
 issuesRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
   try {

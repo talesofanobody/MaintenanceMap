@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MapContainer, Marker, Polygon, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { api } from "../api";
@@ -120,6 +120,20 @@ export default function PropertyWorkspace() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, loading]);
+
+  // Notifications and dashboards deep-link to an issue with ?issue=<id>: open it and fly there.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const wanted = searchParams.get("issue");
+    if (!wanted || loading) return;
+    const target = issues.find((i) => i.id === wanted);
+    if (target) {
+      openEditPanel(target);
+      setViewTarget({ lat: target.lat, lng: target.lng, zoom: 19, nonce: Date.now() });
+    }
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, loading, issues]);
 
   const numberedIssues = useMemo(() => {
     const sorted = [...issues].sort((a, b) => a.createdAt.localeCompare(b.createdAt));

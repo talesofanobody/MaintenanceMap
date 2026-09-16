@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppUser, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { ActivityEntry, AppNotification, AppUser, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -55,6 +55,11 @@ export const api = {
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") q.set(k, String(v));
     return request<ActivityEntry[]>(`/activity${q.toString() ? `?${q}` : ""}`);
   },
+
+  listNotifications: () => request<{ unread: number; items: AppNotification[] }>("/notifications"),
+  markNotificationRead: (id: string) => request<{ ok: boolean }>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllNotificationsRead: () => request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+  runReminderChecks: () => request<{ created: number; checked: number }>("/notifications/run-checks", { method: "POST" }),
 
   listProperties: () => request<Property[]>("/properties"),
   createProperty: (data: { name: string; address?: string; notes?: string }) =>
