@@ -5,6 +5,8 @@ import { propertiesRouter } from "./routes/properties";
 import { issuesRouter } from "./routes/issues";
 import { photosRouter } from "./routes/photos";
 import { authRouter } from "./routes/auth";
+import { techniciansRouter } from "./routes/technicians";
+import { dashboardRouter } from "./routes/dashboard";
 import { requireAuth } from "./middleware/requireAuth";
 import { PrismaSessionStore, purgeExpiredSessions } from "./lib/sessionStore";
 
@@ -52,6 +54,8 @@ app.use("/api/auth", authRouter);
 app.use("/api/properties", requireAuth, propertiesRouter);
 app.use("/api/issues", requireAuth, issuesRouter);
 app.use("/api/photos", requireAuth, photosRouter);
+app.use("/api/technicians", requireAuth, techniciansRouter);
+app.use("/api/dashboard", requireAuth, dashboardRouter);
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -7,6 +7,7 @@ import type { Issue, Priority, Property, Status } from "../types";
 import { PRIORITIES, PRIORITY_DESCRIPTIONS, PRIORITY_LABELS, STATUS_LABELS } from "../types";
 import { boundsOf, geoJsonToLatLngs, WORLD_RING } from "../lib/geo";
 import { durationMs, formatDate, formatDuration, formatDurationMs } from "../lib/dates";
+import { formatHours, relativeDay } from "../lib/capacity";
 import { issueDivIcon, pinSvg } from "../components/issueIcon";
 import { SATELLITE_ATTRIBUTION, SATELLITE_URL } from "./PropertyWorkspace";
 
@@ -249,6 +250,28 @@ export default function Report() {
                   <div>
                     <dt>Comments</dt>
                     <dd>{issue.comments || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Assigned to</dt>
+                    <dd>
+                      {issue.technician ? (
+                        <>
+                          <span className="tech-dot" style={{ background: issue.technician.color }} />
+                          {issue.technician.name}
+                          {issue.technician.trade ? ` (${issue.technician.trade})` : ""}
+                        </>
+                      ) : (
+                        "Unassigned"
+                      )}
+                      {issue.scheduledFor && ` · ${relativeDay(issue.scheduledFor)}`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Effort</dt>
+                    <dd>
+                      {issue.estimatedHours != null ? `Est. ${formatHours(issue.estimatedHours)}` : "No estimate"}
+                      {issue.actualHours != null ? ` · Actual ${formatHours(issue.actualHours)}` : ""}
+                    </dd>
                   </div>
                   <div>
                     <dt>Logged</dt>

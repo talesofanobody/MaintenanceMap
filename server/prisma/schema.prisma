@@ -20,6 +20,21 @@ model Session {
   expiresAt DateTime
 }
 
+model Technician {
+  id          String   @id @default(cuid())
+  name        String
+  trade       String?
+  phone       String?
+  color       String   @default("#2563eb")
+  active      Boolean  @default(true)
+  // Hours available per weekday, Monday first, stored as a JSON array of 7 numbers.
+  weeklyHours String   @default("[8,8,8,8,8,0,0]")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  issues      Issue[]
+}
+
 model Property {
   id        String   @id @default(cuid())
   name      String
@@ -50,11 +65,18 @@ model Issue {
   lat              Float
   lng              Float
   closedAt         DateTime?
+  technicianId     String?
+  technician       Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  estimatedHours   Float?
+  actualHours      Float?
+  // Calendar day the work is planned for, as YYYY-MM-DD in the user's local time.
+  scheduledFor     String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   photos           Photo[]
 
   @@index([propertyId])
+  @@index([technicianId])
 }
 
 model Photo {

@@ -1,0 +1,34 @@
+import { Router } from "express";
+import { prisma } from "../db";
+import { serializeTechnician } from "./technicians";
+
+export const dashboardRouter = Router();
+
+// One aggregate payload for the display screens: every property outline, every
+// open issue (plus those closed in the last week, for the summary), and the crew.
+dashboardRouter.get("/", async (_req, res) => {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [properties, technicians, issues] = await Promise.all([
+    prisma.property.findMany({
+      select: { id: true, name: true, address: true, boundary: true, centerLat: true, centerLng: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.technician.findMany({ orderBy: [{ active: "desc" }, { name: "asc" }] }),
+    prisma.issue.findMany({
+      where: { OR: [{ status: { not: "completed" } }, { closedAt: { gte: since } }] },
+      include: {
+        property: { select: { id: true, name: true } },
+        technician: { select: { id: true, name: true, color: true, trade: true } },
+        photos: { select: { id: true }, orderBy: { createdAt: "desc" }, take: 1 },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+
+  res.json({
+    generatedAt: new Date().toISOString(),
+    properties: properties.map((p) => ({ ...p, boundary: p.boundary ? JSON.parse(p.boundary) : null })),
+    technicians: technicians.map(serializeTechnician),
+    issues,
+  });
+});

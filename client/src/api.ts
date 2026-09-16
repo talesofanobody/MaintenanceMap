@@ -1,4 +1,14 @@
-import type { GeoJSONPolygon, Issue, Photo, Priority, Property, Status } from "./types";
+import type { DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Status, Technician } from "./types";
+
+export interface TechnicianInput {
+  name: string;
+  trade?: string | null;
+  phone?: string | null;
+  color?: string;
+  weeklyHours?: number[];
+  notes?: string | null;
+  active?: boolean;
+}
 
 const BASE = "/api";
 
@@ -55,7 +65,19 @@ export const api = {
     lat: number;
     lng: number;
     closedAt?: string | null;
+    technicianId?: string | null;
+    estimatedHours?: number | null;
+    actualHours?: number | null;
+    scheduledFor?: string | null;
   }) => request<Issue>("/issues", { method: "POST", body: JSON.stringify(data) }),
+
+  listTechnicians: () => request<Technician[]>("/technicians"),
+  createTechnician: (data: TechnicianInput) => request<Technician>("/technicians", { method: "POST", body: JSON.stringify(data) }),
+  updateTechnician: (id: string, data: Partial<TechnicianInput>) =>
+    request<Technician>(`/technicians/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteTechnician: (id: string) => request<void>(`/technicians/${id}`, { method: "DELETE" }),
+
+  getDashboard: () => request<DashboardData>("/dashboard"),
   updateIssue: (id: string, data: Partial<Issue>) =>
     request<Issue>(`/issues/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteIssue: (id: string) => request<void>(`/issues/${id}`, { method: "DELETE" }),

@@ -2,7 +2,8 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
-import type { Issue, Photo, Priority, Status } from "../types";
+import { capacityOn, committedOn, formatHours, relativeDay, todayStr } from "../lib/capacity";
+import type { Issue, Photo, Priority, Status, Technician } from "../types";
 import { PRIORITIES, PRIORITY_SHORT_LABELS, STATUSES, STATUS_LABELS } from "../types";
 import PhotoLightbox from "./PhotoLightbox";
 
@@ -54,6 +55,12 @@ function looksLikeUrl(value: string): boolean {
   }
 }
 
+function parseHours(value: string): number | null {
+  if (value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestReposition, onLocationDetected, onClose, onSaved }: Props) {
   const isEdit = !!issue;
   const [title, setTitle] = useState(issue?.title ?? "");
@@ -67,6 +74,11 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
   const [comments, setComments] = useState(issue?.comments ?? "");
   const [closedDate, setClosedDate] = useState(toDateInputValue(issue?.closedAt));
   const [closedDateTouched, setClosedDateTouched] = useState(false);
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [technicianId, setTechnicianId] = useState(issue?.technicianId ?? "");
+  const [estimatedHours, setEstimatedHours] = useState(issue?.estimatedHours != null ? String(issue.estimatedHours) : "");
+  const [actualHours, setActualHours] = useState(issue?.actualHours != null ? String(issue.actualHours) : "");
+  const [scheduledFor, setScheduledFor] = useState(issue?.scheduledFor ?? "");
   const [lat, setLat] = useState<number | null>(issue?.lat ?? draftLatLng?.lat ?? null);
   const [lng, setLng] = useState<number | null>(issue?.lng ?? draftLatLng?.lng ?? null);
   const [locationNote, setLocationNote] = useState<string | null>(null);
@@ -87,12 +99,44 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
     };
   }, []);
 
+  useEffect(() => {
+    api
+      .listTechnicians()
+      .then(setTechnicians)
+      .catch(() => setTechnicians([]));
+  }, []);
+
   const effectiveLat = draftLatLng?.lat ?? lat;
   const effectiveLng = draftLatLng?.lng ?? lng;
   const hasLocation = effectiveLat !== null && effectiveLng !== null;
   const photoCount = staged.length + existingPhotos.length;
   const urlValid = looksLikeUrl(workOrderUrl);
   const closedIso = status === "completed" ? (closedDateTouched || !issue?.closedAt ? dateInputToIso(closedDate) : issue.closedAt) : null;
+
+  const selectableTechs = technicians.filter((t) => t.active || t.id === technicianId);
+  const selectedTech = technicians.find((t) => t.id === technicianId) ?? null;
+  const estimate = parseHours(estimatedHours);
+  let capacityHint: { text: string; tone: "ok" | "warn" } | null = null;
+  if (selectedTech && scheduledFor) {
+    const capacity = capacityOn(selectedTech.weeklyHours, scheduledFor);
+    const committed = committedOn(selectedTech.assignments, scheduledFor, issue?.id);
+    const free = capacity - committed;
+    const after = free - (estimate ?? 0);
+    const day = relativeDay(scheduledFor, todayStr());
+    if (capacity === 0) {
+      capacityHint = { text: `${selectedTech.name} isn't scheduled to work on ${day}.`, tone: "warn" };
+    } else if (after < 0) {
+      capacityHint = {
+        text: `${selectedTech.name} only has ${formatHours(Math.max(0, free))} free on ${day} (${formatHours(committed)} of ${formatHours(capacity)} already scheduled) — this would overbook by ${formatHours(-after)}.`,
+        tone: "warn",
+      };
+    } else {
+      capacityHint = {
+        text: `${selectedTech.name} has ${formatHours(free)} free on ${day} (${formatHours(committed)} of ${formatHours(capacity)} scheduled)${estimate ? ` — ${formatHours(after)} left after this` : ""}.`,
+        tone: "ok",
+      };
+    }
+  }
 
   async function handleFiles(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -178,6 +222,10 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
       setError("The EAM link doesn't look like a web address.");
       return;
     }
+    if (estimatedHours.trim() !== "" && estimate === null) {
+      setError("Estimated hours must be a number.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -194,6 +242,10 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
         lat: finalLat,
         lng: finalLng,
         closedAt: closedIso,
+        technicianId: technicianId || null,
+        estimatedHours: estimate,
+        actualHours: status === "completed" ? parseHours(actualHours) : null,
+        scheduledFor: scheduledFor || null,
       };
 
       if (isEdit && issue) {
@@ -337,6 +389,37 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
           </div>
         </div>
 
+        <div className="assignment-box">
+          <span className="field-label">Assignment</span>
+          <label>
+            Technician
+            <select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)}>
+              <option value="">Unassigned</option>
+              {selectableTechs.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.trade ? ` — ${t.trade}` : ""}
+                  {!t.active ? " (inactive)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          {technicians.length === 0 && (
+            <span className="muted small">No technicians yet — add them under Technicians in the top menu.</span>
+          )}
+          <div className="form-row">
+            <label>
+              Estimated hours
+              <input type="number" min={0} step={0.5} inputMode="decimal" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} placeholder="e.g. 2" />
+            </label>
+            <label>
+              Scheduled for
+              <input type="date" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} />
+            </label>
+          </div>
+          {capacityHint && <span className={`hint ${capacityHint.tone === "warn" ? "hint-warn" : ""}`}>{capacityHint.text}</span>}
+        </div>
+
         <div className="timeline-box">
           <div className="timeline-row">
             <span className="timeline-label">Logged</span>
@@ -362,6 +445,10 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
                   <span className="timeline-strong">{formatDuration(issue.createdAt, closedIso)}</span>
                 </div>
               )}
+              <label className="timeline-row timeline-input">
+                <span className="timeline-label">Actual hours</span>
+                <input type="number" min={0} step={0.25} inputMode="decimal" value={actualHours} onChange={(e) => setActualHours(e.target.value)} placeholder={estimate ? `est. ${estimate}` : "e.g. 1.5"} />
+              </label>
             </>
           ) : (
             issue && (

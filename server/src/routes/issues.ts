@@ -1,12 +1,16 @@
 import { Router } from "express";
 import { prisma } from "../db";
+import { parseOptionalDay, parseOptionalHours, ValidationError } from "../lib/validation";
 
 export const issuesRouter = Router();
 
 const PRIORITIES = new Set(["low", "medium", "high", "urgent"]);
 const STATUSES = new Set(["pending", "in_progress", "completed"]);
 
-class ValidationError extends Error {}
+const ISSUE_INCLUDE = {
+  photos: true,
+  technician: { select: { id: true, name: true, color: true, trade: true } },
+} as const;
 
 // Accepts a pasted EAM link, tolerating a missing scheme; only http(s) is allowed
 // so the value is always safe to render as an href.
@@ -39,32 +43,48 @@ function parseDate(value: unknown, field: string): Date | null | undefined {
   return date;
 }
 
+async function parseTechnicianId(value: unknown): Promise<string | null | undefined> {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "string") throw new ValidationError("invalid technician");
+  const tech = await prisma.technician.findUnique({ where: { id: value } });
+  if (!tech) throw new ValidationError("technician not found");
+  return tech.id;
+}
+
+interface ParsedExtras {
+  url: string | null | undefined;
+  closed: Date | null | undefined;
+  technicianId: string | null | undefined;
+  estimatedHours: number | null | undefined;
+  actualHours: number | null | undefined;
+  scheduledFor: string | null | undefined;
+}
+
+async function parseExtras(body: any): Promise<ParsedExtras> {
+  return {
+    url: normalizeUrl(body.workOrderUrl),
+    closed: parseDate(body.closedAt, "closedAt"),
+    technicianId: await parseTechnicianId(body.technicianId),
+    estimatedHours: parseOptionalHours(body.estimatedHours, "estimatedHours"),
+    actualHours: parseOptionalHours(body.actualHours, "actualHours"),
+    scheduledFor: parseOptionalDay(body.scheduledFor, "scheduledFor"),
+  };
+}
+
 issuesRouter.get("/", async (req, res) => {
   const { propertyId } = req.query;
   const issues = await prisma.issue.findMany({
     where: propertyId ? { propertyId: String(propertyId) } : undefined,
-    include: { photos: true },
+    include: ISSUE_INCLUDE,
     orderBy: { createdAt: "desc" },
   });
   res.json(issues);
 });
 
 issuesRouter.post("/", async (req, res) => {
-  const {
-    propertyId,
-    title,
-    description,
-    actionNeeded,
-    priority,
-    status,
-    workOrderCreated,
-    workOrderNumber,
-    workOrderUrl,
-    comments,
-    lat,
-    lng,
-    closedAt,
-  } = req.body;
+  const { propertyId, title, description, actionNeeded, priority, status, workOrderCreated, workOrderNumber, comments, lat, lng } =
+    req.body;
 
   if (!propertyId || typeof propertyId !== "string") {
     return res.status(400).json({ error: "propertyId is required" });
@@ -82,13 +102,12 @@ issuesRouter.post("/", async (req, res) => {
     return res.status(400).json({ error: "invalid status" });
   }
 
-  let url: string | null | undefined;
-  let closed: Date | null | undefined;
+  let extras: ParsedExtras;
   try {
-    url = normalizeUrl(workOrderUrl);
-    closed = parseDate(closedAt, "closedAt");
+    extras = await parseExtras(req.body);
   } catch (err) {
-    return res.status(400).json({ error: (err as Error).message });
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
   }
 
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
@@ -105,41 +124,29 @@ issuesRouter.post("/", async (req, res) => {
       status: finalStatus,
       workOrderCreated: !!workOrderCreated,
       workOrderNumber: workOrderNumber ?? null,
-      workOrderUrl: url ?? null,
+      workOrderUrl: extras.url ?? null,
       comments: comments ?? null,
       lat,
       lng,
-      closedAt: finalStatus === "completed" ? closed ?? new Date() : null,
+      closedAt: finalStatus === "completed" ? extras.closed ?? new Date() : null,
+      technicianId: extras.technicianId ?? null,
+      estimatedHours: extras.estimatedHours ?? null,
+      actualHours: finalStatus === "completed" ? extras.actualHours ?? null : null,
+      scheduledFor: extras.scheduledFor ?? null,
     },
-    include: { photos: true },
+    include: ISSUE_INCLUDE,
   });
   res.status(201).json(issue);
 });
 
 issuesRouter.get("/:id", async (req, res) => {
-  const issue = await prisma.issue.findUnique({
-    where: { id: req.params.id },
-    include: { photos: true },
-  });
+  const issue = await prisma.issue.findUnique({ where: { id: req.params.id }, include: ISSUE_INCLUDE });
   if (!issue) return res.status(404).json({ error: "not found" });
   res.json(issue);
 });
 
 issuesRouter.put("/:id", async (req, res) => {
-  const {
-    title,
-    description,
-    actionNeeded,
-    priority,
-    status,
-    workOrderCreated,
-    workOrderNumber,
-    workOrderUrl,
-    comments,
-    lat,
-    lng,
-    closedAt,
-  } = req.body;
+  const { title, description, actionNeeded, priority, status, workOrderCreated, workOrderNumber, comments, lat, lng } = req.body;
 
   if (priority !== undefined && !PRIORITIES.has(priority)) {
     return res.status(400).json({ error: "invalid priority" });
@@ -148,13 +155,12 @@ issuesRouter.put("/:id", async (req, res) => {
     return res.status(400).json({ error: "invalid status" });
   }
 
-  let url: string | null | undefined;
-  let closed: Date | null | undefined;
+  let extras: ParsedExtras;
   try {
-    url = normalizeUrl(workOrderUrl);
-    closed = parseDate(closedAt, "closedAt");
+    extras = await parseExtras(req.body);
   } catch (err) {
-    return res.status(400).json({ error: (err as Error).message });
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
   }
 
   const existing = await prisma.issue.findUnique({ where: { id: req.params.id } });
@@ -165,7 +171,7 @@ issuesRouter.put("/:id", async (req, res) => {
   const nextStatus = status ?? existing.status;
   let nextClosedAt: Date | null;
   if (nextStatus === "completed") {
-    nextClosedAt = closed !== undefined ? closed ?? new Date() : existing.closedAt ?? new Date();
+    nextClosedAt = extras.closed !== undefined ? extras.closed ?? new Date() : existing.closedAt ?? new Date();
   } else {
     nextClosedAt = null;
   }
@@ -180,13 +186,21 @@ issuesRouter.put("/:id", async (req, res) => {
       ...(status !== undefined ? { status } : {}),
       ...(workOrderCreated !== undefined ? { workOrderCreated: !!workOrderCreated } : {}),
       ...(workOrderNumber !== undefined ? { workOrderNumber } : {}),
-      ...(url !== undefined ? { workOrderUrl: url } : {}),
+      ...(extras.url !== undefined ? { workOrderUrl: extras.url } : {}),
       ...(comments !== undefined ? { comments } : {}),
       ...(lat !== undefined ? { lat } : {}),
       ...(lng !== undefined ? { lng } : {}),
+      ...(extras.technicianId !== undefined ? { technicianId: extras.technicianId } : {}),
+      ...(extras.estimatedHours !== undefined ? { estimatedHours: extras.estimatedHours } : {}),
+      ...(extras.scheduledFor !== undefined ? { scheduledFor: extras.scheduledFor } : {}),
+      ...(nextStatus === "completed"
+        ? extras.actualHours !== undefined
+          ? { actualHours: extras.actualHours }
+          : {}
+        : { actualHours: null }),
       closedAt: nextClosedAt,
     },
-    include: { photos: true },
+    include: ISSUE_INCLUDE,
   });
   res.json(issue);
 });

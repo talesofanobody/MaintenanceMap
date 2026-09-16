@@ -1,9 +1,15 @@
-import { HashRouter, Link, Route, Routes } from "react-router-dom";
+import { HashRouter, Link, NavLink, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import Login from "./pages/Login";
 import PropertiesList from "./pages/PropertiesList";
 import PropertyWorkspace from "./pages/PropertyWorkspace";
 import Report from "./pages/Report";
+import Technicians from "./pages/Technicians";
+import DashboardLayout from "./dashboard/DashboardLayout";
+import MapDashboard from "./dashboard/MapDashboard";
+import DepartureBoard from "./dashboard/DepartureBoard";
+import SummaryBoard from "./dashboard/SummaryBoard";
+import TvView from "./dashboard/TvView";
 
 export function BrandMark() {
   return (
@@ -17,7 +23,38 @@ export function BrandMark() {
   );
 }
 
-function AppShell() {
+function MainLayout({ username, onLogout }: { username: string; onLogout: () => void }) {
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="app-header-left">
+          <Link to="/" className="app-title">
+            <BrandMark />
+            <span className="hide-mobile">MaintenanceMap</span>
+          </Link>
+          <nav className="app-nav" aria-label="Main">
+            <NavLink to="/" end>
+              Properties
+            </NavLink>
+            <NavLink to="/technicians">Technicians</NavLink>
+            <NavLink to="/dashboard">Dashboards</NavLink>
+          </nav>
+        </div>
+        <div className="app-header-right">
+          <span className="app-header-user hide-mobile">{username}</span>
+          <button type="button" className="btn btn-ghost btn-small" onClick={onLogout}>
+            Sign out
+          </button>
+        </div>
+      </header>
+      <main className="app-main">
+        <Outlet />
+      </main>
+    </div>
+  );
+}
+
+function AppRoutes() {
   const { state, logout } = useAuth();
 
   if (state.status === "loading") {
@@ -30,27 +67,20 @@ function AppShell() {
 
   return (
     <HashRouter>
-      <div className="app-shell">
-        <header className="app-header">
-          <Link to="/" className="app-title">
-            <BrandMark />
-            <span>MaintenanceMap</span>
-          </Link>
-          <div className="app-header-right">
-            <span className="app-header-user hide-mobile">{state.username}</span>
-            <button type="button" className="btn btn-ghost btn-small" onClick={() => logout()}>
-              Sign out
-            </button>
-          </div>
-        </header>
-        <main className="app-main">
-          <Routes>
-            <Route path="/" element={<PropertiesList />} />
-            <Route path="/properties/:id" element={<PropertyWorkspace />} />
-            <Route path="/properties/:id/report" element={<Report />} />
-          </Routes>
-        </main>
-      </div>
+      <Routes>
+        <Route element={<MainLayout username={state.username} onLogout={() => logout()} />}>
+          <Route path="/" element={<PropertiesList />} />
+          <Route path="/properties/:id" element={<PropertyWorkspace />} />
+          <Route path="/properties/:id/report" element={<Report />} />
+          <Route path="/technicians" element={<Technicians />} />
+        </Route>
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route index element={<TvView />} />
+          <Route path="map" element={<MapDashboard />} />
+          <Route path="board" element={<DepartureBoard />} />
+          <Route path="summary" element={<SummaryBoard />} />
+        </Route>
+      </Routes>
     </HashRouter>
   );
 }
@@ -58,7 +88,7 @@ function AppShell() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppShell />
+      <AppRoutes />
     </AuthProvider>
   );
 }

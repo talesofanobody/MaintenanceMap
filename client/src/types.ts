@@ -13,6 +13,36 @@ export interface Photo {
   createdAt: string;
 }
 
+export interface TechnicianRef {
+  id: string;
+  name: string;
+  color: string;
+  trade: string | null;
+}
+
+export interface Assignment {
+  id: string;
+  title: string;
+  priority: Priority;
+  status: Status;
+  estimatedHours: number | null;
+  actualHours: number | null;
+  scheduledFor: string | null;
+  propertyId: string;
+}
+
+export interface Technician extends TechnicianRef {
+  phone: string | null;
+  active: boolean;
+  weeklyHours: number[];
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  assignments: Assignment[];
+}
+
+export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
 export interface Issue {
   id: string;
   propertyId: string;
@@ -28,9 +58,26 @@ export interface Issue {
   lat: number;
   lng: number;
   closedAt: string | null;
+  technicianId: string | null;
+  technician: TechnicianRef | null;
+  estimatedHours: number | null;
+  actualHours: number | null;
+  scheduledFor: string | null;
   createdAt: string;
   updatedAt: string;
   photos: Photo[];
+}
+
+export interface DashboardIssue extends Omit<Issue, "photos"> {
+  property: { id: string; name: string };
+  photos: { id: string }[];
+}
+
+export interface DashboardData {
+  generatedAt: string;
+  properties: Pick<Property, "id" | "name" | "address" | "boundary" | "centerLat" | "centerLng">[];
+  technicians: Omit<Technician, "assignments">[];
+  issues: DashboardIssue[];
 }
 
 export interface GeoJSONPolygon {
