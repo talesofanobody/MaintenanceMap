@@ -20,6 +20,7 @@ dashboardRouter.get("/", async (_req, res) => {
         property: { select: { id: true, name: true } },
         technician: { select: { id: true, name: true, color: true, trade: true } },
         photos: { select: { id: true }, orderBy: { createdAt: "desc" }, take: 1 },
+        checklist: { select: { done: true } },
       },
       orderBy: { createdAt: "asc" },
     }),

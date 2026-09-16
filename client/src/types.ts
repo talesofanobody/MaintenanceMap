@@ -74,6 +74,61 @@ export interface AppSettings {
   escalation: { enabled: boolean; afterOverdueDays: number };
 }
 
+export interface ChecklistItem {
+  id: string;
+  issueId: string;
+  text: string;
+  position: number;
+  done: boolean;
+  doneAt: string | null;
+  doneBy: string | null;
+}
+
+export type ScheduleUnit = "days" | "weeks" | "months";
+
+export interface Schedule {
+  id: string;
+  propertyId: string;
+  title: string;
+  description: string | null;
+  actionNeeded: string | null;
+  priority: Priority;
+  technicianId: string | null;
+  technician: { id: string; name: string; color: string } | null;
+  estimatedHours: number | null;
+  lat: number;
+  lng: number;
+  every: number;
+  unit: ScheduleUnit;
+  leadDays: number;
+  nextDue: string;
+  checklist: string[];
+  active: boolean;
+  lastCreatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  property: { id: string; name: string };
+  issues: { id: string; title: string; status: Status; dueDate: string | null }[];
+}
+
+export interface ScheduleInput {
+  propertyId?: string;
+  title: string;
+  description?: string | null;
+  actionNeeded?: string | null;
+  priority: Priority;
+  technicianId?: string | null;
+  estimatedHours?: number | null;
+  lat?: number;
+  lng?: number;
+  every: number;
+  unit: ScheduleUnit;
+  leadDays: number;
+  nextDue: string;
+  checklist: string[];
+  active?: boolean;
+}
+
 export interface TechnicianRef {
   id: string;
   name: string;
@@ -108,6 +163,8 @@ export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export interface Issue {
   id: string;
   propertyId: string;
+  scheduleId?: string | null;
+  checklist?: ChecklistItem[];
   title: string;
   description: string | null;
   actionNeeded: string | null;
@@ -131,9 +188,10 @@ export interface Issue {
   photos: Photo[];
 }
 
-export interface DashboardIssue extends Omit<Issue, "photos"> {
+export interface DashboardIssue extends Omit<Issue, "photos" | "checklist"> {
   property: { id: string; name: string };
   photos: { id: string }[];
+  checklist?: { done: boolean }[];
 }
 
 export interface ActiveEntry {

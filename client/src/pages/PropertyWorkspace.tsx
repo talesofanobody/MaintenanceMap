@@ -291,6 +291,11 @@ export default function PropertyWorkspace() {
               </option>
             ))}
           </select>
+          {canManage && (
+            <Link to={`/schedules?property=${property.id}`} className="btn btn-ghost btn-small hide-mobile" title="Recurring maintenance for this property">
+              Schedules
+            </Link>
+          )}
           <Link to={`/properties/${property.id}/report`} className="btn btn-secondary btn-small">
             Report
           </Link>

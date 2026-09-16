@@ -236,6 +236,22 @@ export default function Report() {
                     <dt>What needs to be done</dt>
                     <dd>{issue.actionNeeded || "—"}</dd>
                   </div>
+                  {issue.checklist && issue.checklist.length > 0 && (
+                    <div className="issue-card-checklist">
+                      <dt>
+                        Checklist · {issue.checklist.filter((c) => c.done).length}/{issue.checklist.length} done
+                      </dt>
+                      <dd>
+                        <ul>
+                          {issue.checklist.map((c) => (
+                            <li key={c.id} className={c.done ? "done" : ""}>
+                              <span aria-hidden="true">{c.done ? "☑" : "☐"}</span> {c.text}
+                            </li>
+                          ))}
+                        </ul>
+                      </dd>
+                    </div>
+                  )}
                   <div>
                     <dt>Work order</dt>
                     <dd>

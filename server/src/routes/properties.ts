@@ -35,7 +35,7 @@ propertiesRouter.post("/", ADMIN_ONLY, async (req, res) => {
 propertiesRouter.get("/:id", async (req, res) => {
   const property = await prisma.property.findUnique({
     where: { id: req.params.id },
-    include: { issues: { include: { photos: true }, orderBy: { createdAt: "desc" } } },
+    include: { issues: { include: { photos: true, checklist: { orderBy: { position: "asc" } } }, orderBy: { createdAt: "desc" } } },
   });
   if (!property) return res.status(404).json({ error: "not found" });
   res.json(withParsedBoundary(property));

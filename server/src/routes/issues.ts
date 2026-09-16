@@ -25,6 +25,7 @@ const STATUSES = new Set(["pending", "in_progress", "completed"]);
 const ISSUE_INCLUDE = {
   photos: true,
   technician: { select: { id: true, name: true, color: true, trade: true } },
+  checklist: { orderBy: { position: "asc" as const } },
 } as const;
 
 // Accepts a pasted EAM link, tolerating a missing scheme; only http(s) is allowed
@@ -337,4 +338,67 @@ issuesRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
   } catch {
     res.status(404).json({ error: "not found" });
   }
+});
+
+// ---- Checklist steps -------------------------------------------------------
+
+// Loads the issue and applies the same "technicians only touch their own work" rule as edits.
+async function issueForEdit(req: Parameters<typeof issuesRouter.get>[1] extends never ? never : any, res: any, id: string) {
+  const issue = await prisma.issue.findUnique({ where: { id } });
+  if (!issue) {
+    res.status(404).json({ error: "not found" });
+    return null;
+  }
+  if (req.user!.role === "technician" && issue.technicianId !== req.user!.technicianId) {
+    res.status(403).json({ error: "You can only update issues assigned to you." });
+    return null;
+  }
+  return issue;
+}
+
+issuesRouter.post("/:id/checklist", CAN_EDIT, async (req, res) => {
+  const issue = await issueForEdit(req, res, req.params.id);
+  if (!issue) return;
+  const text = typeof req.body.text === "string" ? req.body.text.trim().slice(0, 200) : "";
+  if (!text) return res.status(400).json({ error: "Step text is required" });
+  const count = await prisma.checklistItem.count({ where: { issueId: issue.id } });
+  if (count >= 50) return res.status(400).json({ error: "A checklist can have at most 50 steps" });
+  const item = await prisma.checklistItem.create({ data: { issueId: issue.id, text, position: count } });
+  res.status(201).json(item);
+});
+
+issuesRouter.put("/:id/checklist/:itemId", CAN_EDIT, async (req, res) => {
+  const issue = await issueForEdit(req, res, req.params.id);
+  if (!issue) return;
+  const item = await prisma.checklistItem.findFirst({ where: { id: req.params.itemId, issueId: issue.id } });
+  if (!item) return res.status(404).json({ error: "not found" });
+  const data: Record<string, unknown> = {};
+  if (req.body.text !== undefined) {
+    const text = typeof req.body.text === "string" ? req.body.text.trim().slice(0, 200) : "";
+    if (!text) return res.status(400).json({ error: "Step text is required" });
+    data.text = text;
+  }
+  if (req.body.done !== undefined) {
+    const done = !!req.body.done;
+    data.done = done;
+    data.doneAt = done ? new Date() : null;
+    data.doneBy = done ? req.user!.username : null;
+  }
+  const updated = await prisma.checklistItem.update({ where: { id: item.id }, data });
+  if (data.done === true) {
+    const remaining = await prisma.checklistItem.count({ where: { issueId: issue.id, done: false } });
+    if (remaining === 0) {
+      const total = await prisma.checklistItem.count({ where: { issueId: issue.id } });
+      await logActivity(req, { action: "issue.checklist", entityType: "issue", entityId: issue.id, issueId: issue.id, propertyId: issue.propertyId, summary: `"${issue.title}": checklist complete (${total}/${total})` });
+    }
+  }
+  res.json(updated);
+});
+
+issuesRouter.delete("/:id/checklist/:itemId", CAN_EDIT, async (req, res) => {
+  const issue = await issueForEdit(req, res, req.params.id);
+  if (!issue) return;
+  const result = await prisma.checklistItem.deleteMany({ where: { id: req.params.itemId, issueId: issue.id } });
+  if (result.count === 0) return res.status(404).json({ error: "not found" });
+  res.status(204).end();
 });

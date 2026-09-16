@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import TimeLog from "../time/TimeLog";
+import Checklist from "./Checklist";
 import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
 import { capacityOn, committedOn, defaultDueDate, formatHours, relativeDay, slaProgress, todayStr } from "../lib/capacity";
@@ -240,6 +241,10 @@ export default function IssuePanel({
   }
 
   function changeStatus(next: Status) {
+    if (next === "completed" && issue?.checklist?.some((c) => !c.done)) {
+      const left = issue.checklist.filter((c) => !c.done).length;
+      if (!confirm(`${left} checklist step${left === 1 ? " isn't" : "s aren't"} ticked yet. Mark the issue completed anyway?`)) return;
+    }
     setStatus(next);
     if (next === "completed" && !issue?.closedAt && !closedDateTouched) {
       setClosedDate(toDateInputValue(null));
@@ -439,6 +444,8 @@ export default function IssuePanel({
           What needs to be done
           <textarea value={actionNeeded} onChange={(e) => setActionNeeded(e.target.value)} rows={2} placeholder="Repair steps / scope of work" readOnly={!canEdit} />
         </label>
+
+        {isEdit && issue && <Checklist issue={issue} editable={canEdit} onChanged={onSaved} />}
 
         <div className="field">
           <span className="field-label">Priority</span>

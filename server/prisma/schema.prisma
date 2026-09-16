@@ -80,6 +80,7 @@ model Technician {
   updatedAt   DateTime @updatedAt
   issues      Issue[]
   timeEntries TimeEntry[]
+  schedules   Schedule[]
   user        User?
 }
 
@@ -95,6 +96,7 @@ model Property {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   issues    Issue[]
+  schedules Schedule[]
 }
 
 model Issue {
@@ -123,10 +125,14 @@ model Issue {
   dueDate          String?
   // Set when the scheduler last raised this issue's priority for being overdue.
   escalatedAt      DateTime?
+  // Set when a recurring maintenance schedule created this issue.
+  scheduleId       String?
+  schedule         Schedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   photos           Photo[]
   timeEntries      TimeEntry[]
+  checklist        ChecklistItem[]
 
   @@index([propertyId])
   @@index([technicianId])
@@ -170,4 +176,47 @@ model Setting {
   id        String   @id
   json      String
   updatedAt DateTime @updatedAt
+}
+
+// A recurring maintenance task (gutters every 3 months, boiler service yearly…). The
+// scheduler turns it into a normal issue `leadDays` before each due date.
+model Schedule {
+  id             String      @id @default(cuid())
+  propertyId     String
+  property       Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  actionNeeded   String?
+  priority       String      @default("medium")
+  technicianId   String?
+  technician     Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  estimatedHours Float?
+  lat            Float
+  lng            Float
+  every          Int         @default(1)
+  unit           String      @default("months") // days | weeks | months
+  leadDays       Int         @default(7)
+  nextDue        String      // YYYY-MM-DD
+  checklist      String      @default("[]") // JSON array of item texts
+  active         Boolean     @default(true)
+  lastCreatedAt  DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  issues         Issue[]
+
+  @@index([propertyId])
+}
+
+// Tick-box steps on an issue (from a schedule's template or added by hand).
+model ChecklistItem {
+  id       String    @id @default(cuid())
+  issueId  String
+  issue    Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  text     String
+  position Int       @default(0)
+  done     Boolean   @default(false)
+  doneAt   DateTime?
+  doneBy   String?
+
+  @@index([issueId])
 }

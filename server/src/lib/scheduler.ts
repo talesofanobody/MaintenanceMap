@@ -2,6 +2,7 @@ import { prisma } from "../db";
 import { dayFrom, daysBetween } from "./validation";
 import { getSettings, nextPriority } from "./settings";
 import { logActivity } from "./activity";
+import { generateDueOccurrences } from "./schedules";
 import { adminUserIds, issueLine, notifyUsers, priorityWord } from "./notify";
 
 /**
@@ -15,6 +16,8 @@ export async function runScheduledChecks(now = new Date()): Promise<{ created: n
   const tomorrow = dayFrom(now, 1);
   const admins = await adminUserIds();
   const settings = await getSettings();
+  // Recurring maintenance first, so freshly created jobs get today's reminders too.
+  let created = await generateDueOccurrences(now);
   const open = await prisma.issue.findMany({
     where: { status: { not: "completed" } },
     include: {
@@ -23,7 +26,6 @@ export async function runScheduledChecks(now = new Date()): Promise<{ created: n
     },
   });
 
-  let created = 0;
   for (const issue of open) {
     const techUser = issue.technician?.user?.active ? issue.technician.user.id : null;
     const line = issueLine(issue, issue.property.name);

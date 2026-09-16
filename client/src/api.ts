@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppNotification, AppSettings, AppUser, TimeEntry, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { ActivityEntry, AppNotification, AppSettings, AppUser, ChecklistItem, Schedule, ScheduleInput, TimeEntry, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -75,6 +75,17 @@ export const api = {
 
   getSettings: () => request<{ settings: AppSettings; defaults: AppSettings }>("/settings"),
   saveSettings: (settings: AppSettings) => request<{ settings: AppSettings; defaults: AppSettings }>("/settings", { method: "PUT", body: JSON.stringify(settings) }),
+
+  listSchedules: (propertyId?: string) => request<Schedule[]>(`/schedules${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ""}`),
+  createSchedule: (data: ScheduleInput) => request<Schedule>("/schedules", { method: "POST", body: JSON.stringify(data) }),
+  updateSchedule: (id: string, data: Partial<ScheduleInput>) => request<Schedule>(`/schedules/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteSchedule: (id: string) => request<void>(`/schedules/${id}`, { method: "DELETE" }),
+  runScheduleNow: (id: string) => request<{ issue: Issue; schedule: Schedule | null }>(`/schedules/${id}/run-now`, { method: "POST" }),
+
+  addChecklistItem: (issueId: string, text: string) => request<ChecklistItem>(`/issues/${issueId}/checklist`, { method: "POST", body: JSON.stringify({ text }) }),
+  updateChecklistItem: (issueId: string, itemId: string, data: { done?: boolean; text?: string }) =>
+    request<ChecklistItem>(`/issues/${issueId}/checklist/${itemId}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteChecklistItem: (issueId: string, itemId: string) => request<void>(`/issues/${issueId}/checklist/${itemId}`, { method: "DELETE" }),
 
   listProperties: () => request<Property[]>("/properties"),
   createProperty: (data: { name: string; address?: string; notes?: string }) =>

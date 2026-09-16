@@ -196,6 +196,7 @@ export default function MyDay() {
                       <span className="muted small">
                         {atRisk && <span className="risk-flag">At risk</span>}
                         {issue.property.name} · {dueText(issue, today)}
+                        {issue.checklist && issue.checklist.length > 0 ? ` · ☑ ${issue.checklist.filter((c) => c.done).length}/${issue.checklist.length}` : ""}
                         {issue.estimatedHours != null ? ` · est. ${formatHours(issue.estimatedHours)}` : ""}
                         {issue.actualHours ? ` · logged ${formatHours(issue.actualHours)}` : ""}
                       </span>
