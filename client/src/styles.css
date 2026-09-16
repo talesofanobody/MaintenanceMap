@@ -3516,3 +3516,295 @@ li.unread .bell-item:hover {
     columns: 1;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Costs, contractors and the day planner                              */
+/* ------------------------------------------------------------------ */
+.costs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.costs-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.costs-total {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.costs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.costs-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 13.5px;
+}
+
+.costs-kind {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.costs-kind.kind-contractor {
+  background: var(--brand-soft);
+  border-color: #bfdbfe;
+  color: var(--brand-text);
+}
+
+.costs-desc {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.costs-meta {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.costs-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.costs-labour {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 13.5px;
+}
+
+.costs-labour strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.cost-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.cost-form label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.cost-form label > input,
+.cost-form label > select {
+  margin-top: 4px;
+  width: 100%;
+}
+
+.cost-form .span-2,
+.cost-form-actions {
+  grid-column: 1 / -1;
+}
+
+.cost-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.contractors {
+  margin-top: 34px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.section-header h2 {
+  margin: 0 0 2px;
+  font-size: 19px;
+}
+
+.section-header p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.contractor-form {
+  margin-bottom: 16px;
+}
+
+.planner-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.planner-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.planner-jump {
+  display: flex;
+  gap: 4px;
+}
+
+.planner-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+
+.planner-summary strong {
+  display: block;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-summary .btn {
+  align-self: flex-start;
+}
+
+.planner-summary .load-bar span {
+  background: var(--brand);
+}
+
+.planner-summary .load-bar span.over {
+  background: var(--danger);
+}
+
+.planner-list {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  counter-reset: stop;
+}
+
+.planner-stop {
+  display: grid;
+  grid-template-columns: 30px auto 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.planner-stop.dropped {
+  opacity: 0.55;
+}
+
+.planner-order {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.planner-stop-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.planner-stop-title {
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.planner-stop-title:hover {
+  color: var(--brand);
+}
+
+.planner-hours {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.planner-left h2 {
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.stat-spend .stat-value {
+  color: var(--brand-text);
+}
+
+.report-cost-lines {
+  display: flex;
+  flex-direction: column;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+@media screen and (max-width: 768px) {
+  .cost-form {
+    grid-template-columns: 1fr;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .planner-stop {
+    grid-template-columns: 26px auto 1fr;
+  }
+
+  .planner-stop .tag,
+  .planner-hours {
+    grid-column: 3;
+    justify-self: start;
+  }
+}

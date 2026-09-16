@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { MapContainer, Marker, Polygon, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import { api } from "../api";
+import { money } from "../components/CostPanel";
 import type { Issue, Priority, Property, Status } from "../types";
 import { PRIORITIES, PRIORITY_DESCRIPTIONS, PRIORITY_LABELS, STATUS_LABELS } from "../types";
 import { boundsOf, geoJsonToLatLngs, WORLD_RING } from "../lib/geo";
@@ -58,6 +59,17 @@ export default function Report() {
     () => [...numbered].sort((a, b) => SEVERITY[a.priority] - SEVERITY[b.priority] || a.number - b.number),
     [numbered]
   );
+
+  const spend = useMemo(() => {
+    const perIssue = new Map<string, number>();
+    let total = 0;
+    for (const issue of issues) {
+      const sum = (issue.costs ?? []).reduce((acc, c) => acc + c.amount * c.quantity, 0);
+      perIssue.set(issue.id, sum);
+      total += sum;
+    }
+    return { perIssue, total };
+  }, [issues]);
 
   const counts = useMemo(() => {
     const byPriority: Record<Priority, number> = { low: 0, medium: 0, high: 0, urgent: 0 };
@@ -142,6 +154,12 @@ export default function Report() {
               <span className="stat-label">{PRIORITY_LABELS[p]}</span>
             </div>
           ))}
+          {spend.total > 0 && (
+            <div className="stat stat-spend">
+              <span className="stat-value">{money(spend.total)}</span>
+              <span className="stat-label">Recorded spend</span>
+            </div>
+          )}
         </section>
 
         <section className="report-map-block">
@@ -270,6 +288,22 @@ export default function Report() {
                     <dt>Comments</dt>
                     <dd>{issue.comments || "—"}</dd>
                   </div>
+                  {(spend.perIssue.get(issue.id) ?? 0) > 0 && (
+                    <div>
+                      <dt>Costs</dt>
+                      <dd>
+                        <strong>{money(spend.perIssue.get(issue.id) ?? 0)}</strong>
+                        <span className="report-cost-lines">
+                          {(issue.costs ?? []).map((c) => (
+                            <span key={c.id}>
+                              {c.description}
+                              {c.contractor ? ` (${c.contractor.name})` : ""} · {money(c.amount * c.quantity)}
+                            </span>
+                          ))}
+                        </span>
+                      </dd>
+                    </div>
+                  )}
                   <div>
                     <dt>Assigned to</dt>
                     <dd>

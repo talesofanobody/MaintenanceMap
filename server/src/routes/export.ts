@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db";
 import { serializeTechnician } from "./technicians";
+import { costsByIssue } from "../lib/costs";
 
 export const exportRouter = Router();
 
@@ -33,9 +34,11 @@ exportRouter.get("/issues.csv", async (req, res) => {
       property: { select: { name: true, address: true } },
       technician: { select: { name: true, trade: true } },
       photos: { select: { id: true }, orderBy: { createdAt: "asc" } },
+      checklist: { select: { done: true } },
     },
     orderBy: [{ propertyId: "asc" }, { createdAt: "asc" }],
   });
+  const costs = await costsByIssue(issues.map((i) => i.id));
 
   // Per-property numbering matches the workspace, report and boards.
   const counters = new Map<string, number>();
@@ -56,6 +59,11 @@ exportRouter.get("/issues.csv", async (req, res) => {
       "Days to resolve",
       "Estimated hours",
       "Actual hours",
+      "Checklist done",
+      "Checklist steps",
+      "Recorded costs",
+      "Labour cost",
+      "Total cost",
       "Work order created",
       "Work order number",
       "EAM link",
@@ -89,6 +97,11 @@ exportRouter.get("/issues.csv", async (req, res) => {
       daysToResolve,
       i.estimatedHours,
       i.actualHours,
+      i.checklist.filter((c) => c.done).length,
+      i.checklist.length,
+      costs.get(i.id)?.recorded ?? 0,
+      costs.get(i.id)?.labour ?? 0,
+      costs.get(i.id)?.total ?? 0,
       i.workOrderCreated,
       i.workOrderNumber,
       i.workOrderUrl,
@@ -133,4 +146,41 @@ exportRouter.get("/technicians.csv", async (_req, res) => {
     ]);
   }
   send(res, `maintenancemap-technicians-${today()}.csv`, csv(rows));
+});
+
+exportRouter.get("/costs.csv", async (req, res) => {
+  const propertyId = req.query.propertyId ? String(req.query.propertyId) : undefined;
+  const lines = await prisma.cost.findMany({
+    where: propertyId ? { issue: { propertyId } } : undefined,
+    include: {
+      contractor: { select: { name: true, trade: true } },
+      issue: { select: { title: true, priority: true, status: true, property: { select: { name: true } }, technician: { select: { name: true } } } },
+    },
+    orderBy: [{ incurredOn: "desc" }, { createdAt: "desc" }],
+  });
+  const rows: Cell[][] = [
+    ["Date", "Property", "Issue", "Issue priority", "Issue status", "Technician", "Kind", "Description", "Contractor", "Contractor trade", "Invoice ref", "Unit amount", "Quantity", "Line total", "Recorded by", "Recorded at", "Cost ID"],
+  ];
+  for (const c of lines) {
+    rows.push([
+      c.incurredOn,
+      c.issue.property.name,
+      c.issue.title,
+      c.issue.priority,
+      c.issue.status,
+      c.issue.technician?.name ?? "",
+      c.kind,
+      c.description,
+      c.contractor?.name ?? "",
+      c.contractor?.trade ?? "",
+      c.invoiceRef,
+      c.amount,
+      c.quantity,
+      Math.round(c.amount * c.quantity * 100) / 100,
+      c.createdBy,
+      c.createdAt.toISOString(),
+      c.id,
+    ]);
+  }
+  send(res, `maintenancemap-costs-${today()}.csv`, csv(rows));
 });

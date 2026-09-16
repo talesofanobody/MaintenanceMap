@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import TimeLog from "../time/TimeLog";
 import Checklist from "./Checklist";
+import CostPanel from "./CostPanel";
 import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
 import { capacityOn, committedOn, defaultDueDate, formatHours, relativeDay, slaProgress, todayStr } from "../lib/capacity";
@@ -602,6 +603,8 @@ export default function IssuePanel({
             )
           )}
         </div>
+
+        {isEdit && issue && <CostPanel issue={issue} editable={canEdit} onChanged={onSaved} />}
 
         {isEdit && issue && (
           <TimeLog

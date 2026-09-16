@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, TechnicianInput } from "../api";
 import type { Technician } from "../types";
+import Contractors from "../components/Contractors";
 import { PRIORITY_SHORT_LABELS, WEEKDAYS } from "../types";
 import { formatHours, initials, loadSummary, relativeDay, todayStr } from "../lib/capacity";
 
@@ -11,6 +12,7 @@ const DEFAULT_HOURS = [8, 8, 8, 8, 8, 0, 0];
 interface FormState {
   name: string;
   trade: string;
+  hourlyRate: string;
   phone: string;
   color: string;
   weeklyHours: number[];
@@ -22,6 +24,7 @@ function toForm(t?: Technician): FormState {
   return {
     name: t?.name ?? "",
     trade: t?.trade ?? "",
+    hourlyRate: t?.hourlyRate != null ? String(t.hourlyRate) : "",
     phone: t?.phone ?? "",
     color: t?.color ?? SWATCHES[Math.floor(Math.random() * SWATCHES.length)],
     weeklyHours: t?.weeklyHours ?? DEFAULT_HOURS,
@@ -51,6 +54,7 @@ function TechnicianForm({ initial, onCancel, onSaved }: { initial?: Technician; 
     const payload: TechnicianInput = {
       name: form.name.trim(),
       trade: form.trade.trim() || null,
+      hourlyRate: form.hourlyRate === "" ? null : Number(form.hourlyRate),
       phone: form.phone.trim() || null,
       color: form.color,
       weeklyHours: form.weeklyHours,
@@ -89,6 +93,20 @@ function TechnicianForm({ initial, onCancel, onSaved }: { initial?: Technician; 
           Phone <span className="muted">(optional)</span>
           <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel" />
         </label>
+        <label>
+          Hourly rate <span className="muted">(optional — values clocked time)</span>
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            inputMode="decimal"
+            value={form.hourlyRate}
+            onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
+            placeholder="e.g. 45"
+          />
+        </label>
+      </div>
+      <div className="form-row">
         <div className="field">
           <span className="field-label">Colour</span>
           <div className="swatches">
@@ -192,6 +210,9 @@ export default function Technicians() {
         <div className="page-header-actions">
           <a className="btn btn-secondary" href={api.exportTechniciansUrl()} download>
             Export CSV
+          </a>
+          <a className="btn btn-ghost" href={api.exportCostsUrl()} download title="Every cost line across all properties">
+            Export costs
           </a>
           {!adding && (
             <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
@@ -347,6 +368,8 @@ export default function Technicians() {
           })}
         </div>
       )}
+
+      <Contractors />
     </div>
   );
 }

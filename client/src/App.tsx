@@ -16,6 +16,7 @@ import ActiveTimer from "./time/ActiveTimer";
 import MyDay from "./pages/MyDay";
 import Settings from "./pages/Settings";
 import Schedules from "./pages/Schedules";
+import Planner from "./pages/Planner";
 import { SettingsProvider } from "./settings/SettingsContext";
 import MapDashboard from "./dashboard/MapDashboard";
 import DepartureBoard from "./dashboard/DepartureBoard";
@@ -126,6 +127,7 @@ function AppRoutes() {
           <Route path="/" element={<Navigate to={user.role === "technician" ? "/today" : "/properties"} replace />} />
           <Route path="/properties" element={<PropertiesList />} />
           {(user.technicianId || isAdmin) && <Route path="/today" element={<MyDay />} />}
+          {(user.technicianId || isAdmin) && <Route path="/planner" element={<Planner />} />}
           <Route path="/properties/:id" element={<PropertyWorkspace />} />
           <Route path="/properties/:id/report" element={<Report />} />
           <Route path="/account" element={<Account />} />

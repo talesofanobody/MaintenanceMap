@@ -75,6 +75,8 @@ model Technician {
   active      Boolean  @default(true)
   // Hours available per weekday, Monday first, stored as a JSON array of 7 numbers.
   weeklyHours String   @default("[8,8,8,8,8,0,0]")
+  // Charge-out rate used to value clocked time on an issue.
+  hourlyRate  Float?
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -133,6 +135,7 @@ model Issue {
   photos           Photo[]
   timeEntries      TimeEntry[]
   checklist        ChecklistItem[]
+  costs            Cost[]
 
   @@index([propertyId])
   @@index([technicianId])
@@ -219,4 +222,38 @@ model ChecklistItem {
   doneBy   String?
 
   @@index([issueId])
+}
+
+// An outside firm or tradesperson used for work the in-house crew doesn't cover.
+model Contractor {
+  id        String   @id @default(cuid())
+  name      String
+  trade     String?
+  phone     String?
+  email     String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  costs     Cost[]
+}
+
+// Money spent on an issue: parts, an invoice from a contractor, hire, disposal…
+model Cost {
+  id           String      @id @default(cuid())
+  issueId      String
+  issue        Issue       @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  kind         String      @default("parts") // parts | contractor | hire | other
+  description  String
+  amount       Float
+  quantity     Float       @default(1)
+  contractorId String?
+  contractor   Contractor? @relation(fields: [contractorId], references: [id], onDelete: SetNull)
+  invoiceRef   String?
+  incurredOn   String      // YYYY-MM-DD
+  createdBy    String?
+  createdAt    DateTime    @default(now())
+
+  @@index([issueId])
+  @@index([contractorId])
 }

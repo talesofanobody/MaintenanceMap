@@ -129,6 +129,66 @@ export interface ScheduleInput {
   active?: boolean;
 }
 
+export type CostKind = "parts" | "contractor" | "hire" | "other";
+
+export const COST_KIND_LABELS: Record<CostKind, string> = {
+  parts: "Parts / materials",
+  contractor: "Contractor invoice",
+  hire: "Hire / plant",
+  other: "Other",
+};
+
+export interface Contractor {
+  id: string;
+  name: string;
+  trade: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  active: boolean;
+  totalSpend?: number;
+  _count?: { costs: number };
+}
+
+export interface Cost {
+  id: string;
+  issueId: string;
+  kind: CostKind;
+  description: string;
+  amount: number;
+  quantity: number;
+  contractorId: string | null;
+  contractor: { id: string; name: string } | null;
+  invoiceRef: string | null;
+  incurredOn: string;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface CostSummary {
+  recorded: number;
+  labour: number;
+  labourHours: number;
+  total: number;
+}
+
+export interface PlanStop {
+  issue: DashboardIssue;
+  hours: number;
+  assumedHours: boolean;
+  travelMetres: number;
+  reason: string;
+}
+
+export interface DayPlan {
+  day: string;
+  technicianId: string;
+  capacityHours: number;
+  plannedHours: number;
+  stops: PlanStop[];
+  leftOver: { issue: DashboardIssue; hours: number; reason: string }[];
+}
+
 export interface TechnicianRef {
   id: string;
   name: string;
@@ -149,6 +209,7 @@ export interface Assignment {
 }
 
 export interface Technician extends TechnicianRef {
+  hourlyRate: number | null;
   phone: string | null;
   active: boolean;
   weeklyHours: number[];
@@ -165,6 +226,7 @@ export interface Issue {
   propertyId: string;
   scheduleId?: string | null;
   checklist?: ChecklistItem[];
+  costs?: Cost[];
   title: string;
   description: string | null;
   actionNeeded: string | null;

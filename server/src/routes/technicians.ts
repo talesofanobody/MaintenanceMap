@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { parseColor, parseOptionalString, parseWeeklyHours, ValidationError } from "../lib/validation";
+import { parseColor, parseOptionalHours, parseOptionalString, parseWeeklyHours, ValidationError } from "../lib/validation";
 import { ADMIN_ONLY } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 
@@ -39,7 +39,7 @@ techniciansRouter.get("/", async (_req, res) => {
 });
 
 techniciansRouter.post("/", ADMIN_ONLY, async (req, res) => {
-  const { name, trade, phone, color, weeklyHours, notes, active } = req.body;
+  const { name, trade, phone, color, weeklyHours, notes, active, hourlyRate } = req.body;
   if (!name || typeof name !== "string" || !name.trim()) {
     return res.status(400).json({ error: "name is required" });
   }
@@ -52,6 +52,7 @@ techniciansRouter.post("/", ADMIN_ONLY, async (req, res) => {
         color: parseColor(color) ?? "#2563eb",
         weeklyHours: JSON.stringify(parseWeeklyHours(weeklyHours) ?? [8, 8, 8, 8, 8, 0, 0]),
         notes: parseOptionalString(notes, "notes", 2000) ?? null,
+        hourlyRate: parseOptionalHours(hourlyRate, "hourlyRate") ?? null,
         active: active === undefined ? true : !!active,
       },
     });
@@ -64,7 +65,7 @@ techniciansRouter.post("/", ADMIN_ONLY, async (req, res) => {
 });
 
 techniciansRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
-  const { name, trade, phone, color, weeklyHours, notes, active } = req.body;
+  const { name, trade, phone, color, weeklyHours, notes, active, hourlyRate } = req.body;
   if (name !== undefined && (typeof name !== "string" || !name.trim())) {
     return res.status(400).json({ error: "name cannot be empty" });
   }
@@ -78,6 +79,7 @@ techniciansRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
         ...(phone !== undefined ? { phone: parseOptionalString(phone, "phone", 60) } : {}),
         ...(color !== undefined ? { color: parseColor(color) } : {}),
         ...(parsedHours !== undefined ? { weeklyHours: JSON.stringify(parsedHours) } : {}),
+        ...(hourlyRate !== undefined ? { hourlyRate: parseOptionalHours(hourlyRate, "hourlyRate") } : {}),
         ...(notes !== undefined ? { notes: parseOptionalString(notes, "notes", 2000) } : {}),
         ...(active !== undefined ? { active: !!active } : {}),
       },

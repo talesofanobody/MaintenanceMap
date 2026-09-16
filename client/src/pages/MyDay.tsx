@@ -117,6 +117,11 @@ export default function MyDay() {
           <h1>{isAdmin && technician ? `${technician.name}'s day` : "My day"}</h1>
           <p className="muted">{formatDay(today, "long")}</p>
         </div>
+        <div className="page-header-actions">
+          <Link to={`/planner?day=${today}${technicianId ? `&tech=${technicianId}` : ""}`} className="btn btn-secondary btn-small">
+            Plan this day
+          </Link>
+        </div>
         {isAdmin && technicians.length > 1 && (
           <label className="myday-picker">
             Technician

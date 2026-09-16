@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { defaultDueDate, parseOptionalDay, parseOptionalHours, ValidationError } from "../lib/validation";
+import { defaultDueDate, parseOptionalDay, parseOptionalHours, parseOptionalString, ValidationError } from "../lib/validation";
 import { ADMIN_ONLY, CAN_EDIT } from "../middleware/requireAuth";
 import { describeChanges, logActivity } from "../lib/activity";
 import { adminUserIds, issueLine, notifyUsers, priorityWord, technicianUserId } from "../lib/notify";
 import { getSettings } from "../lib/settings";
+import { COST_KINDS, issueCosts } from "../lib/costs";
 
 const STATUS_WORD: Record<string, string> = { pending: "pending", in_progress: "in progress", completed: "completed" };
 
@@ -26,6 +27,7 @@ const ISSUE_INCLUDE = {
   photos: true,
   technician: { select: { id: true, name: true, color: true, trade: true } },
   checklist: { orderBy: { position: "asc" as const } },
+  costs: { include: { contractor: { select: { id: true, name: true } } }, orderBy: { incurredOn: "desc" as const } },
 } as const;
 
 // Accepts a pasted EAM link, tolerating a missing scheme; only http(s) is allowed
@@ -401,4 +403,103 @@ issuesRouter.delete("/:id/checklist/:itemId", CAN_EDIT, async (req, res) => {
   const result = await prisma.checklistItem.deleteMany({ where: { id: req.params.itemId, issueId: issue.id } });
   if (result.count === 0) return res.status(404).json({ error: "not found" });
   res.status(204).end();
+});
+
+// ---- Costs -----------------------------------------------------------------
+
+issuesRouter.get("/:id/costs", async (req, res) => {
+  const issue = await prisma.issue.findUnique({ where: { id: req.params.id }, select: { id: true } });
+  if (!issue) return res.status(404).json({ error: "not found" });
+  const [lines, summary] = await Promise.all([
+    prisma.cost.findMany({ where: { issueId: issue.id }, include: { contractor: { select: { id: true, name: true } } }, orderBy: { incurredOn: "desc" } }),
+    issueCosts(issue.id),
+  ]);
+  res.json({ lines, summary });
+});
+
+async function parseCost(body: any, partial: boolean) {
+  const data: Record<string, unknown> = {};
+  if (!partial || body.description !== undefined) {
+    if (!body.description || typeof body.description !== "string" || !body.description.trim()) throw new ValidationError("description is required");
+    data.description = body.description.trim().slice(0, 200);
+  }
+  if (!partial || body.amount !== undefined) {
+    const amount = typeof body.amount === "string" ? Number(body.amount) : body.amount;
+    if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0 || amount > 10_000_000) throw new ValidationError("amount must be a positive number");
+    data.amount = Math.round(amount * 100) / 100;
+  }
+  if (body.quantity !== undefined) {
+    const q = typeof body.quantity === "string" ? Number(body.quantity) : body.quantity;
+    if (typeof q !== "number" || !Number.isFinite(q) || q <= 0 || q > 100_000) throw new ValidationError("quantity must be a positive number");
+    data.quantity = Math.round(q * 1000) / 1000;
+  }
+  if (body.kind !== undefined) {
+    if (!COST_KINDS.has(body.kind)) throw new ValidationError("kind must be parts, contractor, hire or other");
+    data.kind = body.kind;
+  }
+  if (body.contractorId !== undefined) {
+    if (!body.contractorId) data.contractorId = null;
+    else {
+      const contractor = await prisma.contractor.findUnique({ where: { id: String(body.contractorId) } });
+      if (!contractor) throw new ValidationError("contractor not found");
+      data.contractorId = contractor.id;
+    }
+  }
+  const invoiceRef = parseOptionalString(body.invoiceRef, "invoiceRef", 80);
+  if (invoiceRef !== undefined) data.invoiceRef = invoiceRef;
+  const incurredOn = parseOptionalDay(body.incurredOn, "incurredOn");
+  if (incurredOn) data.incurredOn = incurredOn;
+  else if (!partial) data.incurredOn = new Date().toISOString().slice(0, 10);
+  return data;
+}
+
+issuesRouter.post("/:id/costs", CAN_EDIT, async (req, res) => {
+  const issue = await issueForEdit(req, res, req.params.id);
+  if (!issue) return;
+  try {
+    const data = await parseCost(req.body, false);
+    const cost = await prisma.cost.create({
+      data: { ...(data as any), issueId: issue.id, createdBy: req.user!.username },
+      include: { contractor: { select: { id: true, name: true } } },
+    });
+    await logActivity(req, {
+      action: "cost.added",
+      entityType: "issue",
+      entityId: issue.id,
+      issueId: issue.id,
+      propertyId: issue.propertyId,
+      summary: `"${issue.title}": added ${cost.kind} cost ${cost.description} (${(cost.amount * cost.quantity).toFixed(2)})${cost.contractor ? ` — ${cost.contractor.name}` : ""}`,
+    });
+    res.status(201).json({ cost, summary: await issueCosts(issue.id) });
+  } catch (err) {
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+});
+
+issuesRouter.put("/:id/costs/:costId", CAN_EDIT, async (req, res) => {
+  const issue = await issueForEdit(req, res, req.params.id);
+  if (!issue) return;
+  const existing = await prisma.cost.findFirst({ where: { id: req.params.costId, issueId: issue.id } });
+  if (!existing) return res.status(404).json({ error: "not found" });
+  try {
+    const cost = await prisma.cost.update({
+      where: { id: existing.id },
+      data: (await parseCost(req.body, true)) as any,
+      include: { contractor: { select: { id: true, name: true } } },
+    });
+    res.json({ cost, summary: await issueCosts(issue.id) });
+  } catch (err) {
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+});
+
+issuesRouter.delete("/:id/costs/:costId", CAN_EDIT, async (req, res) => {
+  const issue = await issueForEdit(req, res, req.params.id);
+  if (!issue) return;
+  const result = await prisma.cost.deleteMany({ where: { id: req.params.costId, issueId: issue.id } });
+  if (result.count === 0) return res.status(404).json({ error: "not found" });
+  await logActivity(req, { action: "cost.removed", entityType: "issue", entityId: issue.id, issueId: issue.id, propertyId: issue.propertyId, summary: `"${issue.title}": removed a cost line` });
+  res.json({ summary: await issueCosts(issue.id) });
 });

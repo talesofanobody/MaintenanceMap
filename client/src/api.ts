@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppNotification, AppSettings, AppUser, ChecklistItem, Schedule, ScheduleInput, TimeEntry, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { ActivityEntry, AppNotification, AppSettings, AppUser, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Schedule, ScheduleInput, TimeEntry, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -6,6 +6,7 @@ export interface TechnicianInput {
   phone?: string | null;
   color?: string;
   weeklyHours?: number[];
+  hourlyRate?: number | null;
   notes?: string | null;
   active?: boolean;
 }
@@ -86,6 +87,26 @@ export const api = {
   updateChecklistItem: (issueId: string, itemId: string, data: { done?: boolean; text?: string }) =>
     request<ChecklistItem>(`/issues/${issueId}/checklist/${itemId}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteChecklistItem: (issueId: string, itemId: string) => request<void>(`/issues/${issueId}/checklist/${itemId}`, { method: "DELETE" }),
+
+  listContractors: () => request<Contractor[]>("/contractors"),
+  createContractor: (data: Partial<Contractor> & { name: string }) => request<Contractor>("/contractors", { method: "POST", body: JSON.stringify(data) }),
+  updateContractor: (id: string, data: Partial<Contractor>) => request<Contractor>(`/contractors/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteContractor: (id: string) => request<void>(`/contractors/${id}`, { method: "DELETE" }),
+
+  listCosts: (issueId: string) => request<{ lines: Cost[]; summary: CostSummary }>(`/issues/${issueId}/costs`),
+  addCost: (issueId: string, data: Partial<Cost> & { description: string; amount: number }) =>
+    request<{ cost: Cost; summary: CostSummary }>(`/issues/${issueId}/costs`, { method: "POST", body: JSON.stringify(data) }),
+  deleteCost: (issueId: string, costId: string) => request<{ summary: CostSummary }>(`/issues/${issueId}/costs/${costId}`, { method: "DELETE" }),
+
+  getDayPlan: (params: { technicianId?: string; day: string; propertyId?: string }) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) q.set(k, String(v));
+    return request<DayPlan>(`/planner?${q}`);
+  },
+  applyDayPlan: (data: { technicianId?: string; day: string; issueIds: string[] }) =>
+    request<{ applied: number; plan: DayPlan }>("/planner/apply", { method: "POST", body: JSON.stringify(data) }),
+
+  exportCostsUrl: (propertyId?: string) => `${BASE}/export/costs.csv${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ""}`,
 
   listProperties: () => request<Property[]>("/properties"),
   createProperty: (data: { name: string; address?: string; notes?: string }) =>
