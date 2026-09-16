@@ -189,6 +189,41 @@ export interface DayPlan {
   leftOver: { issue: DashboardIssue; hours: number; reason: string }[];
 }
 
+export interface Trends {
+  months: { month: string; logged: number; closed: number; spend: number; avgResolveDays: number | null }[];
+  openByPriority: Record<Priority, number>;
+  openTotal: number;
+  overdueTotal: number;
+  byProperty: { id: string; name: string; open: number; overdue: number; closed: number; spend: number }[];
+  byTechnician: { name: string; color: string; open: number; closed: number; avgResolveDays: number | null }[];
+  byContractor: { name: string; spend: number }[];
+}
+
+export interface PortfolioProperty {
+  id: string;
+  name: string;
+  address: string | null;
+  openTotal: number;
+  closedTotal: number;
+  byPriority: Record<Priority, number>;
+  overdue: number;
+  spend: number;
+  avgResolveDays: number | null;
+  nextScheduled: { title: string; nextDue: string } | null;
+  attention: { id: string; title: string; priority: Priority; dueDate: string | null; technician: string | null }[];
+}
+
+export interface Portfolio {
+  generatedAt: string;
+  today: string;
+  properties: PortfolioProperty[];
+}
+
+export interface CalendarFeed {
+  token: string;
+  path: string;
+}
+
 export interface TechnicianRef {
   id: string;
   name: string;

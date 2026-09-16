@@ -1,8 +1,8 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import { BrandMark } from "../App";
-import { ROLE_LABELS } from "../types";
+import { ROLE_LABELS, type CalendarFeed } from "../types";
 
 export default function Account({ forced = false }: { forced?: boolean }) {
   const { state, refresh, logout } = useAuth();
@@ -33,6 +33,40 @@ export default function Account({ forced = false }: { forced?: boolean }) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  const [feed, setFeed] = useState<CalendarFeed | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [feedError, setFeedError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (forced) return;
+    api
+      .getCalendarFeed()
+      .then(setFeed)
+      .catch((e) => setFeedError(e.message));
+  }, [forced]);
+
+  const feedUrl = feed ? `${window.location.origin}${feed.path}` : "";
+
+  async function copyFeed() {
+    try {
+      await navigator.clipboard.writeText(feedUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setFeedError("Couldn't copy automatically — select the address and copy it.");
+    }
+  }
+
+  async function resetFeed() {
+    if (!window.confirm("Create a new calendar link? Any calendar already subscribed to the old one will stop updating.")) return;
+    try {
+      setFeed(await api.regenerateCalendarFeed());
+      setCopied(false);
+    } catch (e: any) {
+      setFeedError(e.message);
     }
   }
 
@@ -99,6 +133,33 @@ export default function Account({ forced = false }: { forced?: boolean }) {
       <div className="card property-form">
         <h3>Change password</h3>
         {form}
+      </div>
+
+      <div className="card property-form feed-card">
+        <h3>Calendar feed</h3>
+        <p className="muted small">
+          Subscribe in Outlook, Google Calendar or Apple Calendar to see {user?.role === "technician" ? "your scheduled jobs" : "every scheduled job"} alongside the rest of your
+          diary. Each job appears on its start date, or its due date if it hasn't been scheduled. The link is private — anyone who has it can read the feed.
+        </p>
+        {feedError && <div className="banner banner-error">{feedError}</div>}
+        {feed && (
+          <>
+            <div className="feed-url">
+              <input value={feedUrl} readOnly aria-label="Calendar feed address" onFocus={(e) => e.currentTarget.select()} />
+              <button type="button" className="btn btn-secondary" onClick={copyFeed}>
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <div className="form-actions">
+              <a className="btn btn-ghost btn-small" href={feed.path} download="maintenancemap.ics">
+                Download once
+              </a>
+              <button type="button" className="btn btn-ghost btn-small btn-danger-text" onClick={resetFeed}>
+                Reset link
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

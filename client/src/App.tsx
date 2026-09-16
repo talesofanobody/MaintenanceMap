@@ -17,6 +17,7 @@ import MyDay from "./pages/MyDay";
 import Settings from "./pages/Settings";
 import Schedules from "./pages/Schedules";
 import Planner from "./pages/Planner";
+import Reports from "./pages/Reports";
 import { SettingsProvider } from "./settings/SettingsContext";
 import MapDashboard from "./dashboard/MapDashboard";
 import DepartureBoard from "./dashboard/DepartureBoard";
@@ -51,6 +52,7 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
             {isAdmin && <NavLink to="/technicians">Technicians</NavLink>}
             {isAdmin && <NavLink to="/schedules">Schedules</NavLink>}
             <NavLink to="/dashboard">Dashboards</NavLink>
+            {isAdmin && <NavLink to="/reports">Reports</NavLink>}
             {isAdmin && <NavLink to="/activity">Activity</NavLink>}
             {isAdmin && <NavLink to="/access">Access</NavLink>}
             {isAdmin && <NavLink to="/settings">Settings</NavLink>}
@@ -133,6 +135,7 @@ function AppRoutes() {
           <Route path="/account" element={<Account />} />
           {isAdmin && <Route path="/technicians" element={<Technicians />} />}
           {isAdmin && <Route path="/schedules" element={<Schedules />} />}
+          {isAdmin && <Route path="/reports" element={<Reports />} />}
           {isAdmin && <Route path="/activity" element={<Activity />} />}
           {isAdmin && <Route path="/access" element={<Access />} />}
           {isAdmin && <Route path="/settings" element={<Settings />} />}

@@ -15,6 +15,8 @@ import { settingsRouter } from "./routes/settings";
 import { schedulesRouter } from "./routes/schedules";
 import { contractorsRouter } from "./routes/contractors";
 import { plannerRouter } from "./routes/planner";
+import { calendarRouter } from "./routes/calendar";
+import { insightsRouter } from "./routes/insights";
 import { ADMIN_ONLY, attachUser, requireAuth } from "./middleware/requireAuth";
 import { usersRouter } from "./routes/users";
 import { activityRouter } from "./routes/activity";
@@ -74,6 +76,10 @@ app.use("/api/settings", requireAuth, settingsRouter);
 app.use("/api/schedules", requireAuth, schedulesRouter);
 app.use("/api/contractors", requireAuth, contractorsRouter);
 app.use("/api/planner", requireAuth, plannerRouter);
+app.use("/api/insights", requireAuth, insightsRouter);
+// Not behind requireAuth: the secret token in the feed URL is what authorises it, so a
+// calendar app can subscribe. The router guards its own session-only endpoints.
+app.use("/api/calendar", calendarRouter);
 app.use("/api/properties", requireAuth, propertiesRouter);
 app.use("/api/issues", requireAuth, issuesRouter);
 app.use("/api/photos", requireAuth, photosRouter);

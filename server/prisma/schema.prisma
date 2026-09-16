@@ -17,6 +17,8 @@ model User {
   active             Boolean     @default(true)
   mustChangePassword Boolean     @default(false)
   lastLoginAt        DateTime?
+  // Secret in the calendar-feed URL; rotating it invalidates any subscribed calendar.
+  feedToken          String?     @unique
   createdAt          DateTime    @default(now())
   notifications      Notification[]
 }

@@ -3808,3 +3808,283 @@ li.unread .bell-item:hover {
     justify-self: start;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Charts, reports and the calendar feed                               */
+/* ------------------------------------------------------------------ */
+.chart {
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.chart figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 10px;
+}
+
+.chart figcaption strong {
+  font-size: 15px;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.chart-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+
+.chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.chart-axis-line {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.chart-axis {
+  font-size: 11px;
+  fill: var(--text-3);
+}
+
+.chart-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.chart-row .chart {
+  margin-bottom: 16px;
+}
+
+.ranked {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ranked li {
+  display: grid;
+  grid-template-columns: minmax(90px, 30%) 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.ranked-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+
+.ranked-track {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.ranked-fill {
+  display: block;
+  height: 100%;
+}
+
+.ranked-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.trend-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.trend-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.tab-switch {
+  display: flex;
+  gap: 6px;
+}
+
+.portfolio-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.portfolio-sheet {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px 30px;
+}
+
+.portfolio-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  border-bottom: 2px solid var(--text);
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+
+.portfolio-header h2 {
+  margin: 2px 0 0;
+  font-size: 24px;
+}
+
+.portfolio-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 18px 0 8px;
+  font-size: 13.5px;
+}
+
+.portfolio-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border-strong);
+  padding: 6px 8px;
+}
+
+.portfolio-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-table td:first-child {
+  font-variant-numeric: normal;
+}
+
+.portfolio-table td a {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  display: block;
+}
+
+.portfolio-table td .muted {
+  display: block;
+}
+
+.portfolio-attention {
+  margin-top: 22px;
+}
+
+.portfolio-attention h3 {
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+
+.portfolio-attention-block {
+  break-inside: avoid;
+  margin-bottom: 12px;
+}
+
+.portfolio-attention-block h4 {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.portfolio-attention-block ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.portfolio-attention-block li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.portfolio-attention-block li a {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.feed-card {
+  margin-top: 18px;
+}
+
+.feed-url {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.feed-url input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+
+@media screen and (max-width: 768px) {
+  .chart-row,
+  .trend-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+@media print {
+  .portfolio-sheet {
+    border: 0;
+    padding: 0;
+  }
+
+  .portfolio-attention-block,
+  .portfolio-table tr {
+    break-inside: avoid;
+  }
+}

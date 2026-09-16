@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppNotification, AppSettings, AppUser, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Schedule, ScheduleInput, TimeEntry, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { ActivityEntry, AppNotification, AppSettings, AppUser, CalendarFeed, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -107,6 +107,12 @@ export const api = {
     request<{ applied: number; plan: DayPlan }>("/planner/apply", { method: "POST", body: JSON.stringify(data) }),
 
   exportCostsUrl: (propertyId?: string) => `${BASE}/export/costs.csv${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ""}`,
+
+  getTrends: (months = 12) => request<Trends>(`/insights/trends?months=${months}`),
+  getPortfolio: () => request<Portfolio>("/insights/portfolio"),
+
+  getCalendarFeed: () => request<CalendarFeed>("/calendar/feed"),
+  regenerateCalendarFeed: () => request<CalendarFeed>("/calendar/feed/regenerate", { method: "POST" }),
 
   listProperties: () => request<Property[]>("/properties"),
   createProperty: (data: { name: string; address?: string; notes?: string }) =>
