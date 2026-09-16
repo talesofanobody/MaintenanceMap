@@ -1,5 +1,7 @@
 import { prisma } from "../db";
-import { dayFrom } from "./validation";
+import { dayFrom, daysBetween } from "./validation";
+import { getSettings, nextPriority } from "./settings";
+import { logActivity } from "./activity";
 import { adminUserIds, issueLine, notifyUsers, priorityWord } from "./notify";
 
 /**
@@ -12,6 +14,7 @@ export async function runScheduledChecks(now = new Date()): Promise<{ created: n
   const today = dayFrom(now, 0);
   const tomorrow = dayFrom(now, 1);
   const admins = await adminUserIds();
+  const settings = await getSettings();
   const open = await prisma.issue.findMany({
     where: { status: { not: "completed" } },
     include: {
@@ -66,6 +69,48 @@ export async function runScheduledChecks(now = new Date()): Promise<{ created: n
         // Re-dating an overdue issue resets the reminder.
         dedupeKey: `overdue:${issue.id}:${issue.dueDate}`,
       });
+    }
+
+    // Running out of turnaround: warn the technician once a set share of the time has gone.
+    if (issue.dueDate && issue.dueDate > today && techUser && settings.warnAtPercent > 0) {
+      const startDay = issue.scheduledFor && issue.scheduledFor <= today ? issue.scheduledFor : dayFrom(issue.createdAt, 0);
+      const total = daysBetween(startDay, issue.dueDate);
+      const elapsed = daysBetween(startDay, today);
+      if (total > 1 && elapsed / total >= settings.warnAtPercent / 100) {
+        created += await notifyUsers([techUser], {
+          ...base,
+          kind: "due_soon",
+          title: `Running out of time: ${issue.title}`,
+          body: `${Math.round((elapsed / total) * 100)}% of the ${total}-day turnaround used · ${line}`,
+          dedupeKey: `at_risk:${issue.id}:${issue.dueDate}`,
+        });
+      }
+    }
+
+    // Overdue long enough: raise the priority one level (and again every N days), so it climbs the boards.
+    if (settings.escalation.enabled && issue.dueDate && issue.dueDate < today) {
+      const overdueDays = daysBetween(issue.dueDate, today);
+      const next = nextPriority(issue.priority);
+      const sinceLast = issue.escalatedAt ? (now.getTime() - issue.escalatedAt.getTime()) / 86_400_000 : Infinity;
+      const every = settings.escalation.afterOverdueDays;
+      if (next && overdueDays >= every && sinceLast >= every) {
+        await prisma.issue.update({ where: { id: issue.id }, data: { priority: next, escalatedAt: now } });
+        await logActivity(null, {
+          action: "issue.escalated",
+          entityType: "issue",
+          entityId: issue.id,
+          issueId: issue.id,
+          propertyId: issue.propertyId,
+          summary: `"${issue.title}": Priority: ${issue.priority} → ${next} (automatic — overdue ${overdueDays} day${overdueDays === 1 ? "" : "s"})`,
+        });
+        created += await notifyUsers([techUser, ...admins], {
+          ...base,
+          kind: "priority",
+          title: `Escalated to ${priorityWord(next)}: ${issue.title}`,
+          body: `Overdue ${overdueDays} day${overdueDays === 1 ? "" : "s"} · ${issue.property.name}${issue.technician ? ` · ${issue.technician.name}` : " · unassigned"}`,
+          dedupeKey: `escalate:${issue.id}:${next}:${today}`,
+        });
+      }
     }
 
     const ageMs = now.getTime() - issue.createdAt.getTime();

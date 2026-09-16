@@ -1,6 +1,6 @@
 import type { DashboardData, DashboardIssue, Priority, Technician } from "../types";
 import { PRIORITIES } from "../types";
-import { addDays, loadSummary, todayStr, type LoadSummary } from "../lib/capacity";
+import { addDays, loadSummary, slaProgress, todayStr, type LoadSummary } from "../lib/capacity";
 import { durationMs } from "../lib/dates";
 
 export const SEVERITY: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
@@ -55,12 +55,13 @@ export function isOverdue(issue: DashboardIssue, today = todayStr()): boolean {
   return !!marker && marker < today && issue.status !== "completed";
 }
 
-export function dueCell(issue: DashboardIssue, today = todayStr()): TimeCell {
+export function dueCell(issue: DashboardIssue, today = todayStr(), warnAtPercent = 0): TimeCell {
   const due = issue.dueDate;
   if (!due) return { label: "NO DUE", tone: "unscheduled" };
   if (due < today) return { label: "OVERDUE", tone: "overdue" };
   if (due === today) return { label: "DUE TODAY", tone: "today" };
   if (due === addDays(today, 1)) return { label: "DUE TMRW", tone: "soon" };
+  if (warnAtPercent > 0 && slaProgress(issue, today, warnAtPercent).state === "warning") return { label: `AT RISK · ${dayLabel(due)}`, tone: "soon" };
   return { label: `DUE ${dayLabel(due)}`, tone: due <= addDays(today, 6) ? "soon" : "later" };
 }
 

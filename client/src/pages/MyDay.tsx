@@ -4,7 +4,8 @@ import { api } from "../api";
 import { useCurrentUser } from "../auth/AuthContext";
 import { useDashboardPolling } from "../dashboard/useDashboardData";
 import { sortIssues } from "../dashboard/derive";
-import { addDays, capacityOn, formatDay, formatHours, relativeDay, todayStr } from "../lib/capacity";
+import { addDays, capacityOn, formatDay, formatHours, relativeDay, slaProgress, todayStr } from "../lib/capacity";
+import { useSettings } from "../settings/SettingsContext";
 import { PRIORITY_SHORT_LABELS, STATUS_LABELS, type DashboardIssue, type TimeEntry } from "../types";
 import { entryMs, formatClock, useOpenEntry, useTicker, TIMER_EVENT } from "../time/useTimer";
 
@@ -41,6 +42,7 @@ export default function MyDay() {
   const state = useDashboardPolling(30000);
   const today = todayStr();
   const now = useTicker(1000);
+  const { warnAtPercent } = useSettings();
 
   const technicians = useMemo(() => (state.data?.technicians ?? []).filter((t) => t.active), [state.data]);
   const technicianId = isAdmin ? params.get("tech") || user?.technicianId || technicians[0]?.id || "" : user?.technicianId ?? "";
@@ -183,6 +185,7 @@ export default function MyDay() {
             <ul className="myday-list">
               {buckets[b].map((issue) => {
                 const here = running?.issueId === issue.id;
+                const atRisk = slaProgress(issue, today, warnAtPercent).state === "warning";
                 return (
                   <li key={issue.id} className={`card myday-row ${here ? "running" : ""}`}>
                     <span className={`tag tag-${issue.priority}`}>{PRIORITY_SHORT_LABELS[issue.priority]}</span>
@@ -191,6 +194,7 @@ export default function MyDay() {
                         {issue.title}
                       </Link>
                       <span className="muted small">
+                        {atRisk && <span className="risk-flag">At risk</span>}
                         {issue.property.name} · {dueText(issue, today)}
                         {issue.estimatedHours != null ? ` · est. ${formatHours(issue.estimatedHours)}` : ""}
                         {issue.actualHours ? ` · logged ${formatHours(issue.actualHours)}` : ""}

@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppNotification, AppUser, TimeEntry, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { ActivityEntry, AppNotification, AppSettings, AppUser, TimeEntry, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -72,6 +72,9 @@ export const api = {
   clockOut: (note?: string, technicianId?: string) =>
     request<TimeEntry & { totalHours: number }>("/time/clock-out", { method: "POST", body: JSON.stringify({ note, technicianId }) }),
   deleteTimeEntry: (id: string) => request<void>(`/time/${id}`, { method: "DELETE" }),
+
+  getSettings: () => request<{ settings: AppSettings; defaults: AppSettings }>("/settings"),
+  saveSettings: (settings: AppSettings) => request<{ settings: AppSettings; defaults: AppSettings }>("/settings", { method: "PUT", body: JSON.stringify(settings) }),
 
   listProperties: () => request<Property[]>("/properties"),
   createProperty: (data: { name: string; address?: string; notes?: string }) =>

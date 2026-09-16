@@ -4,6 +4,7 @@ import { PRIORITY_LABELS, PRIORITY_SHORT_LABELS } from "../types";
 import { formatHours, initials, todayStr } from "../lib/capacity";
 import { activeIssueIds, buildBoard, dueCell, isOverdue, startCell, statusBoardLabel, type BoardFilters, type BoardSection, type GroupMode } from "./derive";
 import { useDashboard } from "./useDashboardData";
+import { useSettings } from "../settings/SettingsContext";
 
 const ROWS_PER_PAGE = 13;
 const PAGE_MS = 10000;
@@ -64,6 +65,7 @@ export function useBoardFilters(): [BoardFilters, (next: Partial<BoardFilters>) 
 
 export default function DepartureBoard({ showControls = true }: { showControls?: boolean }) {
   const { data } = useDashboard();
+  const settings = useSettings();
   const active = useMemo(() => activeIssueIds(data!), [data]);
   const today = todayStr();
   const [filters, setFilters] = useBoardFilters();
@@ -201,7 +203,7 @@ export default function DepartureBoard({ showControls = true }: { showControls?:
             );
           }
           const { issue } = line;
-          const due = dueCell(issue, today);
+          const due = dueCell(issue, today, settings.warnAtPercent);
           return (
             <div
               className={`board-row tone-${due.tone} priority-${issue.priority} status-${issue.status}`}

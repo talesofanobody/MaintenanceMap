@@ -11,8 +11,36 @@ export interface WorkItem {
 // Default turnaround per priority; mirrors the server's fallback.
 export const SLA_DAYS: Record<Priority, number> = { urgent: 0, high: 3, medium: 14, low: 30 };
 
-export function defaultDueDate(priority: Priority, fromDay?: string | null): string {
-  return addDays(fromDay || todayStr(), SLA_DAYS[priority]);
+export function defaultDueDate(priority: Priority, fromDay?: string | null, slaDays: Record<Priority, number> = SLA_DAYS): string {
+  return addDays(fromDay || todayStr(), slaDays[priority]);
+}
+
+export type SlaState = "none" | "ok" | "warning" | "overdue" | "done";
+
+export interface SlaProgress {
+  state: SlaState;
+  /** Share of the turnaround used so far, 0–1 (can exceed 1 when overdue). */
+  fraction: number;
+  totalDays: number;
+  daysLeft: number;
+}
+
+/** How much of an issue's turnaround has been used, measured from its start date (or the day it was logged) to its due date. */
+export function slaProgress(
+  issue: { createdAt: string; scheduledFor: string | null; dueDate: string | null; status: Status },
+  today = todayStr(),
+  warnAtPercent = 80
+): SlaProgress {
+  if (issue.status === "completed") return { state: "done", fraction: 0, totalDays: 0, daysLeft: 0 };
+  if (!issue.dueDate) return { state: "none", fraction: 0, totalDays: 0, daysLeft: 0 };
+  const startDay = issue.scheduledFor && issue.scheduledFor <= today ? issue.scheduledFor : issue.createdAt.slice(0, 10);
+  const totalDays = Math.max(0, daysBetween(startDay, issue.dueDate));
+  const elapsed = daysBetween(startDay, today);
+  const daysLeft = daysBetween(today, issue.dueDate);
+  const fraction = totalDays > 0 ? elapsed / totalDays : elapsed >= 0 ? 1 : 0;
+  if (daysLeft < 0) return { state: "overdue", fraction, totalDays, daysLeft };
+  if (warnAtPercent > 0 && totalDays > 1 && fraction >= warnAtPercent / 100) return { state: "warning", fraction, totalDays, daysLeft };
+  return { state: "ok", fraction, totalDays, daysLeft };
 }
 
 export function daysBetween(fromDay: string, toDay: string): number {

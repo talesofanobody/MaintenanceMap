@@ -68,6 +68,12 @@ export interface AppNotification {
   readAt: string | null;
 }
 
+export interface AppSettings {
+  slaDays: Record<Priority, number>;
+  warnAtPercent: number;
+  escalation: { enabled: boolean; afterOverdueDays: number };
+}
+
 export interface TechnicianRef {
   id: string;
   name: string;

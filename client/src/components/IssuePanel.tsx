@@ -3,7 +3,8 @@ import { api } from "../api";
 import TimeLog from "../time/TimeLog";
 import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
-import { capacityOn, committedOn, defaultDueDate, formatHours, relativeDay, SLA_DAYS, todayStr } from "../lib/capacity";
+import { capacityOn, committedOn, defaultDueDate, formatHours, relativeDay, slaProgress, todayStr } from "../lib/capacity";
+import { useSettings } from "../settings/SettingsContext";
 import type { ActivityEntry, Issue, Photo, Priority, Status, Technician } from "../types";
 import { PRIORITIES, PRIORITY_LABELS, PRIORITY_SHORT_LABELS, STATUSES, STATUS_LABELS } from "../types";
 import PhotoLightbox from "./PhotoLightbox";
@@ -96,6 +97,7 @@ export default function IssuePanel({
   const [workOrderNumber, setWorkOrderNumber] = useState(issue?.workOrderNumber ?? "");
   const [workOrderUrl, setWorkOrderUrl] = useState(issue?.workOrderUrl ?? "");
   const [comments, setComments] = useState(issue?.comments ?? "");
+  const { slaDays, warnAtPercent } = useSettings();
   const [closedDate, setClosedDate] = useState(toDateInputValue(issue?.closedAt));
   const [closedDateTouched, setClosedDateTouched] = useState(false);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
@@ -103,7 +105,7 @@ export default function IssuePanel({
   const [estimatedHours, setEstimatedHours] = useState(issue?.estimatedHours != null ? String(issue.estimatedHours) : "");
   const [actualHours, setActualHours] = useState(issue?.actualHours != null ? String(issue.actualHours) : "");
   const [scheduledFor, setScheduledFor] = useState(issue?.scheduledFor ?? "");
-  const [dueDate, setDueDate] = useState(issue?.dueDate ?? (issue ? "" : defaultDueDate("medium")));
+  const [dueDate, setDueDate] = useState(issue?.dueDate ?? (issue ? "" : defaultDueDate("medium", null, slaDays)));
   const [dueTouched, setDueTouched] = useState(!!issue);
   const [lat, setLat] = useState<number | null>(issue?.lat ?? draftLatLng?.lat ?? null);
   const [lng, setLng] = useState<number | null>(issue?.lng ?? draftLatLng?.lng ?? null);
@@ -144,8 +146,8 @@ export default function IssuePanel({
   // Until the user picks a due date themselves, keep it in step with the priority's
   // turnaround, counted from the start date (or today).
   useEffect(() => {
-    if (!dueTouched) setDueDate(defaultDueDate(priority, scheduledFor || null));
-  }, [priority, scheduledFor, dueTouched]);
+    if (!dueTouched) setDueDate(defaultDueDate(priority, scheduledFor || null, slaDays));
+  }, [priority, scheduledFor, dueTouched, slaDays]);
 
   const effectiveLat = draftLatLng?.lat ?? lat;
   const effectiveLng = draftLatLng?.lng ?? lng;
@@ -330,6 +332,8 @@ export default function IssuePanel({
   }
 
   const lock = limited && isEdit;
+  const risk = issue ? slaProgress(issue, todayStr(), warnAtPercent) : null;
+  const riskState = risk?.state ?? "none";
 
   return (
     <div className="side-panel">
@@ -341,6 +345,14 @@ export default function IssuePanel({
         </button>
       </div>
 
+      {isEdit && issue && risk && riskState === "warning" && (
+        <div className="banner banner-warn">
+          {Math.round(risk.fraction * 100)}% of this issue's turnaround has been used — due {relativeDay(issue.dueDate!).toLowerCase()}.
+        </div>
+      )}
+      {isEdit && issue && riskState === "overdue" && (
+        <div className="banner banner-error">Overdue — this was due {relativeDay(issue.dueDate!).toLowerCase()}.</div>
+      )}
       {isEdit && !canEdit && (
         <div className="banner banner-info">This issue is assigned to {issue.technician?.name ?? "someone else"} — you can view it but not change it.</div>
       )}
@@ -504,8 +516,8 @@ export default function IssuePanel({
             </div>
             <span className="muted small">
               {dueTouched
-                ? `Turnaround for ${PRIORITY_SHORT_LABELS[priority].toLowerCase()} priority is ${SLA_DAYS[priority] === 0 ? "same day" : `${SLA_DAYS[priority]} days`}.`
-                : `Due date set automatically from priority (${SLA_DAYS[priority] === 0 ? "same day" : `${SLA_DAYS[priority]} days`}) — change it if you need to.`}
+                ? `Turnaround for ${PRIORITY_SHORT_LABELS[priority].toLowerCase()} priority is ${slaDays[priority] === 0 ? "same day" : `${slaDays[priority]} days`}.`
+                : `Due date set automatically from priority (${slaDays[priority] === 0 ? "same day" : `${slaDays[priority]} days`}) — change it if you need to.`}
             </span>
             <span className="field-label">Assignment</span>
             <label>

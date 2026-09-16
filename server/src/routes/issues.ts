@@ -4,6 +4,7 @@ import { defaultDueDate, parseOptionalDay, parseOptionalHours, ValidationError }
 import { ADMIN_ONLY, CAN_EDIT } from "../middleware/requireAuth";
 import { describeChanges, logActivity } from "../lib/activity";
 import { adminUserIds, issueLine, notifyUsers, priorityWord, technicianUserId } from "../lib/notify";
+import { getSettings } from "../lib/settings";
 
 const STATUS_WORD: Record<string, string> = { pending: "pending", in_progress: "in progress", completed: "completed" };
 
@@ -145,6 +146,7 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
 
   const finalStatus = status ?? "pending";
   const finalPriority = priority ?? "medium";
+  const { slaDays } = await getSettings();
   const issue = await prisma.issue.create({
     data: {
       propertyId,
@@ -166,7 +168,7 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
       scheduledFor: extras.scheduledFor ?? null,
       // Every issue carries a due date so boards can order by it; fall back to the
       // priority's turnaround from the start date (or today).
-      dueDate: extras.dueDate ?? defaultDueDate(finalPriority, extras.scheduledFor ?? null),
+      dueDate: extras.dueDate ?? defaultDueDate(finalPriority, extras.scheduledFor ?? null, slaDays),
     },
     include: ISSUE_INCLUDE,
   });
@@ -236,6 +238,7 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
     nextClosedAt = null;
   }
 
+  const { slaDays } = await getSettings();
   const issue = await prisma.issue.update({
     where: { id: req.params.id },
     data: {
@@ -254,7 +257,7 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
       ...(extras.estimatedHours !== undefined ? { estimatedHours: extras.estimatedHours } : {}),
       ...(extras.scheduledFor !== undefined ? { scheduledFor: extras.scheduledFor } : {}),
       ...(extras.dueDate !== undefined
-        ? { dueDate: extras.dueDate ?? defaultDueDate(priority ?? existing.priority, extras.scheduledFor ?? existing.scheduledFor) }
+        ? { dueDate: extras.dueDate ?? defaultDueDate(priority ?? existing.priority, extras.scheduledFor ?? existing.scheduledFor, slaDays) }
         : {}),
       // Actual hours come from clock in/out entries (or a manual figure on completion);
       // an ordinary edit never wipes them.

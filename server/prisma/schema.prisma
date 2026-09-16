@@ -121,6 +121,8 @@ model Issue {
   // and when it must be done by.
   scheduledFor     String?
   dueDate          String?
+  // Set when the scheduler last raised this issue's priority for being overdue.
+  escalatedAt      DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   photos           Photo[]
@@ -161,4 +163,11 @@ model Photo {
   createdAt DateTime  @default(now())
 
   @@index([issueId])
+}
+
+// Organisation-wide settings (turnaround days per priority, escalation rules), one JSON row.
+model Setting {
+  id        String   @id
+  json      String
+  updatedAt DateTime @updatedAt
 }

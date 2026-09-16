@@ -9,7 +9,9 @@ import { techniciansRouter } from "./routes/technicians";
 import { dashboardRouter } from "./routes/dashboard";
 import { exportRouter } from "./routes/export";
 import { prisma } from "./db";
-import { dayFrom, SLA_DAYS } from "./lib/validation";
+import { dayFrom } from "./lib/validation";
+import { getSettings } from "./lib/settings";
+import { settingsRouter } from "./routes/settings";
 import { ADMIN_ONLY, attachUser, requireAuth } from "./middleware/requireAuth";
 import { usersRouter } from "./routes/users";
 import { activityRouter } from "./routes/activity";
@@ -65,6 +67,7 @@ app.use("/api/users", requireAuth, ADMIN_ONLY, usersRouter);
 app.use("/api/activity", requireAuth, activityRouter);
 app.use("/api/notifications", requireAuth, notificationsRouter);
 app.use("/api/time", requireAuth, timeRouter);
+app.use("/api/settings", requireAuth, settingsRouter);
 app.use("/api/properties", requireAuth, propertiesRouter);
 app.use("/api/issues", requireAuth, issuesRouter);
 app.use("/api/photos", requireAuth, photosRouter);
@@ -76,8 +79,10 @@ app.use("/api/export", requireAuth, ADMIN_ONLY, exportRouter);
 // counted from the day they were logged.
 async function backfillDueDates() {
   const missing = await prisma.issue.findMany({ where: { dueDate: null }, select: { id: true, priority: true, createdAt: true } });
+  if (!missing.length) return;
+  const { slaDays } = await getSettings();
   for (const issue of missing) {
-    await prisma.issue.update({ where: { id: issue.id }, data: { dueDate: dayFrom(issue.createdAt, SLA_DAYS[issue.priority] ?? 14) } });
+    await prisma.issue.update({ where: { id: issue.id }, data: { dueDate: dayFrom(issue.createdAt, slaDays[issue.priority as keyof typeof slaDays] ?? 14) } });
   }
   if (missing.length) console.log(`Backfilled due dates for ${missing.length} issue(s).`);
 }

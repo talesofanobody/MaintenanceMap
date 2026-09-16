@@ -3204,3 +3204,96 @@ li.unread .bell-item:hover {
     height: 10px;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Settings page, turnaround warnings                                  */
+/* ------------------------------------------------------------------ */
+.banner-warn {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  border: 1px solid #fde68a;
+}
+
+.risk-flag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 720px;
+}
+
+.settings-section {
+  padding: 18px 20px;
+}
+
+.settings-section h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.settings-section > p {
+  margin: 0 0 14px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.sla-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.sla-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sla-grid input {
+  width: 100%;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.settings-row input[type="number"] {
+  width: 90px;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+@media screen and (max-width: 768px) {
+  .sla-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.settings-section .checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}

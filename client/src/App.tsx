@@ -14,6 +14,8 @@ import DashboardLayout from "./dashboard/DashboardLayout";
 import NotificationBell from "./notifications/NotificationBell";
 import ActiveTimer from "./time/ActiveTimer";
 import MyDay from "./pages/MyDay";
+import Settings from "./pages/Settings";
+import { SettingsProvider } from "./settings/SettingsContext";
 import MapDashboard from "./dashboard/MapDashboard";
 import DepartureBoard from "./dashboard/DepartureBoard";
 import SummaryBoard from "./dashboard/SummaryBoard";
@@ -48,6 +50,7 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
             <NavLink to="/dashboard">Dashboards</NavLink>
             {isAdmin && <NavLink to="/activity">Activity</NavLink>}
             {isAdmin && <NavLink to="/access">Access</NavLink>}
+            {isAdmin && <NavLink to="/settings">Settings</NavLink>}
           </nav>
         </div>
         <div className="app-header-right">
@@ -127,6 +130,7 @@ function AppRoutes() {
           {isAdmin && <Route path="/technicians" element={<Technicians />} />}
           {isAdmin && <Route path="/activity" element={<Activity />} />}
           {isAdmin && <Route path="/access" element={<Access />} />}
+          {isAdmin && <Route path="/settings" element={<Settings />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
         {DashboardRoutes()}
@@ -138,7 +142,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <SettingsProvider>
+        <AppRoutes />
+      </SettingsProvider>
     </AuthProvider>
   );
 }

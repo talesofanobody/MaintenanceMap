@@ -41,8 +41,16 @@ export function dayFrom(date: Date, offsetDays: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
-export function defaultDueDate(priority: string, baseDay?: string | null): string {
-  const offset = SLA_DAYS[priority] ?? 14;
+export function daysBetween(fromDay: string, toDay: string): number {
+  const parse = (s: string) => {
+    const [y, m, d] = s.split("-").map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((parse(toDay) - parse(fromDay)) / 86_400_000);
+}
+
+export function defaultDueDate(priority: string, baseDay?: string | null, slaDays: Record<string, number> = SLA_DAYS): string {
+  const offset = slaDays[priority] ?? 14;
   if (baseDay && DATE_ONLY.test(baseDay)) {
     const [y, m, d] = baseDay.split("-").map(Number);
     return dayFrom(new Date(Date.UTC(y, m - 1, d)), offset);
