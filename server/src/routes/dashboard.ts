@@ -8,7 +8,7 @@ export const dashboardRouter = Router();
 // open issue (plus those closed in the last week, for the summary), and the crew.
 dashboardRouter.get("/", async (_req, res) => {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const [properties, technicians, issues] = await Promise.all([
+  const [properties, technicians, issues, activeEntries] = await Promise.all([
     prisma.property.findMany({
       select: { id: true, name: true, address: true, boundary: true, centerLat: true, centerLng: true },
       orderBy: { name: "asc" },
@@ -23,6 +23,8 @@ dashboardRouter.get("/", async (_req, res) => {
       },
       orderBy: { createdAt: "asc" },
     }),
+    // Who is clocked in on what right now.
+    prisma.timeEntry.findMany({ where: { endedAt: null }, select: { id: true, issueId: true, technicianId: true, startedAt: true } }),
   ]);
 
   res.json({
@@ -30,5 +32,6 @@ dashboardRouter.get("/", async (_req, res) => {
     properties: properties.map((p) => ({ ...p, boundary: p.boundary ? JSON.parse(p.boundary) : null })),
     technicians: technicians.map(serializeTechnician),
     issues,
+    activeEntries,
   });
 });

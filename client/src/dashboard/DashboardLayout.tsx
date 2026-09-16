@@ -88,7 +88,7 @@ export default function DashboardLayout() {
                 Sign out
               </button>
             ) : (
-              <Link to="/" className="dash-btn dash-btn-ghost">
+              <Link to="/properties" className="dash-btn dash-btn-ghost">
                 Exit
               </Link>
             )}

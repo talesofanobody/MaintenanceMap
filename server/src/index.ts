@@ -16,6 +16,7 @@ import { activityRouter } from "./routes/activity";
 import { PrismaSessionStore, purgeExpiredSessions } from "./lib/sessionStore";
 import { notificationsRouter } from "./routes/notifications";
 import { startScheduler } from "./lib/scheduler";
+import { timeRouter } from "./routes/time";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -63,6 +64,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/users", requireAuth, ADMIN_ONLY, usersRouter);
 app.use("/api/activity", requireAuth, activityRouter);
 app.use("/api/notifications", requireAuth, notificationsRouter);
+app.use("/api/time", requireAuth, timeRouter);
 app.use("/api/properties", requireAuth, propertiesRouter);
 app.use("/api/issues", requireAuth, issuesRouter);
 app.use("/api/photos", requireAuth, photosRouter);

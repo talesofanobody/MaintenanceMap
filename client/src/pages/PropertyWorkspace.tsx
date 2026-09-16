@@ -121,6 +121,14 @@ export default function PropertyWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, loading]);
 
+  // Keep the open panel's issue in step with the list after a reload (clock in/out, photo changes).
+  useEffect(() => {
+    if (!activeIssue) return;
+    const fresh = issues.find((i) => i.id === activeIssue.id);
+    if (fresh && fresh !== activeIssue) setActiveIssue(fresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [issues]);
+
   // Notifications and dashboards deep-link to an issue with ?issue=<id>: open it and fly there.
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
@@ -248,7 +256,7 @@ export default function PropertyWorkspace() {
     <div className={`workspace ${guideDrawActive ? "guide-draw-active" : ""} ${panelOpen ? "panel-open" : ""}`}>
       <div className="workspace-toolbar">
         <div className="workspace-toolbar-left">
-          <Link to="/" className="btn btn-ghost btn-small" aria-label="Back to properties">
+          <Link to="/properties" className="btn btn-ghost btn-small" aria-label="Back to properties">
             ← <span className="hide-mobile">Properties</span>
           </Link>
           <h2 title={property.name}>{property.name}</h2>

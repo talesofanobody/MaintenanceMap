@@ -80,6 +80,23 @@ export async function runScheduledChecks(now = new Date()): Promise<{ created: n
     }
   }
 
+  // Someone still clocked in after ten hours has almost certainly forgotten.
+  const stale = await prisma.timeEntry.findMany({
+    where: { endedAt: null, startedAt: { lt: new Date(now.getTime() - 10 * 60 * 60 * 1000) } },
+    include: { issue: { select: { title: true, propertyId: true } }, technician: { select: { user: { select: { id: true, active: true } } } } },
+  });
+  for (const entry of stale) {
+    const uid = entry.technician.user?.active ? entry.technician.user.id : null;
+    created += await notifyUsers([uid, ...admins], {
+      kind: "status",
+      title: `Still clocked in: ${entry.issue.title}`,
+      body: `Clocked in since ${entry.startedAt.toISOString().slice(0, 16).replace("T", " ")} UTC — clock out, or an admin can correct the entry.`,
+      issueId: entry.issueId,
+      propertyId: entry.issue.propertyId,
+      dedupeKey: `timer:${entry.id}`,
+    });
+  }
+
   return { created, checked: open.length };
 }
 

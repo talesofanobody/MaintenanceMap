@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppNotification, AppUser, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { ActivityEntry, AppNotification, AppUser, TimeEntry, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -60,6 +60,18 @@ export const api = {
   markNotificationRead: (id: string) => request<{ ok: boolean }>(`/notifications/${id}/read`, { method: "POST" }),
   markAllNotificationsRead: () => request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
   runReminderChecks: () => request<{ created: number; checked: number }>("/notifications/run-checks", { method: "POST" }),
+
+  listTimeEntries: (params: { issueId?: string; technicianId?: string; day?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") q.set(k, String(v));
+    return request<TimeEntry[]>(`/time${q.toString() ? `?${q}` : ""}`);
+  },
+  getOpenEntry: (technicianId?: string) => request<TimeEntry | null>(`/time/open${technicianId ? `?technicianId=${encodeURIComponent(technicianId)}` : ""}`),
+  clockIn: (issueId: string, technicianId?: string) =>
+    request<TimeEntry>("/time/clock-in", { method: "POST", body: JSON.stringify({ issueId, technicianId }) }),
+  clockOut: (note?: string, technicianId?: string) =>
+    request<TimeEntry & { totalHours: number }>("/time/clock-out", { method: "POST", body: JSON.stringify({ note, technicianId }) }),
+  deleteTimeEntry: (id: string) => request<void>(`/time/${id}`, { method: "DELETE" }),
 
   listProperties: () => request<Property[]>("/properties"),
   createProperty: (data: { name: string; address?: string; notes?: string }) =>

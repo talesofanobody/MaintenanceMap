@@ -88,6 +88,8 @@ export default function SummaryBoard() {
             {techs.map(({ t, mine, load }) => {
               const pct = load.today.capacity ? Math.min(100, (load.today.committed / load.today.capacity) * 100) : 0;
               const over = load.today.committed > load.today.capacity;
+              const active = (data.activeEntries ?? []).find((e) => e.technicianId === t.id);
+              const onJob = active ? data.issues.find((i) => i.id === active.issueId) : undefined;
               return (
                 <li key={t.id} className="crew-row">
                   <span className="avatar" style={{ background: t.color }}>
@@ -101,6 +103,7 @@ export default function SummaryBoard() {
                         {load.today.capacity === 0 ? "off today" : over ? `overbooked by ${formatHours(load.today.committed - load.today.capacity)}` : `${formatHours(load.today.free)} free today`}
                       </span>
                     </div>
+                    {onJob && <span className="crew-now">▶ On the job: {onJob.title}</span>}
                     <div className="crew-bar">
                       <span style={{ width: `${pct}%`, background: over ? "#f87171" : t.color }} />
                     </div>

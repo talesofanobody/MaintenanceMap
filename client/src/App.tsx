@@ -12,6 +12,8 @@ import Account from "./pages/Account";
 import Activity from "./pages/Activity";
 import DashboardLayout from "./dashboard/DashboardLayout";
 import NotificationBell from "./notifications/NotificationBell";
+import ActiveTimer from "./time/ActiveTimer";
+import MyDay from "./pages/MyDay";
 import MapDashboard from "./dashboard/MapDashboard";
 import DepartureBoard from "./dashboard/DepartureBoard";
 import SummaryBoard from "./dashboard/SummaryBoard";
@@ -40,9 +42,8 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
             <span className="hide-mobile">MaintenanceMap</span>
           </Link>
           <nav className="app-nav" aria-label="Main">
-            <NavLink to="/" end>
-              Properties
-            </NavLink>
+            {(user.technicianId || isAdmin) && <NavLink to="/today">Today</NavLink>}
+            <NavLink to="/properties">Properties</NavLink>
             {isAdmin && <NavLink to="/technicians">Technicians</NavLink>}
             <NavLink to="/dashboard">Dashboards</NavLink>
             {isAdmin && <NavLink to="/activity">Activity</NavLink>}
@@ -50,6 +51,7 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
           </nav>
         </div>
         <div className="app-header-right">
+          {user.technicianId && <ActiveTimer />}
           <NotificationBell />
           {isAdmin && (
             <a className="btn btn-ghost btn-small hide-mobile" href={api.exportIssuesUrl()} download title="Download every issue across all properties as a spreadsheet">
@@ -116,7 +118,9 @@ function AppRoutes() {
     <HashRouter>
       <Routes>
         <Route element={<MainLayout user={user} onLogout={() => logout()} />}>
-          <Route path="/" element={<PropertiesList />} />
+          <Route path="/" element={<Navigate to={user.role === "technician" ? "/today" : "/properties"} replace />} />
+          <Route path="/properties" element={<PropertiesList />} />
+          {(user.technicianId || isAdmin) && <Route path="/today" element={<MyDay />} />}
           <Route path="/properties/:id" element={<PropertyWorkspace />} />
           <Route path="/properties/:id/report" element={<Report />} />
           <Route path="/account" element={<Account />} />

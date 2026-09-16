@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import TimeLog from "../time/TimeLog";
 import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
 import { capacityOn, committedOn, defaultDueDate, formatHours, relativeDay, SLA_DAYS, todayStr } from "../lib/capacity";
@@ -288,7 +289,7 @@ export default function IssuePanel({
         closedAt: closedIso,
         technicianId: technicianId || null,
         estimatedHours: estimate,
-        actualHours: status === "completed" ? parseHours(actualHours) : null,
+        ...(status === "completed" ? { actualHours: parseHours(actualHours) } : {}),
         scheduledFor: scheduledFor || null,
         dueDate: dueDate || null,
       };
@@ -298,7 +299,7 @@ export default function IssuePanel({
           ? {
               status,
               closedAt: closedIso,
-              actualHours: status === "completed" ? parseHours(actualHours) : null,
+              ...(status === "completed" ? { actualHours: parseHours(actualHours) } : {}),
               comments: comments.trim() || null,
               description: description.trim() || null,
               actionNeeded: actionNeeded.trim() || null,
@@ -582,6 +583,20 @@ export default function IssuePanel({
             )
           )}
         </div>
+
+        {isEdit && issue && (
+          <TimeLog
+            issue={issue}
+            currentTechnicianId={currentTechnicianId}
+            canManage={canManage}
+            onChanged={(what) => {
+              // Clocking in moves a pending issue to in progress on the server; mirror it so a
+              // later Save doesn't push the stale status back.
+              if (what === "in" && status === "pending") changeStatus("in_progress");
+              onSaved();
+            }}
+          />
+        )}
 
         {lock ? (
           workOrderCreated && (

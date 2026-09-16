@@ -79,6 +79,7 @@ model Technician {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   issues      Issue[]
+  timeEntries TimeEntry[]
   user        User?
 }
 
@@ -123,9 +124,28 @@ model Issue {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   photos           Photo[]
+  timeEntries      TimeEntry[]
 
   @@index([propertyId])
   @@index([technicianId])
+}
+
+// One stretch of work on an issue, recorded by clocking in and out. A technician has
+// at most one open entry (no endedAt) at a time; the issue's actualHours is the sum.
+model TimeEntry {
+  id           String     @id @default(cuid())
+  issueId      String
+  issue        Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  technicianId String
+  technician   Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  userId       String?
+  startedAt    DateTime   @default(now())
+  endedAt      DateTime?
+  note         String?
+  createdAt    DateTime   @default(now())
+
+  @@index([issueId])
+  @@index([technicianId, startedAt])
 }
 
 model Photo {

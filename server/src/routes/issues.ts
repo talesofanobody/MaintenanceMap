@@ -94,9 +94,13 @@ async function parseExtras(body: any): Promise<ParsedExtras> {
 }
 
 issuesRouter.get("/", async (req, res) => {
-  const { propertyId } = req.query;
+  const { propertyId, technicianId, open } = req.query;
   const issues = await prisma.issue.findMany({
-    where: propertyId ? { propertyId: String(propertyId) } : undefined,
+    where: {
+      ...(propertyId ? { propertyId: String(propertyId) } : {}),
+      ...(technicianId ? { technicianId: String(technicianId) } : {}),
+      ...(open ? { status: { not: "completed" } } : {}),
+    },
     include: ISSUE_INCLUDE,
     orderBy: { createdAt: "desc" },
   });
@@ -252,11 +256,9 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
       ...(extras.dueDate !== undefined
         ? { dueDate: extras.dueDate ?? defaultDueDate(priority ?? existing.priority, extras.scheduledFor ?? existing.scheduledFor) }
         : {}),
-      ...(nextStatus === "completed"
-        ? extras.actualHours !== undefined
-          ? { actualHours: extras.actualHours }
-          : {}
-        : { actualHours: null }),
+      // Actual hours come from clock in/out entries (or a manual figure on completion);
+      // an ordinary edit never wipes them.
+      ...(extras.actualHours !== undefined ? { actualHours: extras.actualHours } : {}),
       closedAt: nextClosedAt,
     },
     include: ISSUE_INCLUDE,

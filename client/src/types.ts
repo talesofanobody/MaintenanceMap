@@ -130,11 +130,31 @@ export interface DashboardIssue extends Omit<Issue, "photos"> {
   photos: { id: string }[];
 }
 
+export interface ActiveEntry {
+  id: string;
+  issueId: string;
+  technicianId: string;
+  startedAt: string;
+}
+
 export interface DashboardData {
   generatedAt: string;
   properties: Pick<Property, "id" | "name" | "address" | "boundary" | "centerLat" | "centerLng">[];
   technicians: Omit<Technician, "assignments">[];
   issues: DashboardIssue[];
+  activeEntries: ActiveEntry[];
+}
+
+export interface TimeEntry {
+  id: string;
+  issueId: string;
+  technicianId: string;
+  userId: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  note: string | null;
+  technician: { id: string; name: string; color: string };
+  issue: { id: string; title: string; propertyId: string; status: Status; priority: Priority; property: { name: string } };
 }
 
 export interface GeoJSONPolygon {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PRIORITY_LABELS, PRIORITY_SHORT_LABELS } from "../types";
 import { formatHours, initials, todayStr } from "../lib/capacity";
-import { buildBoard, dueCell, isOverdue, startCell, statusBoardLabel, type BoardFilters, type BoardSection, type GroupMode } from "./derive";
+import { activeIssueIds, buildBoard, dueCell, isOverdue, startCell, statusBoardLabel, type BoardFilters, type BoardSection, type GroupMode } from "./derive";
 import { useDashboard } from "./useDashboardData";
 
 const ROWS_PER_PAGE = 13;
@@ -64,6 +64,7 @@ export function useBoardFilters(): [BoardFilters, (next: Partial<BoardFilters>) 
 
 export default function DepartureBoard({ showControls = true }: { showControls?: boolean }) {
   const { data } = useDashboard();
+  const active = useMemo(() => activeIssueIds(data!), [data]);
   const today = todayStr();
   const [filters, setFilters] = useBoardFilters();
   const sections = useMemo(() => (data ? buildBoard(data, today, filters) : []), [data, today, filters]);
@@ -225,9 +226,9 @@ export default function DepartureBoard({ showControls = true }: { showControls?:
               <span className="board-col-pri">
                 <span className={`dash-tag dash-tag-${issue.priority}`}>{PRIORITY_SHORT_LABELS[issue.priority].toUpperCase()}</span>
               </span>
-              <span className={`board-col-status board-status-${issue.status}`}>
+              <span className={`board-col-status board-status-${active.has(issue.id) ? "active" : issue.status}`}>
                 <span className="board-status-dot" />
-                {statusBoardLabel(issue)}
+                {statusBoardLabel(issue, active)}
               </span>
             </div>
           );

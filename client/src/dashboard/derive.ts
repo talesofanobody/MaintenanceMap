@@ -137,7 +137,12 @@ export function averageResolveMs(issues: DashboardIssue[]): number | null {
   return closed.reduce((sum, i) => sum + durationMs(i.createdAt, i.closedAt!), 0) / closed.length;
 }
 
-export function statusBoardLabel(issue: DashboardIssue): string {
+export function activeIssueIds(data: DashboardData): Set<string> {
+  return new Set((data.activeEntries ?? []).map((e) => e.issueId));
+}
+
+export function statusBoardLabel(issue: DashboardIssue, active?: Set<string>): string {
+  if (active?.has(issue.id)) return "ON THE JOB";
   if (issue.status === "in_progress") return "IN PROGRESS";
   if (issue.status === "completed") return "DONE";
   return issue.scheduledFor ? "SCHEDULED" : "WAITING";

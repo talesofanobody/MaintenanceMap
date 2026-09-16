@@ -1249,3 +1249,26 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Someone is clocked in on this row right now */
+.board-status-active {
+  color: #4ade80;
+}
+
+.board-status-active .board-status-dot {
+  background: #4ade80;
+  box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.25);
+  animation: mm-pulse 1.4s ease-in-out infinite;
+}
+
+.crew-now {
+  display: block;
+  font-size: 13px;
+  color: #4ade80;
+  margin: 2px 0 4px;
+}
+
+@keyframes mm-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.75); }
+}
