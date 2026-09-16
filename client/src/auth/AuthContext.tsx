@@ -1,11 +1,12 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import { api } from "../api";
+import type { AuthUser } from "../types";
 
 type AuthState =
   | { status: "loading" }
   | { status: "needs-setup" }
   | { status: "anonymous" }
-  | { status: "authenticated"; username: string };
+  | { status: "authenticated"; user: AuthUser };
 
 interface AuthContextValue {
   state: AuthState;
@@ -24,8 +25,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const status = await api.getAuthStatus();
     if (status.needsSetup) {
       setState({ status: "needs-setup" });
-    } else if (status.authenticated && status.username) {
-      setState({ status: "authenticated", username: status.username });
+    } else if (status.authenticated && status.user) {
+      setState({ status: "authenticated", user: status.user });
     } else {
       setState({ status: "anonymous" });
     }
@@ -37,12 +38,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (username: string, password: string) => {
     const result = await api.login(username, password);
-    setState({ status: "authenticated", username: result.username! });
+    setState({ status: "authenticated", user: result.user! });
   }, []);
 
   const setup = useCallback(async (username: string, password: string) => {
     const result = await api.setupAccount(username, password);
-    setState({ status: "authenticated", username: result.username! });
+    setState({ status: "authenticated", user: result.user! });
   }, []);
 
   const logout = useCallback(async () => {
@@ -57,4 +58,10 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
+}
+
+// Convenience: the signed-in user, or null.
+export function useCurrentUser(): AuthUser | null {
+  const { state } = useAuth();
+  return state.status === "authenticated" ? state.user : null;
 }

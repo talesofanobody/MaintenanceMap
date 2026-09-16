@@ -2,8 +2,10 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import type { Property } from "../types";
+import { useCurrentUser } from "../auth/AuthContext";
 
 export default function PropertiesList() {
+  const isAdmin = useCurrentUser()?.role === "admin";
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +81,7 @@ export default function PropertiesList() {
             </p>
           )}
         </div>
-        {!showForm && (
+        {!showForm && isAdmin && (
           <button type="button" className="btn btn-primary" onClick={() => setShowForm(true)}>
             + Add property
           </button>
@@ -93,7 +95,9 @@ export default function PropertiesList() {
       {loading ? (
         <p className="loading-state">Loading…</p>
       ) : properties.length === 0 ? (
-        !showForm && (
+        !showForm && !isAdmin ? (
+          <p className="empty-state">No properties have been set up yet — an admin needs to add them.</p>
+        ) : !showForm && (
           <section className="welcome card">
             <h2>Welcome to MaintenanceMap</h2>
             <p>Track maintenance issues exactly where they are on each property, then hand over a clean report.</p>
@@ -146,9 +150,11 @@ export default function PropertiesList() {
                 <Link to={`/properties/${p.id}/report`} className="btn btn-ghost btn-small">
                   Report
                 </Link>
-                <button type="button" className="btn btn-ghost btn-small btn-danger-text" onClick={() => handleDelete(p)}>
-                  Delete
-                </button>
+                {isAdmin && (
+                  <button type="button" className="btn btn-ghost btn-small btn-danger-text" onClick={() => handleDelete(p)}>
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           ))}

@@ -3,8 +3,8 @@ import { api } from "../api";
 import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
 import { capacityOn, committedOn, defaultDueDate, formatHours, relativeDay, SLA_DAYS, todayStr } from "../lib/capacity";
-import type { Issue, Photo, Priority, Status, Technician } from "../types";
-import { PRIORITIES, PRIORITY_SHORT_LABELS, STATUSES, STATUS_LABELS } from "../types";
+import type { ActivityEntry, Issue, Photo, Priority, Status, Technician } from "../types";
+import { PRIORITIES, PRIORITY_LABELS, PRIORITY_SHORT_LABELS, STATUSES, STATUS_LABELS } from "../types";
 import PhotoLightbox from "./PhotoLightbox";
 
 interface StagedPhoto {
@@ -18,6 +18,9 @@ interface Props {
   propertyId: string;
   issue: Issue | null;
   draftLatLng: { lat: number; lng: number } | null;
+  // Admins edit everything; technicians only status, hours, notes and photos on their own issues.
+  canManage: boolean;
+  currentTechnicianId?: string | null;
   onRequestReposition: () => void;
   onLocationDetected: (lat: number, lng: number) => void;
   onClose: () => void;
@@ -61,8 +64,28 @@ function parseHours(value: string): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestReposition, onLocationDetected, onClose, onSaved }: Props) {
+/** "Today"/"Tomorrow" read better lowercased mid-sentence; formatted dates keep their case. */
+function softDay(day: string): string {
+  const r = relativeDay(day);
+  return /^(Today|Tomorrow|Yesterday)$/.test(r) ? r.toLowerCase() : r;
+}
+
+export default function IssuePanel({
+  propertyId,
+  issue,
+  draftLatLng,
+  canManage,
+  currentTechnicianId,
+  onRequestReposition,
+  onLocationDetected,
+  onClose,
+  onSaved,
+}: Props) {
   const isEdit = !!issue;
+  // A technician can edit their own issues (limited fields) and log new ones.
+  const ownIssue = !!issue && !!currentTechnicianId && issue.technicianId === currentTechnicianId;
+  const canEdit = canManage || !isEdit || ownIssue;
+  const limited = !canManage;
   const [title, setTitle] = useState(issue?.title ?? "");
   const [description, setDescription] = useState(issue?.description ?? "");
   const [actionNeeded, setActionNeeded] = useState(issue?.actionNeeded ?? "");
@@ -75,7 +98,7 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
   const [closedDate, setClosedDate] = useState(toDateInputValue(issue?.closedAt));
   const [closedDateTouched, setClosedDateTouched] = useState(false);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
-  const [technicianId, setTechnicianId] = useState(issue?.technicianId ?? "");
+  const [technicianId, setTechnicianId] = useState(issue?.technicianId ?? (limited && currentTechnicianId ? currentTechnicianId : ""));
   const [estimatedHours, setEstimatedHours] = useState(issue?.estimatedHours != null ? String(issue.estimatedHours) : "");
   const [actualHours, setActualHours] = useState(issue?.actualHours != null ? String(issue.actualHours) : "");
   const [scheduledFor, setScheduledFor] = useState(issue?.scheduledFor ?? "");
@@ -90,6 +113,7 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState<ActivityEntry[]>([]);
   const stagedRef = useRef<StagedPhoto[]>([]);
   stagedRef.current = staged;
 
@@ -108,6 +132,14 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
       .catch(() => setTechnicians([]));
   }, []);
 
+  useEffect(() => {
+    if (!issue) return;
+    api
+      .listActivity({ issueId: issue.id, limit: 30 })
+      .then(setTimeline)
+      .catch(() => setTimeline([]));
+  }, [issue]);
+
   // Until the user picks a due date themselves, keep it in step with the priority's
   // turnaround, counted from the start date (or today).
   useEffect(() => {
@@ -125,7 +157,7 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
   const selectedTech = technicians.find((t) => t.id === technicianId) ?? null;
   const estimate = parseHours(estimatedHours);
   let capacityHint: { text: string; tone: "ok" | "warn" } | null = null;
-  if (selectedTech && scheduledFor) {
+  if (selectedTech && scheduledFor && canManage) {
     const capacity = capacityOn(selectedTech.weeklyHours, scheduledFor);
     const committed = committedOn(selectedTech.assignments, scheduledFor, issue?.id);
     const free = capacity - committed;
@@ -241,7 +273,7 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
 
     setSaving(true);
     try {
-      const payload = {
+      const full = {
         title: title.trim(),
         description: description.trim() || undefined,
         actionNeeded: actionNeeded.trim() || undefined,
@@ -262,9 +294,19 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
       };
 
       if (isEdit && issue) {
-        await api.updateIssue(issue.id, payload);
+        const payload = limited
+          ? {
+              status,
+              closedAt: closedIso,
+              actualHours: status === "completed" ? parseHours(actualHours) : null,
+              comments: comments.trim() || null,
+              description: description.trim() || null,
+              actionNeeded: actionNeeded.trim() || null,
+            }
+          : full;
+        await api.updateIssue(issue.id, payload as Partial<Issue>);
       } else {
-        const created = await api.createIssue({ propertyId, ...payload });
+        const created = await api.createIssue({ propertyId, ...full });
         for (const s of staged) {
           await api.uploadPhoto(created.id, s.file);
         }
@@ -286,15 +328,21 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
     onClose();
   }
 
+  const lock = limited && isEdit;
+
   return (
     <div className="side-panel">
       <div className="side-panel-grip" aria-hidden="true" />
       <div className="side-panel-header">
-        <h2>{isEdit ? "Edit issue" : "New issue"}</h2>
+        <h2>{isEdit ? (canEdit ? "Edit issue" : "Issue") : "New issue"}</h2>
         <button type="button" className="btn-icon" onClick={onClose} aria-label="Close">
           ✕
         </button>
       </div>
+
+      {isEdit && !canEdit && (
+        <div className="banner banner-info">This issue is assigned to {issue.technician?.name ?? "someone else"} — you can view it but not change it.</div>
+      )}
 
       <form className="form" onSubmit={handleSubmit}>
         <div className={`location-box ${hasLocation ? "is-set" : "is-unset"}`}>
@@ -305,83 +353,100 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
             </span>
             {locationNote && <span className="hint">{locationNote}</span>}
           </div>
-          <button type="button" className="btn btn-small" onClick={onRequestReposition}>
-            {hasLocation ? "Move pin" : "Place pin"}
-          </button>
+          {!lock && (
+            <button type="button" className="btn btn-small" onClick={onRequestReposition}>
+              {hasLocation ? "Move pin" : "Place pin"}
+            </button>
+          )}
         </div>
 
         {error && <div className="banner banner-error">{error}</div>}
 
         <label>
           Title
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Roof leak, north corner" autoFocus />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Roof leak, north corner" autoFocus={!lock} readOnly={lock} />
         </label>
 
-        <div className="field">
-          <span className="field-label">
-            Photos{photoCount > 0 && <span className="field-count">{photoCount}</span>}
-          </span>
-          {photoCount > 0 && (
-            <div className="photo-grid">
-              {staged.map((s) => (
-                <div className="photo-thumb" key={s.id}>
-                  {s.previewUrl ? (
-                    <img src={s.previewUrl} alt="" onClick={() => setLightbox(s.previewUrl)} />
-                  ) : (
-                    <div className="photo-placeholder">{s.converting ? "Preparing…" : "HEIC"}</div>
-                  )}
-                  <button type="button" className="photo-remove" onClick={() => removeStaged(s.id)} aria-label="Remove photo">
-                    ✕
-                  </button>
-                </div>
-              ))}
-              {existingPhotos.map((p) => (
-                <div className="photo-thumb" key={p.id}>
-                  <img src={api.photoThumbUrl(p.id)} alt="" onClick={() => setLightbox(api.photoUrl(p.id))} />
-                  <button type="button" className="photo-remove" onClick={() => removeExistingPhoto(p.id)} aria-label="Remove photo">
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <label className="btn btn-secondary file-btn">
-            <input type="file" accept="image/*,.heic,.heif" multiple onChange={handleFiles} />
-            📷 {photoCount > 0 ? "Add more photos" : "Add photos"}
-          </label>
-          {uploading > 0 ? (
-            <span className="hint">Uploading {uploading} photo{uploading === 1 ? "" : "s"}…</span>
-          ) : (
-            <span className="muted small">JPEG, PNG and iPhone HEIC photos are all fine. Tap a photo to view it full-size.</span>
-          )}
-        </div>
+        {canEdit && (
+          <div className="field">
+            <span className="field-label">
+              Photos{photoCount > 0 && <span className="field-count">{photoCount}</span>}
+            </span>
+            {photoCount > 0 && (
+              <div className="photo-grid">
+                {staged.map((s) => (
+                  <div className="photo-thumb" key={s.id}>
+                    {s.previewUrl ? (
+                      <img src={s.previewUrl} alt="" onClick={() => setLightbox(s.previewUrl)} />
+                    ) : (
+                      <div className="photo-placeholder">{s.converting ? "Preparing…" : "HEIC"}</div>
+                    )}
+                    <button type="button" className="photo-remove" onClick={() => removeStaged(s.id)} aria-label="Remove photo">
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                {existingPhotos.map((p) => (
+                  <div className="photo-thumb" key={p.id}>
+                    <img src={api.photoThumbUrl(p.id)} alt="" onClick={() => setLightbox(api.photoUrl(p.id))} />
+                    <button type="button" className="photo-remove" onClick={() => removeExistingPhoto(p.id)} aria-label="Remove photo">
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <label className="btn btn-secondary file-btn">
+              <input type="file" accept="image/*,.heic,.heif" multiple onChange={handleFiles} />
+              📷 {photoCount > 0 ? "Add more photos" : "Add photos"}
+            </label>
+            {uploading > 0 ? (
+              <span className="hint">Uploading {uploading} photo{uploading === 1 ? "" : "s"}…</span>
+            ) : (
+              <span className="muted small">JPEG, PNG and iPhone HEIC photos are all fine. Tap a photo to view it full-size.</span>
+            )}
+          </div>
+        )}
+        {!canEdit && existingPhotos.length > 0 && (
+          <div className="photo-grid">
+            {existingPhotos.map((p) => (
+              <div className="photo-thumb" key={p.id}>
+                <img src={api.photoThumbUrl(p.id)} alt="" onClick={() => setLightbox(api.photoUrl(p.id))} />
+              </div>
+            ))}
+          </div>
+        )}
 
         <label>
           Description
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="What's wrong?" />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="What's wrong?" readOnly={!canEdit} />
         </label>
 
         <label>
           What needs to be done
-          <textarea value={actionNeeded} onChange={(e) => setActionNeeded(e.target.value)} rows={2} placeholder="Repair steps / scope of work" />
+          <textarea value={actionNeeded} onChange={(e) => setActionNeeded(e.target.value)} rows={2} placeholder="Repair steps / scope of work" readOnly={!canEdit} />
         </label>
 
         <div className="field">
           <span className="field-label">Priority</span>
-          <div className="chip-group" role="radiogroup" aria-label="Priority">
-            {PRIORITIES.map((p) => (
-              <button
-                type="button"
-                key={p}
-                role="radio"
-                aria-checked={priority === p}
-                className={`chip chip-priority-${p} ${priority === p ? "selected" : ""}`}
-                onClick={() => setPriority(p)}
-              >
-                {PRIORITY_SHORT_LABELS[p]}
-              </button>
-            ))}
-          </div>
+          {lock ? (
+            <span className={`pill pill-${priority}`}>{PRIORITY_LABELS[priority]}</span>
+          ) : (
+            <div className="chip-group" role="radiogroup" aria-label="Priority">
+              {PRIORITIES.map((p) => (
+                <button
+                  type="button"
+                  key={p}
+                  role="radio"
+                  aria-checked={priority === p}
+                  className={`chip chip-priority-${p} ${priority === p ? "selected" : ""}`}
+                  onClick={() => setPriority(p)}
+                >
+                  {PRIORITY_SHORT_LABELS[p]}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="field">
@@ -394,7 +459,8 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
                 role="radio"
                 aria-checked={status === s}
                 className={`chip chip-status-${s} ${status === s ? "selected" : ""}`}
-                onClick={() => changeStatus(s)}
+                onClick={() => canEdit && changeStatus(s)}
+                disabled={!canEdit}
               >
                 {STATUS_LABELS[s]}
               </button>
@@ -402,55 +468,70 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
           </div>
         </div>
 
-        <div className="assignment-box">
-          <span className="field-label">Schedule</span>
-          <div className="form-row">
-            <label>
-              Start date
-              <input type="date" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} />
-            </label>
-            <label>
-              Due date
-              <input
-                type="date"
-                value={dueDate}
-                min={scheduledFor || undefined}
-                onChange={(e) => {
-                  setDueDate(e.target.value);
-                  setDueTouched(true);
-                }}
-                className={dueDate && scheduledFor && dueDate < scheduledFor ? "is-invalid" : ""}
-              />
-            </label>
+        {lock ? (
+          <div className="assignment-box readonly">
+            <span className="field-label">Schedule &amp; assignment</span>
+            <span>
+              {scheduledFor ? `Start ${softDay(scheduledFor)}` : "No start date"} · {dueDate ? `due ${softDay(dueDate)}` : "no due date"}
+            </span>
+            <span className="muted small">
+              {selectedTech ? `Assigned to ${selectedTech.name}` : issue?.technician ? `Assigned to ${issue.technician.name}` : "Unassigned"}
+              {estimate != null ? ` · estimate ${formatHours(estimate)}` : ""}
+            </span>
           </div>
-          <span className="muted small">
-            {dueTouched
-              ? `Turnaround for ${PRIORITY_SHORT_LABELS[priority].toLowerCase()} priority is ${SLA_DAYS[priority] === 0 ? "same day" : `${SLA_DAYS[priority]} days`}.`
-              : `Due date set automatically from priority (${SLA_DAYS[priority] === 0 ? "same day" : `${SLA_DAYS[priority]} days`}) — change it if you need to.`}
-          </span>
-          <span className="field-label">Assignment</span>
-          <label>
-            Technician
-            <select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)}>
-              <option value="">Unassigned</option>
-              {selectableTechs.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                  {t.trade ? ` — ${t.trade}` : ""}
-                  {!t.active ? " (inactive)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          {technicians.length === 0 && (
-            <span className="muted small">No technicians yet — add them under Technicians in the top menu.</span>
-          )}
-          <label>
-            Estimated hours
-            <input type="number" min={0} step={0.5} inputMode="decimal" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} placeholder="e.g. 2" />
-          </label>
-          {capacityHint && <span className={`hint ${capacityHint.tone === "warn" ? "hint-warn" : ""}`}>{capacityHint.text}</span>}
-        </div>
+        ) : (
+          <div className="assignment-box">
+            <span className="field-label">Schedule</span>
+            <div className="form-row">
+              <label>
+                Start date
+                <input type="date" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} />
+              </label>
+              <label>
+                Due date
+                <input
+                  type="date"
+                  value={dueDate}
+                  min={scheduledFor || undefined}
+                  onChange={(e) => {
+                    setDueDate(e.target.value);
+                    setDueTouched(true);
+                  }}
+                  className={dueDate && scheduledFor && dueDate < scheduledFor ? "is-invalid" : ""}
+                />
+              </label>
+            </div>
+            <span className="muted small">
+              {dueTouched
+                ? `Turnaround for ${PRIORITY_SHORT_LABELS[priority].toLowerCase()} priority is ${SLA_DAYS[priority] === 0 ? "same day" : `${SLA_DAYS[priority]} days`}.`
+                : `Due date set automatically from priority (${SLA_DAYS[priority] === 0 ? "same day" : `${SLA_DAYS[priority]} days`}) — change it if you need to.`}
+            </span>
+            <span className="field-label">Assignment</span>
+            <label>
+              Technician
+              <select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)} disabled={limited}>
+                <option value="">Unassigned</option>
+                {selectableTechs
+                  .filter((t) => !limited || t.id === currentTechnicianId)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {t.trade ? ` — ${t.trade}` : ""}
+                      {!t.active ? " (inactive)" : ""}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            {technicians.length === 0 && canManage && (
+              <span className="muted small">No technicians yet — add them under Technicians in the top menu.</span>
+            )}
+            <label>
+              Estimated hours
+              <input type="number" min={0} step={0.5} inputMode="decimal" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} placeholder="e.g. 2" />
+            </label>
+            {capacityHint && <span className={`hint ${capacityHint.tone === "warn" ? "hint-warn" : ""}`}>{capacityHint.text}</span>}
+          </div>
+        )}
 
         <div className="timeline-box">
           <div className="timeline-row">
@@ -465,6 +546,7 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
                   type="date"
                   value={closedDate}
                   max={toDateInputValue(null)}
+                  disabled={!canEdit}
                   onChange={(e) => {
                     setClosedDate(e.target.value);
                     setClosedDateTouched(true);
@@ -479,7 +561,16 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
               )}
               <label className="timeline-row timeline-input">
                 <span className="timeline-label">Actual hours</span>
-                <input type="number" min={0} step={0.25} inputMode="decimal" value={actualHours} onChange={(e) => setActualHours(e.target.value)} placeholder={estimate ? `est. ${estimate}` : "e.g. 1.5"} />
+                <input
+                  type="number"
+                  min={0}
+                  step={0.25}
+                  inputMode="decimal"
+                  value={actualHours}
+                  disabled={!canEdit}
+                  onChange={(e) => setActualHours(e.target.value)}
+                  placeholder={estimate ? `est. ${estimate}` : "e.g. 1.5"}
+                />
               </label>
             </>
           ) : (
@@ -492,54 +583,92 @@ export default function IssuePanel({ propertyId, issue, draftLatLng, onRequestRe
           )}
         </div>
 
-        <label className="checkbox-row">
-          <input type="checkbox" checked={workOrderCreated} onChange={(e) => setWorkOrderCreated(e.target.checked)} />
-          Work order created
-        </label>
-        {workOrderCreated && (
-          <div className="work-order-fields">
-            <label>
-              Work order number
-              <input value={workOrderNumber} onChange={(e) => setWorkOrderNumber(e.target.value)} placeholder="e.g. WO-2024-118" />
+        {lock ? (
+          workOrderCreated && (
+            <div className="work-order-fields">
+              <span className="field-label">Work order</span>
+              <span>
+                {workOrderNumber || "Raised"}
+                {workOrderUrl && (
+                  <>
+                    {" · "}
+                    <a className="eam-link" href={workOrderUrl} target="_blank" rel="noopener noreferrer">
+                      Open in EAM ↗
+                    </a>
+                  </>
+                )}
+              </span>
+            </div>
+          )
+        ) : (
+          <>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={workOrderCreated} onChange={(e) => setWorkOrderCreated(e.target.checked)} />
+              Work order created
             </label>
-            <label>
-              EAM link <span className="muted">(optional)</span>
-              <input
-                type="text"
-                inputMode="url"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                value={workOrderUrl}
-                onChange={(e) => setWorkOrderUrl(e.target.value)}
-                placeholder="Paste the work order's page from your EAM"
-                className={workOrderUrl && !urlValid ? "is-invalid" : ""}
-              />
-            </label>
-            {workOrderUrl && urlValid && (
-              <a className="eam-link" href={/^[a-z]+:\/\//i.test(workOrderUrl.trim()) ? workOrderUrl.trim() : `https://${workOrderUrl.trim()}`} target="_blank" rel="noopener noreferrer">
-                Open {workOrderNumber.trim() || "work order"} in EAM ↗
-              </a>
+            {workOrderCreated && (
+              <div className="work-order-fields">
+                <label>
+                  Work order number
+                  <input value={workOrderNumber} onChange={(e) => setWorkOrderNumber(e.target.value)} placeholder="e.g. WO-2024-118" />
+                </label>
+                <label>
+                  EAM link <span className="muted">(optional)</span>
+                  <input
+                    type="text"
+                    inputMode="url"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={workOrderUrl}
+                    onChange={(e) => setWorkOrderUrl(e.target.value)}
+                    placeholder="Paste the work order's page from your EAM"
+                    className={workOrderUrl && !urlValid ? "is-invalid" : ""}
+                  />
+                </label>
+                {workOrderUrl && urlValid && (
+                  <a className="eam-link" href={/^[a-z]+:\/\//i.test(workOrderUrl.trim()) ? workOrderUrl.trim() : `https://${workOrderUrl.trim()}`} target="_blank" rel="noopener noreferrer">
+                    Open {workOrderNumber.trim() || "work order"} in EAM ↗
+                  </a>
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
 
         <label>
           Comments
-          <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2} placeholder="Additional notes" />
+          <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2} placeholder="Additional notes" readOnly={!canEdit} />
         </label>
 
-        <div className="side-panel-actions">
-          <button type="submit" className="btn btn-primary" disabled={saving || uploading > 0}>
-            {saving ? "Saving…" : isEdit ? "Save changes" : "Create issue"}
-          </button>
-          {isEdit && (
-            <button type="button" className="btn btn-danger" onClick={handleDelete}>
-              Delete
+        {canEdit && (
+          <div className="side-panel-actions">
+            <button type="submit" className="btn btn-primary" disabled={saving || uploading > 0}>
+              {saving ? "Saving…" : isEdit ? "Save changes" : "Create issue"}
             </button>
-          )}
-        </div>
+            {isEdit && canManage && (
+              <button type="button" className="btn btn-danger" onClick={handleDelete}>
+                Delete
+              </button>
+            )}
+          </div>
+        )}
       </form>
+
+      {isEdit && timeline.length > 0 && (
+        <div className="issue-timeline">
+          <span className="field-label">History</span>
+          <ul>
+            {timeline.map((e) => (
+              <li key={e.id}>
+                <span className="issue-timeline-when">{formatDateTime(e.at)}</span>
+                <span className="issue-timeline-who">{e.username}</span>
+                <span className="issue-timeline-what">{e.summary.replace(/^"[^"]*":\s*/, "")}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {lightbox && <PhotoLightbox src={lightbox} onClose={() => setLightbox(null)} />}
     </div>

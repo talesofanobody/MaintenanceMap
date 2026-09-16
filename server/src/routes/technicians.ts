@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../db";
 import { parseColor, parseOptionalString, parseWeeklyHours, ValidationError } from "../lib/validation";
+import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { logActivity } from "../lib/activity";
 
 export const techniciansRouter = Router();
 
@@ -36,7 +38,7 @@ techniciansRouter.get("/", async (_req, res) => {
   res.json(technicians.map(({ issues, ...t }) => ({ ...serializeTechnician(t), assignments: issues })));
 });
 
-techniciansRouter.post("/", async (req, res) => {
+techniciansRouter.post("/", ADMIN_ONLY, async (req, res) => {
   const { name, trade, phone, color, weeklyHours, notes, active } = req.body;
   if (!name || typeof name !== "string" || !name.trim()) {
     return res.status(400).json({ error: "name is required" });
@@ -53,6 +55,7 @@ techniciansRouter.post("/", async (req, res) => {
         active: active === undefined ? true : !!active,
       },
     });
+    await logActivity(req, { action: "technician.created", entityType: "technician", entityId: technician.id, summary: `Added technician ${technician.name}` });
     res.status(201).json({ ...serializeTechnician(technician), assignments: [] });
   } catch (err) {
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
@@ -60,7 +63,7 @@ techniciansRouter.post("/", async (req, res) => {
   }
 });
 
-techniciansRouter.put("/:id", async (req, res) => {
+techniciansRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
   const { name, trade, phone, color, weeklyHours, notes, active } = req.body;
   if (name !== undefined && (typeof name !== "string" || !name.trim())) {
     return res.status(400).json({ error: "name cannot be empty" });
@@ -81,6 +84,12 @@ techniciansRouter.put("/:id", async (req, res) => {
       include: { issues: { where: { status: { not: "completed" } }, select: ASSIGNMENT_SELECT } },
     });
     const { issues, ...rest } = technician;
+    await logActivity(req, {
+      action: "technician.updated",
+      entityType: "technician",
+      entityId: technician.id,
+      summary: `Updated technician ${technician.name}${parsedHours ? " (working hours)" : ""}${active !== undefined ? (active ? " (activated)" : " (deactivated)") : ""}`,
+    });
     res.json({ ...serializeTechnician(rest), assignments: issues });
   } catch (err) {
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
@@ -88,9 +97,10 @@ techniciansRouter.put("/:id", async (req, res) => {
   }
 });
 
-techniciansRouter.delete("/:id", async (req, res) => {
+techniciansRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
   try {
-    await prisma.technician.delete({ where: { id: req.params.id } });
+    const technician = await prisma.technician.delete({ where: { id: req.params.id } });
+    await logActivity(req, { action: "technician.deleted", entityType: "technician", entityId: technician.id, summary: `Removed technician ${technician.name}` });
     res.status(204).end();
   } catch {
     res.status(404).json({ error: "not found" });

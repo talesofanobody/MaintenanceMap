@@ -1,4 +1,4 @@
-import type { DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Status, Technician } from "./types";
+import type { ActivityEntry, AppUser, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -30,6 +30,7 @@ export interface AuthStatus {
   authenticated: boolean;
   needsSetup: boolean;
   username?: string;
+  user?: AuthUser;
 }
 
 export const api = {
@@ -39,6 +40,21 @@ export const api = {
   login: (username: string, password: string) =>
     request<AuthStatus>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
+
+  listUsers: () => request<AppUser[]>("/users"),
+  createUser: (data: { username: string; password: string; role: Role; technicianId?: string }) =>
+    request<AppUser>("/users", { method: "POST", body: JSON.stringify(data) }),
+  updateUser: (id: string, data: { active?: boolean; role?: Role; password?: string; technicianId?: string | null }) =>
+    request<AppUser>(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteUser: (id: string) => request<void>(`/users/${id}`, { method: "DELETE" }),
+
+  listActivity: (params: { issueId?: string; propertyId?: string; entityType?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") q.set(k, String(v));
+    return request<ActivityEntry[]>(`/activity${q.toString() ? `?${q}` : ""}`);
+  },
 
   listProperties: () => request<Property[]>("/properties"),
   createProperty: (data: { name: string; address?: string; notes?: string }) =>

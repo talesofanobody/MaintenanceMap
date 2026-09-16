@@ -13,6 +13,39 @@ export interface Photo {
   createdAt: string;
 }
 
+export type Role = "admin" | "technician" | "display";
+
+export const ROLE_LABELS: Record<Role, string> = { admin: "Admin", technician: "Technician", display: "Display" };
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  role: Role;
+  technicianId: string | null;
+  technician: TechnicianRef | null;
+  mustChangePassword: boolean;
+}
+
+export interface AppUser extends AuthUser {
+  active: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface ActivityEntry {
+  id: string;
+  at: string;
+  userId: string | null;
+  username: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  propertyId: string | null;
+  issueId: string | null;
+  summary: string;
+  details: string | null;
+}
+
 export interface TechnicianRef {
   id: string;
   name: string;

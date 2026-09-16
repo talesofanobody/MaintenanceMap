@@ -1,6 +1,17 @@
 import { Router } from "express";
 import { prisma } from "../db";
 import { defaultDueDate, parseOptionalDay, parseOptionalHours, ValidationError } from "../lib/validation";
+import { ADMIN_ONLY, CAN_EDIT } from "../middleware/requireAuth";
+import { describeChanges, logActivity } from "../lib/activity";
+
+// Fields a technician may change on an issue assigned to them.
+const TECHNICIAN_FIELDS = ["status", "actualHours", "comments", "closedAt", "description", "actionNeeded"] as const;
+
+async function technicianName(id: string | null): Promise<string | null> {
+  if (!id) return null;
+  const t = await prisma.technician.findUnique({ where: { id }, select: { name: true } });
+  return t?.name ?? null;
+}
 
 export const issuesRouter = Router();
 
@@ -89,9 +100,14 @@ issuesRouter.get("/", async (req, res) => {
   res.json(issues);
 });
 
-issuesRouter.post("/", async (req, res) => {
+issuesRouter.post("/", CAN_EDIT, async (req, res) => {
   const { propertyId, title, description, actionNeeded, priority, status, workOrderCreated, workOrderNumber, comments, lat, lng } =
     req.body;
+
+  // Technicians can log issues for themselves or leave them unassigned, but not assign others.
+  if (req.user!.role === "technician" && req.body.technicianId && req.body.technicianId !== req.user!.technicianId) {
+    return res.status(403).json({ error: "You can only assign issues to yourself." });
+  }
 
   if (!propertyId || typeof propertyId !== "string") {
     return res.status(400).json({ error: "propertyId is required" });
@@ -147,6 +163,14 @@ issuesRouter.post("/", async (req, res) => {
     },
     include: ISSUE_INCLUDE,
   });
+  await logActivity(req, {
+    action: "issue.created",
+    entityType: "issue",
+    entityId: issue.id,
+    issueId: issue.id,
+    propertyId: issue.propertyId,
+    summary: `Logged "${issue.title}" (${issue.priority}${issue.technician ? `, assigned to ${issue.technician.name}` : ""})`,
+  });
   res.status(201).json(issue);
 });
 
@@ -156,7 +180,19 @@ issuesRouter.get("/:id", async (req, res) => {
   res.json(issue);
 });
 
-issuesRouter.put("/:id", async (req, res) => {
+issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
+  const existing = await prisma.issue.findUnique({ where: { id: req.params.id } });
+  if (!existing) return res.status(404).json({ error: "not found" });
+
+  if (req.user!.role === "technician") {
+    if (existing.technicianId !== req.user!.technicianId) {
+      return res.status(403).json({ error: "You can only update issues assigned to you." });
+    }
+    const limited: Record<string, unknown> = {};
+    for (const key of TECHNICIAN_FIELDS) if (key in req.body) limited[key] = req.body[key];
+    req.body = limited;
+  }
+
   const { title, description, actionNeeded, priority, status, workOrderCreated, workOrderNumber, comments, lat, lng } = req.body;
 
   if (priority !== undefined && !PRIORITIES.has(priority)) {
@@ -173,9 +209,6 @@ issuesRouter.put("/:id", async (req, res) => {
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
     throw err;
   }
-
-  const existing = await prisma.issue.findUnique({ where: { id: req.params.id } });
-  if (!existing) return res.status(404).json({ error: "not found" });
 
   // The close date follows the status: set when an issue becomes completed (unless a
   // date was supplied), kept while it stays completed, cleared when it is reopened.
@@ -216,12 +249,41 @@ issuesRouter.put("/:id", async (req, res) => {
     },
     include: ISSUE_INCLUDE,
   });
+
+  const changes = describeChanges(
+    { ...existing, technicianId: await technicianName(existing.technicianId) },
+    { ...issue, technicianId: issue.technician?.name ?? null },
+    {
+      status: "Status",
+      priority: "Priority",
+      technicianId: "Assigned to",
+      scheduledFor: "Start",
+      dueDate: "Due",
+      title: "Title",
+      estimatedHours: "Estimate (h)",
+      actualHours: "Actual (h)",
+      workOrderNumber: "Work order",
+    }
+  );
+  if (changes.length > 0 || comments !== undefined || description !== undefined || actionNeeded !== undefined) {
+    const summary = changes.length > 0 ? changes.join(" · ") : "Updated notes";
+    await logActivity(req, {
+      action: status !== undefined && status !== existing.status ? "issue.status" : "issue.updated",
+      entityType: "issue",
+      entityId: issue.id,
+      issueId: issue.id,
+      propertyId: issue.propertyId,
+      summary: `"${issue.title}": ${summary}`,
+      details: { changes },
+    });
+  }
   res.json(issue);
 });
 
-issuesRouter.delete("/:id", async (req, res) => {
+issuesRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
   try {
-    await prisma.issue.delete({ where: { id: req.params.id } });
+    const issue = await prisma.issue.delete({ where: { id: req.params.id } });
+    await logActivity(req, { action: "issue.deleted", entityType: "issue", entityId: issue.id, propertyId: issue.propertyId, summary: `Deleted "${issue.title}"` });
     res.status(204).end();
   } catch {
     res.status(404).json({ error: "not found" });

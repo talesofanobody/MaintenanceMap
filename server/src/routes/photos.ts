@@ -5,8 +5,16 @@ import { prisma } from "../db";
 import { upload, UPLOADS_DIR } from "../lib/upload";
 import { readExif } from "../lib/exif";
 import { storeImage } from "../lib/images";
+import { CAN_EDIT } from "../middleware/requireAuth";
+import { logActivity } from "../lib/activity";
 
 export const photosRouter = Router();
+
+// Technicians may only touch photos on issues assigned to them.
+function mayEditIssue(req: Request, issue: { technicianId: string | null }): boolean {
+  const user = req.user!;
+  return user.role === "admin" || (user.role === "technician" && issue.technicianId === user.technicianId);
+}
 
 const IMMUTABLE = "private, max-age=31536000, immutable";
 
@@ -20,7 +28,7 @@ function acceptPhoto(req: Request, res: Response, next: NextFunction) {
   });
 }
 
-photosRouter.post("/", acceptPhoto, async (req, res) => {
+photosRouter.post("/", CAN_EDIT, acceptPhoto, async (req, res) => {
   const { issueId } = req.body;
   const file = req.file;
 
@@ -31,6 +39,7 @@ photosRouter.post("/", acceptPhoto, async (req, res) => {
 
   const issue = await prisma.issue.findUnique({ where: { id: issueId } });
   if (!issue) return res.status(404).json({ error: "issue not found" });
+  if (!mayEditIssue(req, issue)) return res.status(403).json({ error: "You can only add photos to issues assigned to you." });
 
   const exif = await readExif(file.buffer);
 
@@ -54,6 +63,7 @@ photosRouter.post("/", acceptPhoto, async (req, res) => {
     },
   });
 
+  await logActivity(req, { action: "photo.added", entityType: "photo", entityId: photo.id, issueId: issue.id, propertyId: issue.propertyId, summary: `Added a photo to "${issue.title}"` });
   res.status(201).json(photo);
 });
 
@@ -71,10 +81,12 @@ photosRouter.get("/:id/thumb", async (req, res) => {
   res.sendFile(path.join(UPLOADS_DIR, photo.thumbFilename ?? photo.filename));
 });
 
-photosRouter.delete("/:id", async (req, res) => {
-  const photo = await prisma.photo.findUnique({ where: { id: req.params.id } });
+photosRouter.delete("/:id", CAN_EDIT, async (req, res) => {
+  const photo = await prisma.photo.findUnique({ where: { id: req.params.id }, include: { issue: true } });
   if (!photo) return res.status(404).json({ error: "not found" });
+  if (!mayEditIssue(req, photo.issue)) return res.status(403).json({ error: "You can only remove photos from issues assigned to you." });
   await prisma.photo.delete({ where: { id: req.params.id } });
+  await logActivity(req, { action: "photo.removed", entityType: "photo", entityId: photo.id, issueId: photo.issueId, propertyId: photo.issue.propertyId, summary: `Removed a photo from "${photo.issue.title}"` });
   await fs.unlink(path.join(UPLOADS_DIR, photo.filename)).catch(() => {});
   if (photo.thumbFilename) {
     await fs.unlink(path.join(UPLOADS_DIR, photo.thumbFilename)).catch(() => {});

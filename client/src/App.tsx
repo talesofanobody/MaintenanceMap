@@ -1,11 +1,15 @@
-import { HashRouter, Link, NavLink, Outlet, Route, Routes } from "react-router-dom";
+import { HashRouter, Link, Navigate, NavLink, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { api } from "./api";
+import { ROLE_LABELS, type AuthUser } from "./types";
 import Login from "./pages/Login";
 import PropertiesList from "./pages/PropertiesList";
 import PropertyWorkspace from "./pages/PropertyWorkspace";
 import Report from "./pages/Report";
 import Technicians from "./pages/Technicians";
+import Access from "./pages/Access";
+import Account from "./pages/Account";
+import Activity from "./pages/Activity";
 import DashboardLayout from "./dashboard/DashboardLayout";
 import MapDashboard from "./dashboard/MapDashboard";
 import DepartureBoard from "./dashboard/DepartureBoard";
@@ -24,7 +28,8 @@ export function BrandMark() {
   );
 }
 
-function MainLayout({ username, onLogout }: { username: string; onLogout: () => void }) {
+function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+  const isAdmin = user.role === "admin";
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -37,15 +42,21 @@ function MainLayout({ username, onLogout }: { username: string; onLogout: () => 
             <NavLink to="/" end>
               Properties
             </NavLink>
-            <NavLink to="/technicians">Technicians</NavLink>
+            {isAdmin && <NavLink to="/technicians">Technicians</NavLink>}
             <NavLink to="/dashboard">Dashboards</NavLink>
+            {isAdmin && <NavLink to="/activity">Activity</NavLink>}
+            {isAdmin && <NavLink to="/access">Access</NavLink>}
           </nav>
         </div>
         <div className="app-header-right">
-          <a className="btn btn-ghost btn-small hide-mobile" href={api.exportIssuesUrl()} download title="Download every issue across all properties as a spreadsheet">
-            Export CSV
-          </a>
-          <span className="app-header-user hide-mobile">{username}</span>
+          {isAdmin && (
+            <a className="btn btn-ghost btn-small hide-mobile" href={api.exportIssuesUrl()} download title="Download every issue across all properties as a spreadsheet">
+              Export CSV
+            </a>
+          )}
+          <Link to="/account" className="app-header-user hide-mobile" title="Your account">
+            {user.technician?.name ?? user.username} · {ROLE_LABELS[user.role]}
+          </Link>
           <button type="button" className="btn btn-ghost btn-small" onClick={onLogout}>
             Sign out
           </button>
@@ -55,6 +66,17 @@ function MainLayout({ username, onLogout }: { username: string; onLogout: () => 
         <Outlet />
       </main>
     </div>
+  );
+}
+
+function DashboardRoutes() {
+  return (
+    <Route path="/dashboard" element={<DashboardLayout />}>
+      <Route index element={<TvView />} />
+      <Route path="map" element={<MapDashboard />} />
+      <Route path="board" element={<DepartureBoard />} />
+      <Route path="summary" element={<SummaryBoard />} />
+    </Route>
   );
 }
 
@@ -69,21 +91,39 @@ function AppRoutes() {
     return <Login />;
   }
 
+  const user = state.user;
+
+  if (user.mustChangePassword) {
+    return <Account forced />;
+  }
+
+  if (user.role === "display") {
+    return (
+      <HashRouter>
+        <Routes>
+          {DashboardRoutes()}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </HashRouter>
+    );
+  }
+
+  const isAdmin = user.role === "admin";
+
   return (
     <HashRouter>
       <Routes>
-        <Route element={<MainLayout username={state.username} onLogout={() => logout()} />}>
+        <Route element={<MainLayout user={user} onLogout={() => logout()} />}>
           <Route path="/" element={<PropertiesList />} />
           <Route path="/properties/:id" element={<PropertyWorkspace />} />
           <Route path="/properties/:id/report" element={<Report />} />
-          <Route path="/technicians" element={<Technicians />} />
+          <Route path="/account" element={<Account />} />
+          {isAdmin && <Route path="/technicians" element={<Technicians />} />}
+          {isAdmin && <Route path="/activity" element={<Activity />} />}
+          {isAdmin && <Route path="/access" element={<Access />} />}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
-        <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<TvView />} />
-          <Route path="map" element={<MapDashboard />} />
-          <Route path="board" element={<DepartureBoard />} />
-          <Route path="summary" element={<SummaryBoard />} />
-        </Route>
+        {DashboardRoutes()}
       </Routes>
     </HashRouter>
   );

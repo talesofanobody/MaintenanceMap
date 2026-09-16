@@ -433,6 +433,220 @@ textarea {
   color: var(--warn-text);
 }
 
+.assignment-box.readonly {
+  gap: 4px;
+}
+
+.app-header-user {
+  text-decoration: none;
+}
+
+.app-header-user:hover {
+  color: var(--text);
+}
+
+/* Access page */
+
+.access-section {
+  margin-bottom: 28px;
+}
+
+.access-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.access-section h2 {
+  font-size: 16px;
+}
+
+.user-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+
+.user-row.inactive {
+  opacity: 0.65;
+}
+
+.user-main {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-main strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reveal-card {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  margin-bottom: 20px;
+}
+
+.reveal-card h3 {
+  margin-bottom: 4px;
+}
+
+.reveal-grid {
+  display: flex;
+  gap: 32px;
+  margin: 14px 0;
+  flex-wrap: wrap;
+}
+
+.reveal-grid dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.reveal-grid dd {
+  margin: 4px 0 0;
+}
+
+.reveal-grid code {
+  font-size: 18px;
+  font-weight: 700;
+  background: #fff;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  -webkit-user-select: all;
+  user-select: all;
+}
+
+/* Activity */
+
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.filters select,
+.filters input {
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.filters input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.activity-row {
+  display: grid;
+  grid-template-columns: 150px 120px 1fr;
+  gap: 12px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  align-items: baseline;
+}
+
+.activity-row:last-child {
+  border-bottom: none;
+}
+
+.activity-time {
+  color: var(--text-3);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.activity-user {
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-link {
+  color: var(--brand-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.activity-link:hover {
+  text-decoration: underline;
+}
+
+.issue-timeline {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.issue-timeline ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.issue-timeline li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  font-size: 13px;
+}
+
+.issue-timeline-when {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.issue-timeline-who {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.issue-timeline-what {
+  color: var(--text);
+}
+
 .tech-dot {
   display: inline-block;
   width: 10px;
@@ -2187,6 +2401,11 @@ textarea {
     grid-template-columns: repeat(4, 1fr);
   }
 
+  .activity-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
   .workspace-toolbar {
     grid-template-columns: 1fr;
     gap: 8px;
@@ -2405,4 +2624,13 @@ textarea {
   .leaflet-container {
     background: #cbd5e1 !important;
   }
+}
+
+/* Read-only fields (technician viewing an issue that isn't theirs) */
+input:read-only:not([type="date"]),
+textarea:read-only {
+  background: var(--surface-2);
+  color: var(--text-2);
+  border-style: dashed;
+  cursor: default;
 }

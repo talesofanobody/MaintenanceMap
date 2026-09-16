@@ -7,6 +7,7 @@ import type { Issue, Priority, Property, Status } from "../types";
 import { PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "../types";
 import { boundsOf, centroidOf, geoJsonToLatLngs, latLngsToGeoJson, WORLD_RING } from "../lib/geo";
 import { MOBILE_QUERY, useMediaQuery } from "../lib/useMediaQuery";
+import { useCurrentUser } from "../auth/AuthContext";
 import BoundaryDrawControl from "../components/BoundaryDrawControl";
 import MapClickHandler from "../components/MapClickHandler";
 import IssuePanel from "../components/IssuePanel";
@@ -60,6 +61,8 @@ function guideKey(propertyId: string) {
 export default function PropertyWorkspace() {
   const { id } = useParams<{ id: string }>();
   const isMobile = useMediaQuery(MOBILE_QUERY);
+  const currentUser = useCurrentUser();
+  const canManage = currentUser?.role === "admin";
   const [property, setProperty] = useState<Property | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -223,7 +226,7 @@ export default function PropertyWorkspace() {
   if (error) return <div className="page"><div className="banner banner-error">{error}</div></div>;
   if (!property) return <div className="page">Property not found.</div>;
 
-  const showGuideCard = !guideDismissed && !placingPin && !(isMobile && panelOpen);
+  const showGuideCard = canManage && !guideDismissed && !placingPin && !(isMobile && panelOpen);
   const guideDrawActive = showGuideCard && (hasLocated || !!property.boundary) && !property.boundary && pendingBoundary === undefined;
   const hiddenByFilter = numberedIssues.length - visibleIssues.length;
 
@@ -235,7 +238,7 @@ export default function PropertyWorkspace() {
             ← <span className="hide-mobile">Properties</span>
           </Link>
           <h2 title={property.name}>{property.name}</h2>
-          {guideDismissed && (
+          {guideDismissed && canManage && (
             <button type="button" className="btn btn-ghost btn-small hide-mobile" onClick={showGuide} title="Show the getting-started guide">
               ? Guide
             </button>
@@ -284,7 +287,11 @@ export default function PropertyWorkspace() {
               pathOptions={{ stroke: false, fillColor: "#0f172a", fillOpacity: 0.35, interactive: false }}
             />
           )}
-          <BoundaryDrawControl initialLatLngs={boundaryLatLngs ?? undefined} onChange={setPendingBoundary} />
+          {canManage ? (
+            <BoundaryDrawControl initialLatLngs={boundaryLatLngs ?? undefined} onChange={setPendingBoundary} />
+          ) : (
+            boundaryLatLngs && <Polygon positions={boundaryLatLngs} pathOptions={{ color: "#2563eb", weight: 3, fill: false, interactive: false }} />
+          )}
           <MapClickHandler onClick={handleMapClick} />
           <FitToBounds bounds={initialBounds} />
           <FlyTo target={viewTarget} />
@@ -351,6 +358,8 @@ export default function PropertyWorkspace() {
             propertyId={property.id}
             issue={activeIssue}
             draftLatLng={draftLatLng}
+            canManage={canManage}
+            currentTechnicianId={currentUser?.technicianId ?? null}
             onRequestReposition={() => setPlacingPin(true)}
             onLocationDetected={(lat, lng) => {
               setDraftLatLng({ lat, lng });

@@ -4,6 +4,7 @@ import { BrandMark } from "../App";
 import { DashboardContext, useClock, useDashboardPolling } from "./useDashboardData";
 import { openIssues } from "./derive";
 import { PRIORITY_SHORT_LABELS } from "../types";
+import { useAuth, useCurrentUser } from "../auth/AuthContext";
 
 const TITLES: Record<string, string> = {
   "/dashboard": "TV mode",
@@ -17,6 +18,9 @@ export default function DashboardLayout() {
   const now = useClock(1000);
   const location = useLocation();
   const [fullscreen, setFullscreen] = useState(false);
+  const user = useCurrentUser();
+  const { logout } = useAuth();
+  const isDisplay = user?.role === "display";
 
   useEffect(() => {
     const onChange = () => setFullscreen(!!document.fullscreenElement);
@@ -79,9 +83,15 @@ export default function DashboardLayout() {
             <button type="button" className="dash-btn" onClick={toggleFullscreen} title="Toggle fullscreen (F)">
               {fullscreen ? "Exit fullscreen" : "Fullscreen"}
             </button>
-            <Link to="/" className="dash-btn dash-btn-ghost">
-              Exit
-            </Link>
+            {isDisplay ? (
+              <button type="button" className="dash-btn dash-btn-ghost" onClick={() => logout()}>
+                Sign out
+              </button>
+            ) : (
+              <Link to="/" className="dash-btn dash-btn-ghost">
+                Exit
+              </Link>
+            )}
           </div>
         </header>
 

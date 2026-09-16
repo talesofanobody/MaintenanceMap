@@ -10,7 +10,9 @@ import { dashboardRouter } from "./routes/dashboard";
 import { exportRouter } from "./routes/export";
 import { prisma } from "./db";
 import { dayFrom, SLA_DAYS } from "./lib/validation";
-import { requireAuth } from "./middleware/requireAuth";
+import { ADMIN_ONLY, attachUser, requireAuth } from "./middleware/requireAuth";
+import { usersRouter } from "./routes/users";
+import { activityRouter } from "./routes/activity";
 import { PrismaSessionStore, purgeExpiredSessions } from "./lib/sessionStore";
 
 const app = express();
@@ -52,14 +54,18 @@ app.use(
   })
 );
 
+app.use(attachUser);
+
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRouter);
+app.use("/api/users", requireAuth, ADMIN_ONLY, usersRouter);
+app.use("/api/activity", requireAuth, activityRouter);
 app.use("/api/properties", requireAuth, propertiesRouter);
 app.use("/api/issues", requireAuth, issuesRouter);
 app.use("/api/photos", requireAuth, photosRouter);
 app.use("/api/technicians", requireAuth, techniciansRouter);
 app.use("/api/dashboard", requireAuth, dashboardRouter);
-app.use("/api/export", requireAuth, exportRouter);
+app.use("/api/export", requireAuth, ADMIN_ONLY, exportRouter);
 
 // Issues created before due dates existed get one from their priority's turnaround,
 // counted from the day they were logged.

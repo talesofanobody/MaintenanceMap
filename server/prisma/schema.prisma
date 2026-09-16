@@ -8,10 +8,34 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  username     String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
+  id                 String      @id @default(cuid())
+  username           String      @unique
+  passwordHash       String
+  role               String      @default("admin") // admin | technician | display
+  technicianId       String?     @unique
+  technician         Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  active             Boolean     @default(true)
+  mustChangePassword Boolean     @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime    @default(now())
+}
+
+model Activity {
+  id         String   @id @default(cuid())
+  at         DateTime @default(now())
+  userId     String?
+  username   String
+  action     String
+  entityType String
+  entityId   String
+  propertyId String?
+  issueId    String?
+  summary    String
+  details    String?
+
+  @@index([issueId])
+  @@index([propertyId])
+  @@index([at])
 }
 
 model Session {
@@ -33,6 +57,7 @@ model Technician {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   issues      Issue[]
+  user        User?
 }
 
 model Property {
