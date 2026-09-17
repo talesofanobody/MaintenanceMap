@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -129,6 +129,12 @@ export const api = {
   getRota: (week?: string) => request<Rota>(`/rota${week ? `?week=${week}` : ""}`),
   listRooms: (propertyId: string) => request<string[]>(`/issues/rooms/${propertyId}`),
 
+  listMessages: (issueId: string) => request<Message[]>(`/issues/${issueId}/messages`),
+  postMessage: (issueId: string, body: string) => request<Message>(`/issues/${issueId}/messages`, { method: "POST", body: JSON.stringify({ body }) }),
+  updateMessage: (issueId: string, messageId: string, body: string) =>
+    request<Message>(`/issues/${issueId}/messages/${messageId}`, { method: "PUT", body: JSON.stringify({ body }) }),
+  deleteMessage: (issueId: string, messageId: string) => request<void>(`/issues/${issueId}/messages/${messageId}`, { method: "DELETE" }),
+
   listProperties: () => request<Property[]>("/properties"),
   createProperty: (data: { name: string; address?: string; notes?: string }) =>
     request<Property>("/properties", { method: "POST", body: JSON.stringify(data) }),
@@ -150,7 +156,7 @@ export const api = {
     workOrderCreated?: boolean;
     workOrderNumber?: string;
     workOrderUrl?: string | null;
-    comments?: string;
+    firstMessage?: string;
     lat: number;
     lng: number;
     closedAt?: string | null;

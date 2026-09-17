@@ -3,6 +3,7 @@ import { api } from "../api";
 import TimeLog from "../time/TimeLog";
 import Checklist from "./Checklist";
 import CostPanel from "./CostPanel";
+import MessageThread from "./MessageThread";
 import { offlineSupported, queueIssue } from "../offline/queue";
 import { CATEGORIES, categoryLabel, type Tag } from "../types";
 import { readPhotoGps } from "../lib/photoGps";
@@ -106,7 +107,8 @@ export default function IssuePanel({
   const [workOrderCreated, setWorkOrderCreated] = useState(issue?.workOrderCreated ?? false);
   const [workOrderNumber, setWorkOrderNumber] = useState(issue?.workOrderNumber ?? "");
   const [workOrderUrl, setWorkOrderUrl] = useState(issue?.workOrderUrl ?? "");
-  const [comments, setComments] = useState(issue?.comments ?? "");
+  // On a new issue this becomes the opening message; on an existing one the thread owns it.
+  const [firstMessage, setFirstMessage] = useState("");
   const { slaDays, warnAtPercent } = useSettings();
   const [closedDate, setClosedDate] = useState(toDateInputValue(issue?.closedAt));
   const [closedDateTouched, setClosedDateTouched] = useState(false);
@@ -333,7 +335,6 @@ export default function IssuePanel({
         workOrderCreated,
         workOrderNumber: workOrderCreated ? workOrderNumber.trim() || undefined : undefined,
         workOrderUrl: workOrderCreated ? workOrderUrl.trim() || null : null,
-        comments: comments.trim() || undefined,
         category: category || null,
         roomName: roomName.trim() || null,
         tagIds,
@@ -353,7 +354,6 @@ export default function IssuePanel({
               status,
               closedAt: closedIso,
               ...(status === "completed" ? { actualHours: parseHours(actualHours) } : {}),
-              comments: comments.trim() || null,
               description: description.trim() || null,
               actionNeeded: actionNeeded.trim() || null,
               category: category || null,
@@ -372,7 +372,6 @@ export default function IssuePanel({
             actionNeeded: full.actionNeeded ?? null,
             priority,
             status,
-            comments: full.comments ?? null,
             category: category || null,
             roomName: roomName.trim() || null,
             lat: finalLat,
@@ -385,7 +384,7 @@ export default function IssuePanel({
           photos: staged.map((s) => ({ name: s.file.name, type: s.file.type, blob: s.file })),
         });
       } else {
-        const created = await api.createIssue({ propertyId, ...full });
+        const created = await api.createIssue({ propertyId, ...full, firstMessage: firstMessage.trim() || undefined });
         for (const s of staged) {
           await api.uploadPhoto(created.id, s.file);
         }
@@ -405,7 +404,6 @@ export default function IssuePanel({
               actionNeeded: actionNeeded.trim() || null,
               priority,
               status,
-              comments: comments.trim() || null,
               category: category || null,
               roomName: roomName.trim() || null,
               lat: finalLat,
@@ -847,10 +845,19 @@ export default function IssuePanel({
           </>
         )}
 
-        <label>
-          Comments
-          <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2} placeholder="Additional notes" readOnly={!canEdit} />
-        </label>
+        {isEdit && issue ? (
+          <MessageThread issue={issue} canPost={canEdit} />
+        ) : (
+          <label>
+            First message <span className="muted">(optional)</span>
+            <textarea
+              value={firstMessage}
+              onChange={(e) => setFirstMessage(e.target.value)}
+              rows={2}
+              placeholder="Anything the person picking this up should know"
+            />
+          </label>
+        )}
 
         {canEdit && (
           <div className="side-panel-actions">

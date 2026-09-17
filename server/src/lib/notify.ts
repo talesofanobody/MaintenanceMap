@@ -9,7 +9,8 @@ export type NotificationKind =
   | "due_soon"
   | "due_today"
   | "overdue"
-  | "unassigned";
+  | "unassigned"
+  | "message";
 
 export interface NotifyInput {
   kind: NotificationKind;

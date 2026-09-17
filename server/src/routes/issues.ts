@@ -7,11 +7,12 @@ import { adminUserIds, issueLine, notifyUsers, priorityWord, technicianUserId } 
 import { getSettings } from "../lib/settings";
 import { COST_KINDS, issueCosts } from "../lib/costs";
 import { parseCategory, resolveTagIds, setIssueTags } from "../lib/taxonomy";
+import { messagesRouter } from "./messages";
 
 const STATUS_WORD: Record<string, string> = { pending: "pending", in_progress: "in progress", completed: "completed" };
 
 // Fields a technician may change on an issue assigned to them.
-const TECHNICIAN_FIELDS = ["status", "actualHours", "comments", "closedAt", "description", "actionNeeded", "category", "roomName", "tagIds"] as const;
+const TECHNICIAN_FIELDS = ["status", "actualHours", "closedAt", "description", "actionNeeded", "category", "roomName", "tagIds"] as const;
 
 async function technicianName(id: string | null): Promise<string | null> {
   if (!id) return null;
@@ -29,6 +30,7 @@ const ISSUE_INCLUDE = {
   technician: { select: { id: true, name: true, color: true, trade: true } },
   checklist: { orderBy: { position: "asc" as const } },
   tags: { include: { tag: true } },
+  messages: { orderBy: { createdAt: "asc" as const } },
   costs: { include: { contractor: { select: { id: true, name: true } } }, orderBy: { incurredOn: "desc" as const } },
 } as const;
 
@@ -120,8 +122,7 @@ issuesRouter.get("/", async (req, res) => {
 });
 
 issuesRouter.post("/", CAN_EDIT, async (req, res) => {
-  const { propertyId, title, description, actionNeeded, priority, status, workOrderCreated, workOrderNumber, comments, lat, lng } =
-    req.body;
+  const { propertyId, title, description, actionNeeded, priority, status, workOrderCreated, workOrderNumber, lat, lng, firstMessage } = req.body;
 
   // Technicians can log issues for themselves or leave them unassigned, but not assign others.
   if (req.user!.role === "technician" && req.body.technicianId && req.body.technicianId !== req.user!.technicianId) {
@@ -169,7 +170,6 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
       workOrderCreated: !!workOrderCreated,
       workOrderNumber: workOrderNumber ?? null,
       workOrderUrl: extras.url ?? null,
-      comments: comments ?? null,
       category: extras.category ?? null,
       roomName: extras.roomName ?? null,
       lat,
@@ -185,6 +185,12 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
     },
     include: ISSUE_INCLUDE,
   });
+  if (typeof firstMessage === "string" && firstMessage.trim()) {
+    await prisma.message.create({
+      data: { issueId: issue.id, userId: req.user!.id, authorName: req.user!.username, body: firstMessage.trim().slice(0, 4000) },
+    });
+    issue.messages = await prisma.message.findMany({ where: { issueId: issue.id }, orderBy: { createdAt: "asc" } });
+  }
   if (extras.tagIds?.length) {
     await setIssueTags(issue.id, extras.tagIds);
     issue.tags = (await prisma.issueTag.findMany({ where: { issueId: issue.id }, include: { tag: true } })) as typeof issue.tags;
@@ -228,7 +234,7 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
     req.body = limited;
   }
 
-  const { title, description, actionNeeded, priority, status, workOrderCreated, workOrderNumber, comments, lat, lng } = req.body;
+  const { title, description, actionNeeded, priority, status, workOrderCreated, workOrderNumber, lat, lng } = req.body;
 
   if (priority !== undefined && !PRIORITIES.has(priority)) {
     return res.status(400).json({ error: "invalid priority" });
@@ -269,7 +275,6 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
       ...(extras.url !== undefined ? { workOrderUrl: extras.url } : {}),
       ...(extras.category !== undefined ? { category: extras.category } : {}),
       ...(extras.roomName !== undefined ? { roomName: extras.roomName } : {}),
-      ...(comments !== undefined ? { comments } : {}),
       ...(lat !== undefined ? { lat } : {}),
       ...(lng !== undefined ? { lng } : {}),
       ...(extras.technicianId !== undefined ? { technicianId: extras.technicianId } : {}),
@@ -305,7 +310,7 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
       roomName: "Room",
     }
   );
-  if (changes.length > 0 || comments !== undefined || description !== undefined || actionNeeded !== undefined) {
+  if (changes.length > 0 || description !== undefined || actionNeeded !== undefined) {
     const summary = changes.length > 0 ? changes.join(" · ") : "Updated notes";
     await logActivity(req, {
       action: status !== undefined && status !== existing.status ? "issue.status" : "issue.updated",
@@ -424,6 +429,8 @@ issuesRouter.delete("/:id/checklist/:itemId", CAN_EDIT, async (req, res) => {
   if (result.count === 0) return res.status(404).json({ error: "not found" });
   res.status(204).end();
 });
+
+issuesRouter.use("/:id/messages", messagesRouter);
 
 // ---- Costs -----------------------------------------------------------------
 

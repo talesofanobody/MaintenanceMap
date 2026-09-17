@@ -316,6 +316,16 @@ export interface Rota {
   generatedAt: string;
 }
 
+export interface Message {
+  id: string;
+  issueId: string;
+  userId: string | null;
+  authorName: string;
+  body: string;
+  editedAt: string | null;
+  createdAt: string;
+}
+
 export interface TechnicianRef {
   id: string;
   name: string;
@@ -356,6 +366,7 @@ export interface Issue {
   category: string | null;
   roomName: string | null;
   tags?: IssueTag[];
+  messages?: Message[];
   scheduleId?: string | null;
   checklist?: ChecklistItem[];
   costs?: Cost[];
@@ -367,7 +378,6 @@ export interface Issue {
   workOrderCreated: boolean;
   workOrderNumber: string | null;
   workOrderUrl: string | null;
-  comments: string | null;
   lat: number;
   lng: number;
   closedAt: string | null;

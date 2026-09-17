@@ -8,7 +8,7 @@ import { categoryLabel } from "../types";
 import type { Issue, Priority, Property, Status } from "../types";
 import { PRIORITIES, PRIORITY_DESCRIPTIONS, PRIORITY_LABELS, STATUS_LABELS } from "../types";
 import { boundsOf, geoJsonToLatLngs, WORLD_RING } from "../lib/geo";
-import { durationMs, formatDate, formatDuration, formatDurationMs } from "../lib/dates";
+import { durationMs, formatDate, formatDateTime, formatDuration, formatDurationMs } from "../lib/dates";
 import { formatHours, relativeDay } from "../lib/capacity";
 import { issueDivIcon, pinSvg } from "../components/issueIcon";
 import { SATELLITE_ATTRIBUTION, SATELLITE_URL } from "./PropertyWorkspace";
@@ -301,10 +301,22 @@ export default function Report() {
                       )}
                     </dd>
                   </div>
-                  <div>
-                    <dt>Comments</dt>
-                    <dd>{issue.comments || "—"}</dd>
-                  </div>
+                  {issue.messages && issue.messages.length > 0 && (
+                    <div className="issue-card-thread">
+                      <dt>Conversation</dt>
+                      <dd>
+                        <ul>
+                          {issue.messages.map((m) => (
+                            <li key={m.id}>
+                              <strong>{m.authorName}</strong>
+                              <span className="muted"> · {formatDateTime(m.createdAt)}</span>
+                              <span className="thread-print-body">{m.body}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </dd>
+                    </div>
+                  )}
                   {(spend.perIssue.get(issue.id) ?? 0) > 0 && (
                     <div>
                       <dt>Costs</dt>

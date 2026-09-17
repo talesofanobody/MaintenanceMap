@@ -215,7 +215,8 @@ from the photo and the map flies there. The form has:
   — paste the work order's page from your EAM (Maximo, HxGN, SAP PM, …) and an
   **Open in EAM ↗** link appears, which opens the work order in a new tab. Only `http(s)` links
   are accepted.
-- **Comments**
+- **First message (optional)** — anything worth saying up front. It starts the issue's
+  conversation; once the issue exists the field becomes the full thread (below).
 - **📷 Add photos** — JPEG, PNG, WebP and iPhone **HEIC** are all accepted. HEIC photos are
   converted to JPEG on the server so they display everywhere (and show a preview in the form
   while you're still filling it in), sideways photos are rotated upright automatically, and each
@@ -240,6 +241,32 @@ Three things put an issue in context, and all three feed the boards, the report 
   equipment check, servicing, audit, inspection, arrival room, vacant room, out of order room, guest
   complaint, deep clean and preventive. Add your own under Settings, and turn ones you don't use off
   rather than deleting them so labelled history survives.
+
+### The conversation on an issue
+
+Every issue carries a running conversation instead of a single notes box. Each message records who
+wrote it and when, so a job reads as a thread: the office asks for a photo, the technician says the
+valve is seized, the next person on site knows why before they walk in.
+
+- **Anyone signed in can read it. Admins and technicians can post**, on any issue — not only the
+  ones assigned to them, because access notes, parts and "I've already looked at this" are exactly
+  the things that need passing on. Display logins are read-only.
+- **Enter sends, Shift+Enter starts a new line.** Messages post on their own, separately from the
+  rest of the form, so two people writing at the same time can't overwrite each other — which is
+  what the old single comments box did.
+- **Timestamps are relative while they're fresh** ("just now", "12m ago") and become a time or a
+  date after that; hover for the exact moment.
+- **You can edit or delete your own messages**; an edited one is marked as such. Admins can remove
+  anyone's. Nobody can rewrite someone else's words.
+- **The thread refreshes itself** while the panel is open and whenever you come back to the tab, so
+  a reply arrives without reloading the page.
+- **Posting notifies** the assigned technician and the admins — never the person who wrote it.
+- The whole thread prints on the property report and goes into the issues CSV, both as a message
+  count and as the full conversation in one cell.
+
+When you're first logging an issue there's a **First message** field instead; whatever you put there
+becomes the opening message once the issue exists. Comments written before this existed were carried
+over as the first message on their issue, attributed to "imported".
 
 ### Checklists
 
@@ -476,7 +503,8 @@ also shows its own history at the bottom of its panel, which is usually the quic
 **Export CSV** in the top-right of the header downloads every issue across all properties as a
 spreadsheet: property, issue number, title, priority, status, technician and trade, start and due
 dates, logged/closed timestamps, days to resolve, estimated and actual hours, work order details
-and EAM link, description, action, comments, coordinates, and photo counts/paths. Each property's
+and EAM link, description, action, the number of messages and the whole conversation,
+coordinates, and photo counts/paths. Each property's
 report has a **Download CSV** button for just that property, and the Technicians page exports the
 crew with their weekly hours and workload.
 
@@ -495,7 +523,7 @@ laid out as an A4 document:
   legend explaining the pin shapes and status badges.
 - **Following pages** — one card per issue, most severe first: number, title, priority and
   status, description, what needs to be done, work order (linked to the EAM when a link was
-  added — the link survives in the saved PDF), comments, the checklist with its ticks, what the work
+  added — the link survives in the saved PDF), the conversation, the checklist with its ticks, what the work
   cost, when it was logged, and either how long it has been open or when it was closed and how long
   it took to resolve. Photo thumbnails follow.
 - The header also gives the average time to resolve across closed issues and the age of the
@@ -518,9 +546,11 @@ for a file. Tip: give the map a second to finish loading imagery before printing
 - `Tag` / `IssueTag`: the tag list and which issues carry which tags
 - `Contractor`: name, trade, phone, email, notes, active flag
 - `Issue`: title, description, action needed, priority, status, work order flag/number/EAM link,
-  comments, lat/lng, closed-at timestamp (managed from the status), assigned technician,
+  lat/lng, closed-at timestamp (managed from the status), assigned technician,
   estimated/actual hours, start date, due date (always set), category, room, when it was last
   escalated, and the schedule that created it; belongs to a property
+- `Message`: one line of an issue's conversation — the author's login and name as it stood at
+  the time, the text, when it was posted and when it was last edited
 - `Photo`: filename, GPS presence/lat/lng, taken-at timestamp (from EXIF), belongs to an issue
 - `ChecklistItem`: a tick-box step on an issue, with who ticked it and when
 - `TimeEntry`: one stretch of clocked work on an issue; an issue's actual hours are the sum of these

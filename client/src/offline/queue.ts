@@ -21,7 +21,7 @@ export interface QueuedIssue {
     actionNeeded?: string | null;
     priority: Priority;
     status: Status;
-    comments?: string | null;
+    firstMessage?: string | null;
     category?: string | null;
     roomName?: string | null;
     tagIds?: string[];

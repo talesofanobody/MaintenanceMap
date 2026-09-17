@@ -38,6 +38,7 @@ exportRouter.get("/issues.csv", async (req, res) => {
       photos: { select: { id: true }, orderBy: { createdAt: "asc" } },
       checklist: { select: { done: true } },
       tags: { include: { tag: { select: { name: true } } } },
+      messages: { orderBy: { createdAt: "asc" } },
     },
     orderBy: [{ propertyId: "asc" }, { createdAt: "asc" }],
   });
@@ -75,7 +76,8 @@ exportRouter.get("/issues.csv", async (req, res) => {
       "EAM link",
       "Description",
       "Action needed",
-      "Comments",
+      "Messages",
+      "Message thread",
       "Latitude",
       "Longitude",
       "Photos",
@@ -116,7 +118,9 @@ exportRouter.get("/issues.csv", async (req, res) => {
       i.workOrderUrl,
       i.description,
       i.actionNeeded,
-      i.comments,
+      i.messages.length,
+      // The whole conversation in one cell, oldest first, so nothing is lost in export.
+      i.messages.map((m) => `${m.createdAt.toISOString().slice(0, 16).replace("T", " ")} ${m.authorName}: ${m.body}`).join("\n"),
       i.lat,
       i.lng,
       i.photos.length,

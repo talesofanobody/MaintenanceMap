@@ -123,7 +123,6 @@ model Issue {
   workOrderCreated Boolean  @default(false)
   workOrderNumber  String?
   workOrderUrl     String?
-  comments         String?
   lat              Float
   lng              Float
   closedAt         DateTime?
@@ -147,6 +146,7 @@ model Issue {
   checklist        ChecklistItem[]
   costs            Cost[]
   tags             IssueTag[]
+  messages         Message[]
 
   @@index([propertyId])
   @@index([technicianId])
@@ -290,4 +290,19 @@ model IssueTag {
 
   @@id([issueId, tagId])
   @@index([tagId])
+}
+
+// A line in an issue's conversation. Kept separately from the issue so every remark
+// carries who said it and when, and nothing overwrites anything else.
+model Message {
+  id        String    @id @default(cuid())
+  issueId   String
+  issue     Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  userId    String?
+  authorName String
+  body      String
+  editedAt  DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([issueId, createdAt])
 }
