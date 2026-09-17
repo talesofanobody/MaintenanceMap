@@ -39,6 +39,7 @@ exportRouter.get("/issues.csv", async (req, res) => {
       checklist: { select: { done: true } },
       tags: { include: { tag: { select: { name: true } } } },
       messages: { orderBy: { createdAt: "asc" } },
+      guestReport: { select: { roomName: true } },
     },
     orderBy: [{ propertyId: "asc" }, { createdAt: "asc" }],
   });
@@ -55,6 +56,7 @@ exportRouter.get("/issues.csv", async (req, res) => {
       "Category",
       "Room",
       "Tags",
+      "Origin",
       "Priority",
       "Status",
       "Technician",
@@ -97,6 +99,8 @@ exportRouter.get("/issues.csv", async (req, res) => {
       categoryLabel(i.category),
       i.roomName,
       i.tags.map((t) => t.tag.name).join(" | "),
+      // How the job came to exist — worth knowing when counting what guests find for you.
+      i.guestReport ? "Guest report" : i.scheduleId ? "Recurring schedule" : "Logged by staff",
       i.priority,
       i.status,
       i.technician?.name ?? "",

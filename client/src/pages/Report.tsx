@@ -287,6 +287,14 @@ export default function Report() {
                       </dd>
                     </div>
                   )}
+                  {issue.guestReport && (
+                    <div>
+                      <dt>Reported by</dt>
+                      <dd>
+                        A guest, from {issue.guestReport.roomName} on {formatDateTime(issue.guestReport.createdAt)}
+                      </dd>
+                    </div>
+                  )}
                   <div>
                     <dt>Work order</dt>
                     <dd>

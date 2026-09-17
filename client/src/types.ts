@@ -370,6 +370,8 @@ export interface Issue {
   roomName: string | null;
   tags?: IssueTag[];
   messages?: Message[];
+  /** Present when the issue was accepted from a guest report. */
+  guestReport?: IssueOrigin | null;
   scheduleId?: string | null;
   checklist?: ChecklistItem[];
   costs?: Cost[];
@@ -448,6 +450,14 @@ export interface Property {
   intakeToken?: string | null;
   issues?: Issue[];
   _count?: { issues: number };
+}
+
+/** The report an issue came from, carried on the issue so its origin survives. */
+export interface IssueOrigin {
+  id: string;
+  roomName: string;
+  createdAt: string;
+  reviewedBy: string | null;
 }
 
 export type GuestReportStatus = "pending" | "accepted" | "declined";

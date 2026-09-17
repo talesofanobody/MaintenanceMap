@@ -482,6 +482,15 @@ export default function IssuePanel({
       {isEdit && !canEdit && (
         <div className="banner banner-info">This issue is assigned to {issue.technician?.name ?? "someone else"} — you can view it but not change it.</div>
       )}
+      {isEdit && issue?.guestReport && (
+        <div className="banner banner-info intake-banner">
+          <strong>Reported by a guest</strong>
+          <span>
+            {issue.guestReport.roomName} · {formatDateTime(issue.guestReport.createdAt)}
+            {issue.guestReport.reviewedBy && ` · accepted by ${issue.guestReport.reviewedBy}`}
+          </span>
+        </div>
+      )}
       {intakeReport && (
         <div className="banner banner-info intake-banner">
           <strong>From a guest report</strong>

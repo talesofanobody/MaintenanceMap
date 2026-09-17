@@ -534,6 +534,11 @@ photos. Then:
 An accepted report can't be deleted — it's the record of where its issue came from. Delete the
 issue instead if it shouldn't exist.
 
+**The origin sticks to the job.** An issue that started as a guest report says so at the top of its
+panel (room and when it was sent, and who accepted it), on the printed property report, and in the
+issues CSV under **Origin** — alongside *Recurring schedule* and *Logged by staff*, so you can count
+how much of your workload the people in the building are finding for you.
+
 **Limits, because the link is public.** Ten reports an hour per device, four photos each, a
 2,000-character description, and a cap on how many can queue up unreviewed for one property.
 **New link** mints a new secret and kills the old one — every code already printed and stuck to a
@@ -543,7 +548,7 @@ anything already reported. Only admins ever see the secret in the link.
 ### Activity log
 
 **Activity** (admin) is the record of who changed what, and when — every property, issue, photo,
-technician, schedule, cost and login change, with the before-and-after values for the fields that
+technician, schedule, cost and login change, everything guests reported and what was done with it, with the before-and-after values for the fields that
 matter ("Status: pending → in_progress"). Filter by kind or property, or search the text. Each issue
 also shows its own history at the bottom of its panel, which is usually the quickest way to answer
 "why is this marked done?".
@@ -551,7 +556,8 @@ also shows its own history at the bottom of its panel, which is usually the quic
 ### Export to CSV
 
 **Export CSV** in the top-right of the header downloads every issue across all properties as a
-spreadsheet: property, issue number, title, priority, status, technician and trade, start and due
+spreadsheet: property, issue number, title, where it came from, priority, status, technician and
+trade, start and due
 dates, logged/closed timestamps, days to resolve, estimated and actual hours, work order details
 and EAM link, description, action, the number of messages and the whole conversation,
 coordinates, and photo counts/paths. Each property's
@@ -572,7 +578,8 @@ laid out as an A4 document:
   property with everything outside the border shaded out, every issue pinned and numbered, and a
   legend explaining the pin shapes and status badges.
 - **Following pages** — one card per issue, most severe first: number, title, priority and
-  status, description, what needs to be done, work order (linked to the EAM when a link was
+  status, description, what needs to be done, who reported it when a guest did, work order (linked to
+  the EAM when a link was
   added — the link survives in the saved PDF), the conversation, the checklist with its ticks, what the work
   cost, when it was logged, and either how long it has been open or when it was closed and how long
   it took to resolve. Photo thumbnails follow.

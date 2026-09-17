@@ -39,6 +39,8 @@ export default function NotificationBell() {
   function openItem(n: AppNotification) {
     if (!n.readAt) markRead(n.id);
     setOpen(false);
+    // A guest report isn't an issue yet, so it opens the review queue rather than the map.
+    if (n.kind === "guest_report") return navigate("/requests");
     if (n.propertyId) navigate(n.issueId ? `/properties/${n.propertyId}?issue=${n.issueId}` : `/properties/${n.propertyId}`);
   }
 

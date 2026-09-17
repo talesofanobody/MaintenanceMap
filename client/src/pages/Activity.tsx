@@ -11,6 +11,7 @@ const TYPES = [
   { value: "property", label: "Properties" },
   { value: "technician", label: "Technicians" },
   { value: "user", label: "Logins" },
+  { value: "guest_report", label: "Guest reports" },
 ];
 
 export default function Activity() {
@@ -45,7 +46,9 @@ export default function Activity() {
       <div className="page-header">
         <div>
           <h1>Activity</h1>
-          <p className="muted">Who changed what, and when — every issue, photo, property, technician and login change.</p>
+          <p className="muted">
+            Who changed what, and when — every issue, photo, property, technician and login change, and what guests reported.
+          </p>
         </div>
       </div>
 

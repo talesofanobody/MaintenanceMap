@@ -31,6 +31,8 @@ const ISSUE_INCLUDE = {
   checklist: { orderBy: { position: "asc" as const } },
   tags: { include: { tag: true } },
   messages: { orderBy: { createdAt: "asc" as const } },
+  // Where the job came from, when it started life as a guest report.
+  guestReport: { select: { id: true, roomName: true, createdAt: true, reviewedBy: true } },
   costs: { include: { contractor: { select: { id: true, name: true } } }, orderBy: { incurredOn: "desc" as const } },
 } as const;
 

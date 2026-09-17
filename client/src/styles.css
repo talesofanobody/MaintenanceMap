@@ -2801,6 +2801,14 @@ li.unread .bell-item:hover {
   background: var(--success);
 }
 
+.bell-dot-guest_report {
+  background: var(--p-high);
+}
+
+.bell-dot-message {
+  background: var(--brand);
+}
+
 .bell-title {
   display: block;
   font-weight: 600;
