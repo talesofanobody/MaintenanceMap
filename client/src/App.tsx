@@ -25,6 +25,9 @@ import MapDashboard from "./dashboard/MapDashboard";
 import DepartureBoard from "./dashboard/DepartureBoard";
 import SummaryBoard from "./dashboard/SummaryBoard";
 import TvView from "./dashboard/TvView";
+import GuestReport, { parseIntakeHash } from "./pages/GuestReport";
+import Requests from "./pages/Requests";
+import { useEffect, useState } from "react";
 
 export function BrandMark() {
   return (
@@ -35,6 +38,31 @@ export function BrandMark() {
       </g>
       <path d="M13 21 l5 5 l10 -11" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+/** The Requests link carries the number waiting, so nobody has to remember to look. */
+function RequestsLink() {
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const check = () =>
+      api
+        .guestReportPendingCount()
+        .then((r) => alive && setPending(r.pendingCount))
+        .catch(() => {});
+    check();
+    const timer = setInterval(check, 60000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, []);
+  return (
+    <NavLink to="/requests">
+      Requests
+      {pending > 0 && <span className="nav-count">{pending}</span>}
+    </NavLink>
   );
 }
 
@@ -54,6 +82,7 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
             {isAdmin && <NavLink to="/technicians">Technicians</NavLink>}
             {isAdmin && <NavLink to="/schedules">Schedules</NavLink>}
             <NavLink to="/dashboard">Dashboards</NavLink>
+            {isAdmin && <RequestsLink />}
             {isAdmin && <NavLink to="/reports">Reports</NavLink>}
             {isAdmin && <NavLink to="/activity">Activity</NavLink>}
             {isAdmin && <NavLink to="/access">Access</NavLink>}
@@ -139,6 +168,7 @@ function AppRoutes() {
           {isAdmin && <Route path="/technicians" element={<Technicians />} />}
           {isAdmin && <Route path="/technicians/rota" element={<Rota />} />}
           {isAdmin && <Route path="/schedules" element={<Schedules />} />}
+          {isAdmin && <Route path="/requests" element={<Requests />} />}
           {isAdmin && <Route path="/reports" element={<Reports />} />}
           {isAdmin && <Route path="/activity" element={<Activity />} />}
           {isAdmin && <Route path="/access" element={<Access />} />}
@@ -152,6 +182,17 @@ function AppRoutes() {
 }
 
 export default function App() {
+  // The guest reporting form is public. It is checked before anything else so no session
+  // is fetched, no login screen flashes up, and nothing of the app is loaded around it.
+  const [intake, setIntake] = useState(() => parseIntakeHash(window.location.hash));
+  useEffect(() => {
+    const onHash = () => setIntake(parseIntakeHash(window.location.hash));
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  if (intake) return <GuestReport token={intake.token} room={intake.room} />;
+
   return (
     <AuthProvider>
       <SettingsProvider>

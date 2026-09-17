@@ -122,7 +122,13 @@ issuesRouter.get("/", async (req, res) => {
 });
 
 issuesRouter.post("/", CAN_EDIT, async (req, res) => {
-  const { propertyId, title, description, actionNeeded, priority, status, workOrderCreated, workOrderNumber, lat, lng, firstMessage } = req.body;
+  const { propertyId, title, description, actionNeeded, priority, status, workOrderCreated, workOrderNumber, lat, lng, firstMessage, guestReportId } = req.body;
+
+  // Accepting a guest report is a review decision, so it stays with admins even though
+  // technicians can log issues of their own.
+  if (guestReportId !== undefined && guestReportId !== null && req.user!.role !== "admin") {
+    return res.status(403).json({ error: "Only an admin can accept a guest report." });
+  }
 
   // Technicians can log issues for themselves or leave them unassigned, but not assign others.
   if (req.user!.role === "technician" && req.body.technicianId && req.body.technicianId !== req.user!.technicianId) {
@@ -155,6 +161,18 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
 
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
   if (!property) return res.status(404).json({ error: "property not found" });
+
+  // Check the report before creating anything, so a stale review tab doesn't leave a
+  // duplicate issue behind when the report has already been dealt with.
+  let acceptingReport: { id: string; roomName: string } | null = null;
+  if (guestReportId) {
+    if (typeof guestReportId !== "string") return res.status(400).json({ error: "invalid guestReportId" });
+    const report = await prisma.guestReport.findUnique({ where: { id: guestReportId }, select: { id: true, status: true, propertyId: true, roomName: true } });
+    if (!report) return res.status(404).json({ error: "guest report not found" });
+    if (report.propertyId !== propertyId) return res.status(400).json({ error: "That report belongs to another property." });
+    if (report.status !== "pending") return res.status(400).json({ error: `That report was already ${report.status}.` });
+    acceptingReport = { id: report.id, roomName: report.roomName };
+  }
 
   const finalStatus = status ?? "pending";
   const finalPriority = priority ?? "medium";
@@ -194,6 +212,26 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
   if (extras.tagIds?.length) {
     await setIssueTags(issue.id, extras.tagIds);
     issue.tags = (await prisma.issueTag.findMany({ where: { issueId: issue.id }, include: { tag: true } })) as typeof issue.tags;
+  }
+  if (acceptingReport) {
+    // The photos the guest took become the issue's photos: one owner each, so deleting
+    // the issue later takes them with it.
+    await prisma.$transaction([
+      prisma.photo.updateMany({ where: { guestReportId: acceptingReport.id }, data: { issueId: issue.id, guestReportId: null } }),
+      prisma.guestReport.update({
+        where: { id: acceptingReport.id },
+        data: { status: "accepted", issueId: issue.id, reviewedAt: new Date(), reviewedById: req.user!.id, reviewedBy: req.user!.username },
+      }),
+    ]);
+    issue.photos = await prisma.photo.findMany({ where: { issueId: issue.id } });
+    await logActivity(req, {
+      action: "intake.accepted",
+      entityType: "guest_report",
+      entityId: acceptingReport.id,
+      issueId: issue.id,
+      propertyId: issue.propertyId,
+      summary: `Accepted the guest report from ${acceptingReport.roomName} as "${issue.title}"`,
+    });
   }
   await logActivity(req, {
     action: "issue.created",

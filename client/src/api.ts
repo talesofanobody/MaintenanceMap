@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -165,6 +165,8 @@ export const api = {
     actualHours?: number | null;
     scheduledFor?: string | null;
     dueDate?: string | null;
+    /** Set when this issue is an accepted guest report: the photos and the record move with it. */
+    guestReportId?: string;
   }) => request<Issue>("/issues", { method: "POST", body: JSON.stringify(data) }),
 
   exportIssuesUrl: (propertyId?: string) => `${BASE}/export/issues.csv${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ""}`,
@@ -190,4 +192,38 @@ export const api = {
   deletePhoto: (id: string) => request<void>(`/photos/${id}`, { method: "DELETE" }),
   photoUrl: (id: string) => `${BASE}/photos/${id}/file`,
   photoThumbUrl: (id: string) => `${BASE}/photos/${id}/thumb`,
+
+  setPropertyIntake: (id: string, data: { enabled?: boolean; rotate?: boolean }) =>
+    request<{ id: string; intakeEnabled: boolean; intakeToken: string | null }>(`/properties/${id}/intake`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  listGuestReports: (params: { status?: string; propertyId?: string } = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
+    return request<{ reports: GuestReport[]; pendingCount: number }>(`/guest-reports${q.toString() ? `?${q}` : ""}`);
+  },
+  getGuestReport: (id: string) => request<GuestReport>(`/guest-reports/${id}`),
+  guestReportPendingCount: () => request<{ pendingCount: number }>("/guest-reports/pending-count"),
+  declineGuestReport: (id: string, note: string) =>
+    request<GuestReport>(`/guest-reports/${id}/decline`, { method: "POST", body: JSON.stringify({ note }) }),
+  reopenGuestReport: (id: string) => request<GuestReport>(`/guest-reports/${id}/reopen`, { method: "POST" }),
+  deleteGuestReport: (id: string) => request<void>(`/guest-reports/${id}`, { method: "DELETE" }),
+};
+
+/**
+ * The public reporting form. No session is involved — the token in the link is the only
+ * credential — so these deliberately sit outside the `api` object everything else uses.
+ */
+export const intakeApi = {
+  open: (token: string) => request<{ property: { name: string }; categories: Category[] }>(`/intake/${encodeURIComponent(token)}`),
+  submit: (token: string, data: { roomName: string; category: string; description: string; photos: File[] }) => {
+    const form = new FormData();
+    form.append("roomName", data.roomName);
+    form.append("category", data.category);
+    form.append("description", data.description);
+    for (const photo of data.photos) form.append("photos", photo);
+    return request<{ ok: boolean; reference: string; photos: number }>(`/intake/${encodeURIComponent(token)}`, { method: "POST", body: form });
+  },
 };

@@ -8,18 +8,18 @@ datasource db {
 }
 
 model User {
-  id                 String      @id @default(cuid())
-  username           String      @unique
+  id                 String         @id @default(cuid())
+  username           String         @unique
   passwordHash       String
-  role               String      @default("admin") // admin | technician | display
-  technicianId       String?     @unique
-  technician         Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
-  active             Boolean     @default(true)
-  mustChangePassword Boolean     @default(false)
+  role               String         @default("admin") // admin | technician | display
+  technicianId       String?        @unique
+  technician         Technician?    @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  active             Boolean        @default(true)
+  mustChangePassword Boolean        @default(false)
   lastLoginAt        DateTime?
   // Secret in the calendar-feed URL; rotating it invalidates any subscribed calendar.
-  feedToken          String?     @unique
-  createdAt          DateTime    @default(now())
+  feedToken          String?        @unique
+  createdAt          DateTime       @default(now())
   notifications      Notification[]
 }
 
@@ -69,23 +69,23 @@ model Session {
 }
 
 model Technician {
-  id          String   @id @default(cuid())
+  id          String      @id @default(cuid())
   name        String
   trade       String?
   phone       String?
-  color       String   @default("#2563eb")
-  active      Boolean  @default(true)
+  color       String      @default("#2563eb")
+  active      Boolean     @default(true)
   // Hours available per weekday, Monday first, stored as a JSON array of 7 numbers.
   // Either 7 numbers (legacy hours per day) or 7 shift objects {start,end} / null,
   // Monday first. Read through parseShifts, which normalises both shapes.
-  weeklyHours String   @default("[{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},null,null]")
+  weeklyHours String      @default("[{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},null,null]")
   // Work categories this technician covers, as a JSON array of category keys.
-  categories  String   @default("[]")
+  categories  String      @default("[]")
   // Charge-out rate used to value clocked time on an issue.
   hourlyRate  Float?
   notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
   issues      Issue[]
   timeEntries TimeEntry[]
   schedules   Schedule[]
@@ -93,41 +93,46 @@ model Technician {
 }
 
 model Property {
-  id        String   @id @default(cuid())
-  name      String
-  address   String?
-  notes     String?
+  id            String        @id @default(cuid())
+  name          String
+  address       String?
+  notes         String?
   // GeoJSON Polygon geometry, stored as JSON text: { "type": "Polygon", "coordinates": [...] }
-  boundary  String?
-  centerLat Float?
-  centerLng Float?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  issues    Issue[]
-  schedules Schedule[]
+  boundary      String?
+  centerLat     Float?
+  centerLng     Float?
+  // Secret in the public guest-reporting link. Null until an admin turns it on;
+  // rotating it kills every QR code and printed card already in circulation.
+  intakeToken   String?       @unique
+  intakeEnabled Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  issues        Issue[]
+  schedules     Schedule[]
+  guestReports  GuestReport[]
 }
 
 model Issue {
-  id               String   @id @default(cuid())
+  id               String          @id @default(cuid())
   propertyId       String
-  property         Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property         Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   title            String
   description      String?
   actionNeeded     String?
-  priority         String   @default("medium") // low | medium | high | urgent
-  status           String   @default("pending") // pending | in_progress | completed
+  priority         String          @default("medium") // low | medium | high | urgent
+  status           String          @default("pending") // pending | in_progress | completed
   // Trade the work belongs to, used to suggest who should pick it up.
   category         String?
   // Room or sub-location within the property, e.g. "Room 214" or "Pool plant room".
   roomName         String?
-  workOrderCreated Boolean  @default(false)
+  workOrderCreated Boolean         @default(false)
   workOrderNumber  String?
   workOrderUrl     String?
   lat              Float
   lng              Float
   closedAt         DateTime?
   technicianId     String?
-  technician       Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  technician       Technician?     @relation(fields: [technicianId], references: [id], onDelete: SetNull)
   estimatedHours   Float?
   actualHours      Float?
   // Calendar days as YYYY-MM-DD in the user's local time: when work is planned to start,
@@ -138,15 +143,16 @@ model Issue {
   escalatedAt      DateTime?
   // Set when a recurring maintenance schedule created this issue.
   scheduleId       String?
-  schedule         Schedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  schedule         Schedule?       @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
   photos           Photo[]
   timeEntries      TimeEntry[]
   checklist        ChecklistItem[]
   costs            Cost[]
   tags             IssueTag[]
   messages         Message[]
+  guestReport      GuestReport?
 
   @@index([propertyId])
   @@index([technicianId])
@@ -170,19 +176,24 @@ model TimeEntry {
   @@index([technicianId, startedAt])
 }
 
+// Belongs to an issue, or to a guest report until that report is accepted and the
+// photos move across with it. Exactly one of the two is set.
 model Photo {
-  id        String    @id @default(cuid())
-  issueId   String
-  issue     Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  id            String       @id @default(cuid())
+  issueId       String?
+  issue         Issue?       @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  guestReportId String?
+  guestReport   GuestReport? @relation(fields: [guestReportId], references: [id], onDelete: Cascade)
   filename      String
   thumbFilename String?
-  hasGps        Boolean   @default(false)
-  gpsLat    Float?
-  gpsLng    Float?
-  takenAt   DateTime?
-  createdAt DateTime  @default(now())
+  hasGps        Boolean      @default(false)
+  gpsLat        Float?
+  gpsLng        Float?
+  takenAt       DateTime?
+  createdAt     DateTime     @default(now())
 
   @@index([issueId])
+  @@index([guestReportId])
 }
 
 // Organisation-wide settings (turnaround days per priority, escalation rules), one JSON row.
@@ -212,7 +223,7 @@ model Schedule {
   every          Int         @default(1)
   unit           String      @default("months") // days | weeks | months
   leadDays       Int         @default(7)
-  nextDue        String      // YYYY-MM-DD
+  nextDue        String // YYYY-MM-DD
   checklist      String      @default("[]") // JSON array of item texts
   active         Boolean     @default(true)
   lastCreatedAt  DateTime?
@@ -263,7 +274,7 @@ model Cost {
   contractorId String?
   contractor   Contractor? @relation(fields: [contractorId], references: [id], onDelete: SetNull)
   invoiceRef   String?
-  incurredOn   String      // YYYY-MM-DD
+  incurredOn   String // YYYY-MM-DD
   createdBy    String?
   createdAt    DateTime    @default(now())
 
@@ -295,14 +306,43 @@ model IssueTag {
 // A line in an issue's conversation. Kept separately from the issue so every remark
 // carries who said it and when, and nothing overwrites anything else.
 model Message {
-  id        String    @id @default(cuid())
-  issueId   String
-  issue     Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  userId    String?
+  id         String    @id @default(cuid())
+  issueId    String
+  issue      Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  userId     String?
   authorName String
-  body      String
-  editedAt  DateTime?
-  createdAt DateTime  @default(now())
+  body       String
+  editedAt   DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([issueId, createdAt])
+}
+
+// Something reported through a property's public link by someone with no login — a
+// guest, a housekeeper, a front-desk shift. It is not an issue yet: an admin reads it
+// and either accepts it (which creates the issue and moves the photos over) or turns
+// it down, with the record kept either way.
+model GuestReport {
+  id           String    @id @default(cuid())
+  propertyId   String
+  property     Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomName     String
+  category     String?
+  description  String
+  status       String    @default("pending") // pending | accepted | declined
+  // Taken from a submitted photo's EXIF when one had GPS, so the pin starts in the
+  // right place; null means the reviewer positions it themselves.
+  lat          Float?
+  lng          Float?
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewedBy   String?
+  reviewNote   String?
+  issueId      String?   @unique
+  issue        Issue?    @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+  photos       Photo[]
+
+  @@index([status, createdAt])
+  @@index([propertyId])
 }

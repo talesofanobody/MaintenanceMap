@@ -10,7 +10,7 @@ import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
 import { capacityOn, committedOn, defaultDueDate, formatHours, relativeDay, slaProgress, todayStr } from "../lib/capacity";
 import { useSettings } from "../settings/SettingsContext";
-import type { ActivityEntry, Issue, Photo, Priority, Status, Technician } from "../types";
+import type { ActivityEntry, GuestReport, Issue, Photo, Priority, Status, Technician } from "../types";
 import { PRIORITIES, PRIORITY_LABELS, PRIORITY_SHORT_LABELS, STATUSES, STATUS_LABELS } from "../types";
 import PhotoLightbox from "./PhotoLightbox";
 
@@ -24,6 +24,8 @@ interface StagedPhoto {
 interface Props {
   propertyId: string;
   issue: Issue | null;
+  /** Set when this new issue is being created by accepting a guest report. */
+  intakeReport?: GuestReport | null;
   draftLatLng: { lat: number; lng: number } | null;
   // Admins edit everything; technicians only status, hours, notes and photos on their own issues.
   canManage: boolean;
@@ -83,9 +85,21 @@ function softDay(day: string): string {
   return /^(Today|Tomorrow|Yesterday)$/.test(r) ? r.toLowerCase() : r;
 }
 
+/**
+ * A guest writes prose, not a title. The first sentence is nearly always the thing that
+ * is wrong, so it becomes the title and the reviewer edits it if it isn't.
+ */
+function titleFromDescription(description: string): string {
+  const firstSentence = description.split(/(?<=[.!?])\s/)[0]?.trim() ?? description.trim();
+  const text = firstSentence.replace(/\s+/g, " ");
+  if (text.length <= 70) return text.replace(/[.]$/, "");
+  return `${text.slice(0, 67).trimEnd()}…`;
+}
+
 export default function IssuePanel({
   propertyId,
   issue,
+  intakeReport,
   draftLatLng,
   canManage,
   currentTechnicianId,
@@ -99,8 +113,8 @@ export default function IssuePanel({
   const ownIssue = !!issue && !!currentTechnicianId && issue.technicianId === currentTechnicianId;
   const canEdit = canManage || !isEdit || ownIssue;
   const limited = !canManage;
-  const [title, setTitle] = useState(issue?.title ?? "");
-  const [description, setDescription] = useState(issue?.description ?? "");
+  const [title, setTitle] = useState(issue?.title ?? (intakeReport ? titleFromDescription(intakeReport.description) : ""));
+  const [description, setDescription] = useState(issue?.description ?? intakeReport?.description ?? "");
   const [actionNeeded, setActionNeeded] = useState(issue?.actionNeeded ?? "");
   const [priority, setPriority] = useState<Priority>(issue?.priority ?? "medium");
   const [status, setStatus] = useState<Status>(issue?.status ?? "pending");
@@ -116,8 +130,8 @@ export default function IssuePanel({
   const [technicianId, setTechnicianId] = useState(issue?.technicianId ?? (limited && currentTechnicianId ? currentTechnicianId : ""));
   const [estimatedHours, setEstimatedHours] = useState(issue?.estimatedHours != null ? String(issue.estimatedHours) : "");
   const [actualHours, setActualHours] = useState(issue?.actualHours != null ? String(issue.actualHours) : "");
-  const [category, setCategory] = useState(issue?.category ?? "");
-  const [roomName, setRoomName] = useState(issue?.roomName ?? "");
+  const [category, setCategory] = useState(issue?.category ?? intakeReport?.category ?? "");
+  const [roomName, setRoomName] = useState(issue?.roomName ?? intakeReport?.roomName ?? "");
   const [rooms, setRooms] = useState<string[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [tagIds, setTagIds] = useState<string[]>(issue?.tags?.map((t) => t.tagId) ?? []);
@@ -128,7 +142,7 @@ export default function IssuePanel({
   const [lng, setLng] = useState<number | null>(issue?.lng ?? draftLatLng?.lng ?? null);
   const [locationNote, setLocationNote] = useState<string | null>(null);
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
-  const [existingPhotos, setExistingPhotos] = useState<Photo[]>(issue?.photos ?? []);
+  const [existingPhotos, setExistingPhotos] = useState<Photo[]>(issue?.photos ?? intakeReport?.photos ?? []);
   const [uploading, setUploading] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -384,7 +398,13 @@ export default function IssuePanel({
           photos: staged.map((s) => ({ name: s.file.name, type: s.file.type, blob: s.file })),
         });
       } else {
-        const created = await api.createIssue({ propertyId, ...full, firstMessage: firstMessage.trim() || undefined });
+        const created = await api.createIssue({
+          propertyId,
+          ...full,
+          firstMessage: firstMessage.trim() || undefined,
+          // The server moves the guest's photos onto the issue and marks the report accepted.
+          ...(intakeReport ? { guestReportId: intakeReport.id } : {}),
+        });
         for (const s of staged) {
           await api.uploadPhoto(created.id, s.file);
         }
@@ -445,7 +465,7 @@ export default function IssuePanel({
     <div className="side-panel">
       <div className="side-panel-grip" aria-hidden="true" />
       <div className="side-panel-header">
-        <h2>{isEdit ? (canEdit ? "Edit issue" : "Issue") : "New issue"}</h2>
+        <h2>{isEdit ? (canEdit ? "Edit issue" : "Issue") : intakeReport ? "Accept guest report" : "New issue"}</h2>
         <button type="button" className="btn-icon" onClick={onClose} aria-label="Close">
           ✕
         </button>
@@ -461,6 +481,19 @@ export default function IssuePanel({
       )}
       {isEdit && !canEdit && (
         <div className="banner banner-info">This issue is assigned to {issue.technician?.name ?? "someone else"} — you can view it but not change it.</div>
+      )}
+      {intakeReport && (
+        <div className="banner banner-info intake-banner">
+          <strong>From a guest report</strong>
+          <span>
+            {intakeReport.roomName} · {formatDateTime(intakeReport.createdAt)}
+            {intakeReport.photos.length > 0 && ` · ${intakeReport.photos.length} photo${intakeReport.photos.length === 1 ? "" : "s"}`}
+          </span>
+          <span className="muted small">
+            Their words and photos are below — change anything that needs changing. Saving creates the issue and marks the report
+            accepted; closing without saving leaves it in the queue.
+          </span>
+        </div>
       )}
 
       <form className="form" onSubmit={handleSubmit}>
@@ -508,9 +541,13 @@ export default function IssuePanel({
                 {existingPhotos.map((p) => (
                   <div className="photo-thumb" key={p.id}>
                     <img src={api.photoThumbUrl(p.id)} alt="" onClick={() => setLightbox(api.photoUrl(p.id))} />
-                    <button type="button" className="photo-remove" onClick={() => removeExistingPhoto(p.id)} aria-label="Remove photo">
-                      ✕
-                    </button>
+                    {/* A guest's photos still belong to their report until it is accepted,
+                        so there is nothing to remove here yet. */}
+                    {!intakeReport && (
+                      <button type="button" className="photo-remove" onClick={() => removeExistingPhoto(p.id)} aria-label="Remove photo">
+                        ✕
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

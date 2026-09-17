@@ -3,9 +3,11 @@ import { prisma } from "../db";
 
 export interface ActivityInput {
   action: string;
-  entityType: "issue" | "property" | "technician" | "user" | "photo" | "system";
+  entityType: "issue" | "property" | "technician" | "user" | "photo" | "guest_report" | "system";
   entityId: string;
   summary: string;
+  /** Who to record when there is no session — a guest submitting through a public link. */
+  username?: string;
   propertyId?: string | null;
   issueId?: string | null;
   details?: Record<string, unknown> | null;
@@ -16,7 +18,7 @@ export async function logActivity(req: Request | null, input: ActivityInput): Pr
     await prisma.activity.create({
       data: {
         userId: req?.user?.id ?? null,
-        username: req?.user?.username ?? "system",
+        username: req?.user?.username ?? input.username ?? "system",
         action: input.action,
         entityType: input.entityType,
         entityId: input.entityId,

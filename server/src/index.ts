@@ -29,6 +29,8 @@ import { PrismaSessionStore, purgeExpiredSessions } from "./lib/sessionStore";
 import { notificationsRouter } from "./routes/notifications";
 import { startScheduler } from "./lib/scheduler";
 import { timeRouter } from "./routes/time";
+import { intakeRouter } from "./routes/intake";
+import { guestReportsRouter } from "./routes/guestReports";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -88,12 +90,17 @@ app.use("/api/rota", requireAuth, rotaRouter);
 // Not behind requireAuth: the secret token in the feed URL is what authorises it, so a
 // calendar app can subscribe. The router guards its own session-only endpoints.
 app.use("/api/calendar", calendarRouter);
+// Also public, and for the same reason: a guest scanning a QR code in their room has no
+// login. The secret in the link is the credential, and the router is rate-limited and
+// gives back nothing about the property beyond its name.
+app.use("/api/intake", intakeRouter);
 app.use("/api/properties", requireAuth, propertiesRouter);
 app.use("/api/issues", requireAuth, issuesRouter);
 app.use("/api/photos", requireAuth, photosRouter);
 app.use("/api/technicians", requireAuth, techniciansRouter);
 app.use("/api/dashboard", requireAuth, dashboardRouter);
 app.use("/api/export", requireAuth, ADMIN_ONLY, exportRouter);
+app.use("/api/guest-reports", requireAuth, ADMIN_ONLY, guestReportsRouter);
 
 // Issues created before due dates existed get one from their priority's turnaround,
 // counted from the day they were logged.

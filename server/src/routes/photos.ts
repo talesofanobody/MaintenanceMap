@@ -84,6 +84,9 @@ photosRouter.get("/:id/thumb", async (req, res) => {
 photosRouter.delete("/:id", CAN_EDIT, async (req, res) => {
   const photo = await prisma.photo.findUnique({ where: { id: req.params.id }, include: { issue: true } });
   if (!photo) return res.status(404).json({ error: "not found" });
+  // A photo still attached to a guest report goes when the report is declined or deleted,
+  // so there is nothing to do here and no issue to check permission against.
+  if (!photo.issue) return res.status(400).json({ error: "That photo belongs to a guest report, not an issue." });
   if (!mayEditIssue(req, photo.issue)) return res.status(403).json({ error: "You can only remove photos from issues assigned to you." });
   await prisma.photo.delete({ where: { id: req.params.id } });
   await logActivity(req, { action: "photo.removed", entityType: "photo", entityId: photo.id, issueId: photo.issueId, propertyId: photo.issue.propertyId, summary: `Removed a photo from "${photo.issue.title}"` });

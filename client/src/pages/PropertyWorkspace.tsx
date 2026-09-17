@@ -4,7 +4,7 @@ import { MapContainer, Marker, Polygon, TileLayer, useMap, useMapEvents } from "
 import L from "leaflet";
 import { api } from "../api";
 import { isNetworkError, readCache, writeCache } from "../offline/cache";
-import type { Issue, Priority, Property, Status } from "../types";
+import type { GuestReport, Issue, Priority, Property, Status } from "../types";
 import { PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "../types";
 import { boundsOf, centroidOf, geoJsonToLatLngs, latLngsToGeoJson, WORLD_RING } from "../lib/geo";
 import { MOBILE_QUERY, useMediaQuery } from "../lib/useMediaQuery";
@@ -76,6 +76,8 @@ export default function PropertyWorkspace() {
   const [draftLatLng, setDraftLatLng] = useState<{ lat: number; lng: number } | null>(null);
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  // Set when the panel is being used to accept a guest report rather than log a fresh issue.
+  const [intakeReport, setIntakeReport] = useState<GuestReport | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "all">("all");
@@ -160,6 +162,35 @@ export default function PropertyWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, loading, issues]);
 
+  // Requests deep-link with ?intake=<id> to accept a guest report: the panel opens as a
+  // new issue already carrying what the guest wrote.
+  useEffect(() => {
+    const wanted = searchParams.get("intake");
+    if (!wanted || loading || !property) return;
+    setSearchParams({}, { replace: true });
+    api
+      .getGuestReport(wanted)
+      .then((report) => {
+        if (report.propertyId !== property.id) throw new Error("That report belongs to another property.");
+        if (report.status !== "pending") throw new Error(`That report was already ${report.status}.`);
+        setIntakeReport(report);
+        setActiveIssue(null);
+        setPanelOpen(true);
+        // A photo with GPS puts the pin near the problem; otherwise the reviewer places it.
+        const lat = report.lat ?? property.centerLat;
+        const lng = report.lng ?? property.centerLng;
+        if (lat != null && lng != null) {
+          setDraftLatLng({ lat, lng });
+          setPlacingPin(false);
+          setViewTarget({ lat, lng, zoom: 19, nonce: Date.now() });
+        } else {
+          setPlacingPin(true);
+        }
+      })
+      .catch((e: Error) => setError(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, loading, property]);
+
   const numberedIssues = useMemo(() => {
     const sorted = [...issues].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     return sorted.map((issue, idx) => ({ ...issue, number: idx + 1 }));
@@ -195,6 +226,7 @@ export default function PropertyWorkspace() {
 
   function openCreatePanel() {
     setActiveIssue(null);
+    setIntakeReport(null);
     setDraftLatLng(null);
     setPanelOpen(true);
     setPlacingPin(true);
@@ -202,6 +234,7 @@ export default function PropertyWorkspace() {
 
   function openEditPanel(issue: Issue) {
     setActiveIssue(issue);
+    setIntakeReport(null);
     setDraftLatLng(null);
     setPanelOpen(true);
     setPlacingPin(false);
@@ -212,6 +245,7 @@ export default function PropertyWorkspace() {
     setPlacingPin(false);
     setDraftLatLng(null);
     setActiveIssue(null);
+    setIntakeReport(null);
   }
 
   function startDrawing() {
@@ -403,9 +437,10 @@ export default function PropertyWorkspace() {
 
         {panelOpen && (
           <IssuePanel
-            key={activeIssue?.id ?? "new"}
+            key={activeIssue?.id ?? intakeReport?.id ?? "new"}
             propertyId={property.id}
             issue={activeIssue}
+            intakeReport={intakeReport}
             draftLatLng={draftLatLng}
             canManage={canManage}
             currentTechnicianId={currentUser?.technicianId ?? null}

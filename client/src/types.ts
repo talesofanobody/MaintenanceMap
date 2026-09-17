@@ -3,7 +3,8 @@ export type Status = "pending" | "in_progress" | "completed";
 
 export interface Photo {
   id: string;
-  issueId: string;
+  /** Null while the photo still belongs to a guest report that hasn't been accepted. */
+  issueId: string | null;
   filename: string;
   thumbFilename: string | null;
   hasGps: boolean;
@@ -55,7 +56,9 @@ export type NotificationKind =
   | "due_soon"
   | "due_today"
   | "overdue"
-  | "unassigned";
+  | "unassigned"
+  | "message"
+  | "guest_report";
 
 export interface AppNotification {
   id: string;
@@ -440,8 +443,33 @@ export interface Property {
   centerLng: number | null;
   createdAt: string;
   updatedAt: string;
+  /** Guest reporting: whether the public link works, and the secret in it (admins only). */
+  intakeEnabled?: boolean;
+  intakeToken?: string | null;
   issues?: Issue[];
   _count?: { issues: number };
+}
+
+export type GuestReportStatus = "pending" | "accepted" | "declined";
+
+/** Something reported through a property's public link by someone with no login. */
+export interface GuestReport {
+  id: string;
+  propertyId: string;
+  roomName: string;
+  category: string | null;
+  description: string;
+  status: GuestReportStatus;
+  lat: number | null;
+  lng: number | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  reviewNote: string | null;
+  issueId: string | null;
+  createdAt: string;
+  photos: Photo[];
+  property: { id: string; name: string; centerLat: number | null; centerLng: number | null };
+  issue: { id: string; title: string; status: Status; priority: Priority } | null;
 }
 
 export const PRIORITIES: Priority[] = ["low", "medium", "high", "urgent"];
