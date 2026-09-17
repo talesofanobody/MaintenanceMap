@@ -76,7 +76,11 @@ model Technician {
   color       String   @default("#2563eb")
   active      Boolean  @default(true)
   // Hours available per weekday, Monday first, stored as a JSON array of 7 numbers.
-  weeklyHours String   @default("[8,8,8,8,8,0,0]")
+  // Either 7 numbers (legacy hours per day) or 7 shift objects {start,end} / null,
+  // Monday first. Read through parseShifts, which normalises both shapes.
+  weeklyHours String   @default("[{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},null,null]")
+  // Work categories this technician covers, as a JSON array of category keys.
+  categories  String   @default("[]")
   // Charge-out rate used to value clocked time on an issue.
   hourlyRate  Float?
   notes       String?
@@ -112,6 +116,10 @@ model Issue {
   actionNeeded     String?
   priority         String   @default("medium") // low | medium | high | urgent
   status           String   @default("pending") // pending | in_progress | completed
+  // Trade the work belongs to, used to suggest who should pick it up.
+  category         String?
+  // Room or sub-location within the property, e.g. "Room 214" or "Pool plant room".
+  roomName         String?
   workOrderCreated Boolean  @default(false)
   workOrderNumber  String?
   workOrderUrl     String?
@@ -138,6 +146,7 @@ model Issue {
   timeEntries      TimeEntry[]
   checklist        ChecklistItem[]
   costs            Cost[]
+  tags             IssueTag[]
 
   @@index([propertyId])
   @@index([technicianId])
@@ -193,6 +202,8 @@ model Schedule {
   description    String?
   actionNeeded   String?
   priority       String      @default("medium")
+  category       String?
+  roomName       String?
   technicianId   String?
   technician     Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
   estimatedHours Float?
@@ -258,4 +269,25 @@ model Cost {
 
   @@index([issueId])
   @@index([contractorId])
+}
+
+// A label for the kind of work, seeded with the hotel set and extendable by an admin.
+model Tag {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  color     String     @default("#475569")
+  sortOrder Int        @default(0)
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  issues    IssueTag[]
+}
+
+model IssueTag {
+  issueId String
+  issue   Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  tagId   String
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, tagId])
+  @@index([tagId])
 }

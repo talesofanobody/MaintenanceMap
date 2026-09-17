@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { BrandMark } from "../App";
 import { DashboardContext, useClock, useDashboardPolling } from "./useDashboardData";
-import { openIssues } from "./derive";
-import { PRIORITY_SHORT_LABELS } from "../types";
+import DashRail, { RailProvider } from "./DashRail";
 import { useAuth, useCurrentUser } from "../auth/AuthContext";
 
 const TITLES: Record<string, string> = {
@@ -47,13 +46,6 @@ export default function DashboardLayout() {
   const title = TITLES[location.pathname] ?? "Dashboard";
   const secondsAgo = state.lastUpdated ? Math.round((now.getTime() - state.lastUpdated.getTime()) / 1000) : null;
 
-  const ticker = useMemo(() => {
-    if (!state.data) return [];
-    return openIssues(state.data)
-      .filter((i) => i.priority === "urgent" || i.priority === "high")
-      .slice(0, 12);
-  }, [state.data]);
-
   return (
     <DashboardContext.Provider value={state}>
       <div className="dash">
@@ -95,35 +87,31 @@ export default function DashboardLayout() {
           </div>
         </header>
 
-        <main className="dash-main">
-          {state.error && !state.data ? (
+        {state.error && !state.data ? (
+          <main className="dash-main">
             <div className="dash-empty">
               <h2>Can't reach the server</h2>
               <p>{state.error}</p>
             </div>
-          ) : !state.data ? (
+          </main>
+        ) : !state.data ? (
+          <main className="dash-main">
             <div className="dash-empty">
               <h2>Loading…</h2>
             </div>
-          ) : (
-            <Outlet />
-          )}
-        </main>
-
-        <footer className="dash-ticker" aria-hidden="true">
-          {ticker.length === 0 ? (
-            <div className="dash-ticker-static">No urgent or high-priority issues open.</div>
-          ) : (
-            <div className="dash-ticker-track" style={{ animationDuration: `${Math.max(30, ticker.length * 8)}s` }}>
-              {[...ticker, ...ticker].map((i, idx) => (
-                <span className="dash-ticker-item" key={`${i.id}-${idx}`}>
-                  <span className={`dash-tag dash-tag-${i.priority}`}>{PRIORITY_SHORT_LABELS[i.priority].toUpperCase()}</span>
-                  {i.title} · {i.property.name} · {i.technician ? i.technician.name : "UNASSIGNED"}
-                </span>
-              ))}
+          </main>
+        ) : (
+          // The rail and the view share one rotation, so the map is always showing
+          // whatever is at the top of the rail.
+          <RailProvider>
+            <div className="dash-body">
+              <main className="dash-main">
+                <Outlet />
+              </main>
+              <DashRail />
             </div>
-          )}
-        </footer>
+          </RailProvider>
+        )}
       </div>
     </DashboardContext.Provider>
   );

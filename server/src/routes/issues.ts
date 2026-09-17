@@ -6,11 +6,12 @@ import { describeChanges, logActivity } from "../lib/activity";
 import { adminUserIds, issueLine, notifyUsers, priorityWord, technicianUserId } from "../lib/notify";
 import { getSettings } from "../lib/settings";
 import { COST_KINDS, issueCosts } from "../lib/costs";
+import { parseCategory, resolveTagIds, setIssueTags } from "../lib/taxonomy";
 
 const STATUS_WORD: Record<string, string> = { pending: "pending", in_progress: "in progress", completed: "completed" };
 
 // Fields a technician may change on an issue assigned to them.
-const TECHNICIAN_FIELDS = ["status", "actualHours", "comments", "closedAt", "description", "actionNeeded"] as const;
+const TECHNICIAN_FIELDS = ["status", "actualHours", "comments", "closedAt", "description", "actionNeeded", "category", "roomName", "tagIds"] as const;
 
 async function technicianName(id: string | null): Promise<string | null> {
   if (!id) return null;
@@ -27,6 +28,7 @@ const ISSUE_INCLUDE = {
   photos: true,
   technician: { select: { id: true, name: true, color: true, trade: true } },
   checklist: { orderBy: { position: "asc" as const } },
+  tags: { include: { tag: true } },
   costs: { include: { contractor: { select: { id: true, name: true } } }, orderBy: { incurredOn: "desc" as const } },
 } as const;
 
@@ -71,6 +73,9 @@ async function parseTechnicianId(value: unknown): Promise<string | null | undefi
 }
 
 interface ParsedExtras {
+  category: string | null | undefined;
+  roomName: string | null | undefined;
+  tagIds: string[] | undefined;
   url: string | null | undefined;
   closed: Date | null | undefined;
   technicianId: string | null | undefined;
@@ -87,6 +92,9 @@ async function parseExtras(body: any): Promise<ParsedExtras> {
     throw new ValidationError("due date can't be before the start date");
   }
   return {
+    category: parseCategory(body.category),
+    roomName: parseOptionalString(body.roomName, "roomName", 120),
+    tagIds: await resolveTagIds(body.tagIds),
     url: normalizeUrl(body.workOrderUrl),
     closed: parseDate(body.closedAt, "closedAt"),
     technicianId: await parseTechnicianId(body.technicianId),
@@ -162,6 +170,8 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
       workOrderNumber: workOrderNumber ?? null,
       workOrderUrl: extras.url ?? null,
       comments: comments ?? null,
+      category: extras.category ?? null,
+      roomName: extras.roomName ?? null,
       lat,
       lng,
       closedAt: finalStatus === "completed" ? extras.closed ?? new Date() : null,
@@ -175,6 +185,10 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
     },
     include: ISSUE_INCLUDE,
   });
+  if (extras.tagIds?.length) {
+    await setIssueTags(issue.id, extras.tagIds);
+    issue.tags = (await prisma.issueTag.findMany({ where: { issueId: issue.id }, include: { tag: true } })) as typeof issue.tags;
+  }
   await logActivity(req, {
     action: "issue.created",
     entityType: "issue",
@@ -253,6 +267,8 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
       ...(workOrderCreated !== undefined ? { workOrderCreated: !!workOrderCreated } : {}),
       ...(workOrderNumber !== undefined ? { workOrderNumber } : {}),
       ...(extras.url !== undefined ? { workOrderUrl: extras.url } : {}),
+      ...(extras.category !== undefined ? { category: extras.category } : {}),
+      ...(extras.roomName !== undefined ? { roomName: extras.roomName } : {}),
       ...(comments !== undefined ? { comments } : {}),
       ...(lat !== undefined ? { lat } : {}),
       ...(lng !== undefined ? { lng } : {}),
@@ -270,6 +286,8 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
     include: ISSUE_INCLUDE,
   });
 
+  if (extras.tagIds !== undefined) await setIssueTags(issue.id, extras.tagIds);
+
   const changes = describeChanges(
     { ...existing, technicianId: await technicianName(existing.technicianId) },
     { ...issue, technicianId: issue.technician?.name ?? null },
@@ -283,6 +301,8 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
       estimatedHours: "Estimate (h)",
       actualHours: "Actual (h)",
       workOrderNumber: "Work order",
+      category: "Category",
+      roomName: "Room",
     }
   );
   if (changes.length > 0 || comments !== undefined || description !== undefined || actionNeeded !== undefined) {
@@ -502,4 +522,15 @@ issuesRouter.delete("/:id/costs/:costId", CAN_EDIT, async (req, res) => {
   if (result.count === 0) return res.status(404).json({ error: "not found" });
   await logActivity(req, { action: "cost.removed", entityType: "issue", entityId: issue.id, issueId: issue.id, propertyId: issue.propertyId, summary: `"${issue.title}": removed a cost line` });
   res.json({ summary: await issueCosts(issue.id) });
+});
+
+// Distinct rooms already used at a property, so the issue form can offer them.
+issuesRouter.get("/rooms/:propertyId", async (req, res) => {
+  const rows = await prisma.issue.findMany({
+    where: { propertyId: req.params.propertyId, roomName: { not: null } },
+    select: { roomName: true },
+    distinct: ["roomName"],
+    orderBy: { roomName: "asc" },
+  });
+  res.json(rows.map((r) => r.roomName).filter(Boolean));
 });

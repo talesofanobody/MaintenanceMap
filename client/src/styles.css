@@ -4146,3 +4146,370 @@ li.unread .bell-item:hover {
     font-size: 12.5px;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Categories, tags, shifts and the week schedule                      */
+/* ------------------------------------------------------------------ */
+.tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-chip {
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.3;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.tag-chip:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.tag-chip.on {
+  color: #fff;
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.tag-chip.static {
+  cursor: default;
+  font-weight: 500;
+}
+
+.tag-chip:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  border: 1px solid #bfdbfe;
+  color: var(--brand-text);
+  font-size: 13px;
+}
+
+.suggestion span {
+  flex: 1;
+}
+
+.shift-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shift-row {
+  display: grid;
+  grid-template-columns: 110px auto auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+
+.shift-row.is-off {
+  opacity: 0.65;
+}
+
+.shift-day {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.shift-row input[type="time"] {
+  width: 120px;
+}
+
+.shift-dash {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+.shift-hours {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.covers-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.week-strip .week-day b {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tag-admin {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.tag-admin-row {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr auto auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.tag-admin-row.off {
+  opacity: 0.55;
+}
+
+.tag-add {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.tag-add input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.category-list {
+  margin-top: 14px;
+  font-size: 13.5px;
+}
+
+.category-list summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.category-list .tag-picker {
+  margin-top: 8px;
+}
+
+.report-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* Week schedule sheet */
+.rota-controls,
+.rota-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rota-actions {
+  margin-bottom: 16px;
+}
+
+.rota-sheet {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 26px 28px;
+}
+
+.rota-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  border-bottom: 2px solid var(--text);
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+}
+
+.rota-header h2 {
+  margin: 2px 0 0;
+  font-size: 21px;
+}
+
+.rota-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  table-layout: fixed;
+}
+
+.rota-table th,
+.rota-table td {
+  border: 1px solid var(--border);
+  padding: 7px 8px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.rota-table thead th {
+  background: var(--surface-2);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+
+.rota-table thead th span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-2);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.rota-table tbody th {
+  width: 150px;
+  background: var(--surface-2);
+}
+
+.rota-table .is-today {
+  background: var(--brand-soft);
+}
+
+.rota-table td.is-off {
+  background: repeating-linear-gradient(135deg, var(--surface-2), var(--surface-2) 6px, transparent 6px, transparent 12px);
+}
+
+.rota-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.rota-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.rota-table tbody th .muted {
+  display: block;
+  font-weight: 400;
+}
+
+.rota-shift {
+  display: block;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rota-load {
+  display: block;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.rota-off {
+  color: var(--text-3);
+}
+
+.rota-total {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.rota-jobs {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rota-jobs li {
+  display: flex;
+  gap: 5px;
+  align-items: flex-start;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.rota-jobs .tag {
+  padding: 1px 5px;
+  font-size: 9.5px;
+  flex: none;
+}
+
+@media screen and (max-width: 900px) {
+  .rota-sheet {
+    padding: 16px;
+    overflow-x: auto;
+  }
+
+  .rota-table {
+    min-width: 900px;
+  }
+
+  .shift-row {
+    grid-template-columns: 96px 1fr 1fr;
+  }
+
+  .shift-dash,
+  .shift-hours {
+    display: none;
+  }
+
+  .tag-admin-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .tag-admin-row .swatches {
+    grid-column: 1 / -1;
+  }
+}
+
+@media print {
+  .rota-sheet {
+    border: 0;
+    padding: 0;
+  }
+
+  .rota-table {
+    font-size: 9.5px;
+  }
+
+  .rota-table tr {
+    break-inside: avoid;
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+}
+
+.rota-actions .checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}

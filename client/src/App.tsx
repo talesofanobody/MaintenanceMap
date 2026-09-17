@@ -17,6 +17,7 @@ import OfflineBar from "./offline/OfflineBar";
 import MyDay from "./pages/MyDay";
 import Settings from "./pages/Settings";
 import Schedules from "./pages/Schedules";
+import Rota from "./pages/Rota";
 import Planner from "./pages/Planner";
 import Reports from "./pages/Reports";
 import { SettingsProvider } from "./settings/SettingsContext";
@@ -136,6 +137,7 @@ function AppRoutes() {
           <Route path="/properties/:id/report" element={<Report />} />
           <Route path="/account" element={<Account />} />
           {isAdmin && <Route path="/technicians" element={<Technicians />} />}
+          {isAdmin && <Route path="/technicians/rota" element={<Rota />} />}
           {isAdmin && <Route path="/schedules" element={<Schedules />} />}
           {isAdmin && <Route path="/reports" element={<Reports />} />}
           {isAdmin && <Route path="/activity" element={<Activity />} />}

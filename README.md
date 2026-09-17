@@ -2,8 +2,8 @@
 
 A self-hosted web app for running property maintenance from a map. Draw a property's border over
 satellite imagery, drop pins for issues (or let the app place them from a photo's GPS metadata), and
-track the work from there: priority and status, who it's assigned to, start and due dates, checklists,
-photos, time clocked on site, what it cost, and the work order in your EAM.
+track the work from there: priority and status, category, room, tags, who it's assigned to, start and due
+dates, checklists, photos, time clocked on site, what it cost, and the work order in your EAM.
 
 Around that sits the rest of a working day: per-person logins for admins and technicians, a day sheet
 with clock in/out, a planner that fills someone's day by urgency and proximity, recurring maintenance
@@ -225,6 +225,22 @@ from the photo and the map flies there. The form has:
 Tap **Create issue**. The pin appears immediately, numbered in the order issues were logged — the
 same numbers appear in the report.
 
+### Categories, rooms and tags
+
+Three things put an issue in context, and all three feed the boards, the report and the exports:
+
+- **Category** — the trade it belongs to: plumbing, electrical, HVAC, kitchen equipment, pool and
+  spa, and about fifteen more. This is what drives the **suggestion** when you assign the work: pick
+  a category and the form proposes whoever covers it and has the most room left in their day, with an
+  **Assign** button. Technicians who cover the category are ticked in the dropdown too.
+- **Room / location** — where in the property it is: "Room 214", "Pool plant room", "Floor 2
+  corridor". The field suggests rooms already used at that property as you type, so the same room
+  stays spelled the same way without anyone maintaining a list.
+- **Tags** — how the job is framed. The hotel set is created for you: room improvement, room check,
+  equipment check, servicing, audit, inspection, arrival room, vacant room, out of order room, guest
+  complaint, deep clean and preventive. Add your own under Settings, and turn ones you don't use off
+  rather than deleting them so labelled history survives.
+
 ### Checklists
 
 Any issue can carry a list of tick-box steps — useful for inspections and for jobs where the order
@@ -264,8 +280,14 @@ are hidden. It's a view-only filter — the report always includes every issue.
 ### Technicians and assignment
 
 **Technicians** (top menu) is where the admin sets up the crew. Each technician has a name, trade,
-phone, a colour, an optional **hourly rate** (which values their clocked time on an issue), and
-**working hours per weekday** (presets for Mon–Fri 8h, Mon–Sat and part-time). Their card shows, for today and for this week, how many hours are already scheduled
+phone, a colour, an optional **hourly rate** (which values their clocked time on an issue), the
+**categories they cover**, and a **working week**: a start and end time for each day they work, with
+presets to fill it in quickly. Hours per day are worked out from those times, so capacity, planning
+and the boards all follow the rota rather than a number typed separately.
+
+**Week schedule** (button on the Technicians page) prints the rota: every technician down the side,
+the seven days across, each cell showing that day's shift, how much of it is already booked, and the
+jobs in it. Step through weeks with the arrows and print it for the crew room. Their card shows, for today and for this week, how many hours are already scheduled
 against their capacity and how much is **free**, plus unscheduled backlog and overdue counts, and
 their open assignments. Removing a technician leaves their issues unassigned; deactivating keeps
 the history but takes them off the boards.
@@ -357,15 +379,20 @@ demand from the API if they want to see it happen.
 ### Dashboards and TV mode
 
 **Dashboards** (top menu, `/#/dashboard`) opens a dark, large-type layout meant for a wall screen.
-It refreshes itself every 15 seconds, has a clock and a live indicator, and a ticker along the
-bottom of urgent/high issues. Press **F** or use the button for fullscreen. Four views:
+It refreshes itself every 15 seconds, has a clock and a live indicator, and a **rail of issue cards
+down the right**: the top card is the one in focus, with its priority, category, room, tags,
+description and photo, and the next three are queued below it. The rail rotates every 12 seconds, and
+the live map flies to whatever is on top, so the two always agree. Press **F** or use the button for
+fullscreen. Four views:
 
-- **Map** — every property outline with every open issue pinned; it flies to each issue in turn
-  (12 seconds each, worst first) with a card showing priority, status, who's assigned (or an
-  "unassigned" flag), schedule, estimate, how long it's been open, work order and a photo. "Up
-  next" shows what's coming.
-- **Board** — a departure-board style list. By default it's **grouped by priority, ordered by due
-  date** within each group; switch to **grouped by technician** (with today's load and free hours
+- **Map** — every property outline with every open issue pinned, flying to each in turn (12 seconds
+  each, worst first). The card rail alongside it says what you're looking at and what's next.
+- **Board** — a departure-board style list showing **every priority, every time**: urgent, high,
+  medium and low each keep their section (with a count) whether or not anything is in them, and the
+  whole list is in one ranked run rather than paged, so nothing is hidden waiting for a page to turn.
+  If there are more rows than fit the screen it creeps down the list and back up again. Each row
+  carries the issue's category under its title and the room under the property. By default it's
+  **grouped by priority, ordered by due date** within each group; switch to **grouped by technician** (with today's load and free hours
   in each section header, and an UNASSIGNED section for work still needing someone). Columns are
   DUE (OVERDUE / DUE TODAY / DUE TMRW / DUE FRI 20, with the start day and estimate underneath),
   TECH, ISSUE, LOCATION, PRIORITY and STATUS. Overdue rows blink, urgent rows are red, in-progress
@@ -486,12 +513,14 @@ for a file. Tip: give the map a second to finish loading imagery before printing
 - `Notification`: one message for one login, with a dedupe key so a reminder is only ever sent once
 - `Setting`: the organisation's turnaround days, warning threshold and escalation rule (one row)
 - `Property`: name, address, notes, boundary (GeoJSON polygon), center lat/lng
-- `Technician`: name, trade, phone, colour, active flag, working hours per weekday, hourly rate
+- `Technician`: name, trade, phone, colour, active flag, the working week as a start and end time
+  per day, the categories they cover, hourly rate
+- `Tag` / `IssueTag`: the tag list and which issues carry which tags
 - `Contractor`: name, trade, phone, email, notes, active flag
 - `Issue`: title, description, action needed, priority, status, work order flag/number/EAM link,
   comments, lat/lng, closed-at timestamp (managed from the status), assigned technician,
-  estimated/actual hours, start date, due date (always set), when it was last escalated, and the
-  schedule that created it; belongs to a property
+  estimated/actual hours, start date, due date (always set), category, room, when it was last
+  escalated, and the schedule that created it; belongs to a property
 - `Photo`: filename, GPS presence/lat/lng, taken-at timestamp (from EXIF), belongs to an issue
 - `ChecklistItem`: a tick-box step on an issue, with who ticked it and when
 - `TimeEntry`: one stretch of clocked work on an issue; an issue's actual hours are the sum of these
@@ -517,6 +546,9 @@ imagery resolution isn't sufficient for your properties.
   access control.
 - **No automated test suite in the repo.** Each feature was verified end-to-end with a browser
   driving the real app, but those runs aren't checked in, so there's nothing for CI to run.
+- **The category list is fixed in code.** Twenty trades cover most work, but adding one to the list
+  is a code change, not a setting — they drive the assignment suggestion, so they're deliberately
+  stable. Tags are the flexible half of the pair.
 - **Costs carry no currency.** Amounts are plain numbers formatted to two decimal places — fine for
   one currency, wrong the moment you need two.
 - **The planner measures straight-line distance**, not driving time, and doesn't know about traffic,

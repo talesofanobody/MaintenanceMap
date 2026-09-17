@@ -1,9 +1,10 @@
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import TimeLog from "../time/TimeLog";
 import Checklist from "./Checklist";
 import CostPanel from "./CostPanel";
 import { offlineSupported, queueIssue } from "../offline/queue";
+import { CATEGORIES, categoryLabel, type Tag } from "../types";
 import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
 import { capacityOn, committedOn, defaultDueDate, formatHours, relativeDay, slaProgress, todayStr } from "../lib/capacity";
@@ -70,6 +71,12 @@ function parseHours(value: string): number | null {
 }
 
 /** "Today"/"Tomorrow" read better lowercased mid-sentence; formatted dates keep their case. */
+/** "today" / "tomorrow" stand alone; a date needs "on". */
+function whenPhrase(day: string): string {
+  const label = relativeDay(day || todayStr()).toLowerCase();
+  return /^(today|tomorrow|yesterday)$/.test(label) ? label : `on ${label}`;
+}
+
 function softDay(day: string): string {
   const r = relativeDay(day);
   return /^(Today|Tomorrow|Yesterday)$/.test(r) ? r.toLowerCase() : r;
@@ -107,6 +114,11 @@ export default function IssuePanel({
   const [technicianId, setTechnicianId] = useState(issue?.technicianId ?? (limited && currentTechnicianId ? currentTechnicianId : ""));
   const [estimatedHours, setEstimatedHours] = useState(issue?.estimatedHours != null ? String(issue.estimatedHours) : "");
   const [actualHours, setActualHours] = useState(issue?.actualHours != null ? String(issue.actualHours) : "");
+  const [category, setCategory] = useState(issue?.category ?? "");
+  const [roomName, setRoomName] = useState(issue?.roomName ?? "");
+  const [rooms, setRooms] = useState<string[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [tagIds, setTagIds] = useState<string[]>(issue?.tags?.map((t) => t.tagId) ?? []);
   const [scheduledFor, setScheduledFor] = useState(issue?.scheduledFor ?? "");
   const [dueDate, setDueDate] = useState(issue?.dueDate ?? (issue ? "" : defaultDueDate("medium", null, slaDays)));
   const [dueTouched, setDueTouched] = useState(!!issue);
@@ -136,7 +148,19 @@ export default function IssuePanel({
       .listTechnicians()
       .then(setTechnicians)
       .catch(() => setTechnicians([]));
+    api
+      .listTags()
+      .then((r) => setTags(r.tags.filter((t) => t.active)))
+      .catch(() => setTags([]));
   }, []);
+
+  // Rooms already used at this property, offered as suggestions rather than a fixed list.
+  useEffect(() => {
+    api
+      .listRooms(propertyId)
+      .then(setRooms)
+      .catch(() => setRooms([]));
+  }, [propertyId]);
 
   useEffect(() => {
     if (!issue) return;
@@ -161,6 +185,23 @@ export default function IssuePanel({
 
   const selectableTechs = technicians.filter((t) => t.active || t.id === technicianId);
   const selectedTech = technicians.find((t) => t.id === technicianId) ?? null;
+
+  // Who should pick this up: someone who covers the category, with the most room left on
+  // the start day. Only a suggestion — the dropdown still offers everyone.
+  const suggestions = useMemo(() => {
+    if (!category) return [];
+    const day = scheduledFor || todayStr();
+    return technicians
+      .filter((t) => t.active && t.categories?.includes(category))
+      .map((t) => {
+        const capacity = capacityOn(t.weeklyHours, day);
+        const committed = committedOn(t.assignments, day, issue?.id);
+        return { tech: t, free: Math.max(0, capacity - committed), capacity, open: t.assignments.length };
+      })
+      .sort((a, b) => b.free - a.free || a.open - b.open || a.tech.name.localeCompare(b.tech.name));
+  }, [category, technicians, scheduledFor, issue?.id]);
+
+  const topSuggestion = suggestions.find((entry) => entry.tech.id !== technicianId) ?? null;
   const estimate = parseHours(estimatedHours);
   let capacityHint: { text: string; tone: "ok" | "warn" } | null = null;
   if (selectedTech && scheduledFor && canManage) {
@@ -293,6 +334,9 @@ export default function IssuePanel({
         workOrderNumber: workOrderCreated ? workOrderNumber.trim() || undefined : undefined,
         workOrderUrl: workOrderCreated ? workOrderUrl.trim() || null : null,
         comments: comments.trim() || undefined,
+        category: category || null,
+        roomName: roomName.trim() || null,
+        tagIds,
         lat: finalLat,
         lng: finalLng,
         closedAt: closedIso,
@@ -312,6 +356,9 @@ export default function IssuePanel({
               comments: comments.trim() || null,
               description: description.trim() || null,
               actionNeeded: actionNeeded.trim() || null,
+              category: category || null,
+              roomName: roomName.trim() || null,
+              tagIds,
             }
           : full;
         await api.updateIssue(issue.id, payload as Partial<Issue>);
@@ -326,6 +373,8 @@ export default function IssuePanel({
             priority,
             status,
             comments: full.comments ?? null,
+            category: category || null,
+            roomName: roomName.trim() || null,
             lat: finalLat,
             lng: finalLng,
             technicianId: technicianId || null,
@@ -357,6 +406,8 @@ export default function IssuePanel({
               priority,
               status,
               comments: comments.trim() || null,
+              category: category || null,
+              roomName: roomName.trim() || null,
               lat: finalLat,
               lng: finalLng,
               technicianId: technicianId || null,
@@ -499,6 +550,60 @@ export default function IssuePanel({
 
         {isEdit && issue && <Checklist issue={issue} editable={canEdit} onChanged={onSaved} />}
 
+        <div className="form-row">
+          <label>
+            Category
+            <select value={category} onChange={(e) => setCategory(e.target.value)} disabled={!canEdit}>
+              <option value="">Not set</option>
+              {CATEGORIES.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Room / location <span className="muted">(optional)</span>
+            <input
+              value={roomName}
+              onChange={(e) => setRoomName(e.target.value)}
+              list={`rooms-${propertyId}`}
+              placeholder="e.g. Room 214, Pool plant room"
+              maxLength={120}
+              readOnly={!canEdit}
+            />
+            <datalist id={`rooms-${propertyId}`}>
+              {rooms.map((r) => (
+                <option key={r} value={r} />
+              ))}
+            </datalist>
+          </label>
+        </div>
+
+        {(tags.length > 0 || tagIds.length > 0) && (
+          <div className="field">
+            <span className="field-label">Tags</span>
+            <div className="tag-picker">
+              {tags.map((tag) => {
+                const on = tagIds.includes(tag.id);
+                return (
+                  <button
+                    type="button"
+                    key={tag.id}
+                    className={`tag-chip ${on ? "on" : ""}`}
+                    style={on ? { background: tag.color, borderColor: tag.color } : { borderColor: tag.color, color: tag.color }}
+                    aria-pressed={on}
+                    disabled={!canEdit}
+                    onClick={() => setTagIds((ids) => (on ? ids.filter((id) => id !== tag.id) : [...ids, tag.id]))}
+                  >
+                    {tag.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="field">
           <span className="field-label">Priority</span>
           {lock ? (
@@ -579,6 +684,23 @@ export default function IssuePanel({
                 : `Due date set automatically from priority (${slaDays[priority] === 0 ? "same day" : `${slaDays[priority]} days`}) — change it if you need to.`}
             </span>
             <span className="field-label">Assignment</span>
+            {topSuggestion && !limited && (
+              <div className="suggestion">
+                <span>
+                  <strong>{topSuggestion.tech.name}</strong> covers {categoryLabel(category).toLowerCase()}
+                  {topSuggestion.capacity > 0
+                    ? ` and has ${formatHours(topSuggestion.free)} free ${whenPhrase(scheduledFor)}`
+                    : ` but isn't working ${whenPhrase(scheduledFor)}`}
+                  .
+                </span>
+                <button type="button" className="btn btn-small btn-secondary" onClick={() => setTechnicianId(topSuggestion.tech.id)}>
+                  Assign
+                </button>
+              </div>
+            )}
+            {category && suggestions.length === 0 && canManage && (
+              <span className="muted small">Nobody is set up to cover {categoryLabel(category).toLowerCase()} — set who covers what on the Technicians page.</span>
+            )}
             <label>
               Technician
               <select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)} disabled={limited}>
@@ -589,6 +711,7 @@ export default function IssuePanel({
                     <option key={t.id} value={t.id}>
                       {t.name}
                       {t.trade ? ` — ${t.trade}` : ""}
+                      {category && t.categories?.includes(category) ? " ✓" : ""}
                       {!t.active ? " (inactive)" : ""}
                     </option>
                   ))}

@@ -103,6 +103,8 @@ export function buildBoard(data: DashboardData, today = todayStr(), filters: Boa
   const open = applyFilters(openIssues(data), filters);
 
   if (filters.group === "priority") {
+    // Every priority stays on the board, including the empty ones: a missing section
+    // reads as "nothing was captured" rather than "nothing is outstanding".
     return PRIORITIES.slice()
       .reverse()
       .map((priority) => ({
@@ -111,8 +113,7 @@ export function buildBoard(data: DashboardData, today = todayStr(), filters: Boa
         priority,
         load: null,
         rows: open.filter((i) => i.priority === priority),
-      }))
-      .filter((s) => s.rows.length > 0);
+      }));
   }
 
   const activeTechs = data.technicians.filter((t) => t.active && (!filters.technicianId || filters.technicianId === t.id));

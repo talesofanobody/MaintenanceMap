@@ -231,6 +231,91 @@ export interface BackupFile {
   includesPhotos: boolean;
 }
 
+export interface Category {
+  key: string;
+  label: string;
+}
+
+/** Mirrors the server list so labels render without waiting for a fetch. */
+export const CATEGORIES: Category[] = [
+  { key: "plumbing", label: "Plumbing" },
+  { key: "electrical", label: "Electrical" },
+  { key: "hvac", label: "HVAC / air conditioning" },
+  { key: "appliance", label: "Appliances" },
+  { key: "kitchen", label: "Kitchen equipment" },
+  { key: "laundry", label: "Laundry" },
+  { key: "carpentry", label: "Carpentry / joinery" },
+  { key: "painting", label: "Painting / decorating" },
+  { key: "flooring", label: "Flooring" },
+  { key: "doors_locks", label: "Doors, locks & keys" },
+  { key: "furniture", label: "Furniture & fittings" },
+  { key: "lighting", label: "Lighting" },
+  { key: "av_it", label: "TV, AV & IT" },
+  { key: "pool_spa", label: "Pool & spa" },
+  { key: "grounds", label: "Grounds & exterior" },
+  { key: "cleaning", label: "Cleaning / housekeeping" },
+  { key: "pest_control", label: "Pest control" },
+  { key: "fire_safety", label: "Fire & safety" },
+  { key: "lift", label: "Lifts" },
+  { key: "general", label: "General maintenance" },
+];
+
+export function categoryLabel(key: string | null | undefined): string {
+  return CATEGORIES.find((c) => c.key === key)?.label ?? "";
+}
+
+/** Short form for boards and cards, where the full label is too long. */
+export function categoryShort(key: string | null | undefined): string {
+  const label = categoryLabel(key);
+  return label.split(" / ")[0].split(",")[0];
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+  sortOrder: number;
+  active: boolean;
+  _count?: { issues: number };
+}
+
+export interface IssueTag {
+  tagId: string;
+  tag: Tag;
+}
+
+export interface Shift {
+  start: string;
+  end: string;
+}
+
+export type Week = (Shift | null)[];
+
+export interface RotaDay {
+  day: string;
+  shift: Shift | null;
+  hours: number;
+  bookedHours: number;
+  jobs: { id: string; title: string; priority: Priority; estimatedHours: number | null; scheduledFor: string | null; roomName: string | null; category: string | null; property: string }[];
+}
+
+export interface RotaRow {
+  id: string;
+  name: string;
+  trade: string | null;
+  color: string;
+  categories: string[];
+  days: RotaDay[];
+  weekHours: number;
+}
+
+export interface Rota {
+  weekStart: string;
+  days: string[];
+  technicians: RotaRow[];
+  generatedAt: string;
+}
+
 export interface TechnicianRef {
   id: string;
   name: string;
@@ -251,6 +336,8 @@ export interface Assignment {
 }
 
 export interface Technician extends TechnicianRef {
+  shifts: Week;
+  categories: string[];
   hourlyRate: number | null;
   phone: string | null;
   active: boolean;
@@ -266,6 +353,9 @@ export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export interface Issue {
   id: string;
   propertyId: string;
+  category: string | null;
+  roomName: string | null;
+  tags?: IssueTag[];
   scheduleId?: string | null;
   checklist?: ChecklistItem[];
   costs?: Cost[];

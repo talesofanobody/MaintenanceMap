@@ -2,6 +2,8 @@ import { Router } from "express";
 import { prisma } from "../db";
 import { serializeTechnician } from "./technicians";
 import { costsByIssue } from "../lib/costs";
+import { categoryLabel } from "../lib/taxonomy";
+import { parseWeek, shiftHours } from "../lib/shifts";
 
 export const exportRouter = Router();
 
@@ -35,6 +37,7 @@ exportRouter.get("/issues.csv", async (req, res) => {
       technician: { select: { name: true, trade: true } },
       photos: { select: { id: true }, orderBy: { createdAt: "asc" } },
       checklist: { select: { done: true } },
+      tags: { include: { tag: { select: { name: true } } } },
     },
     orderBy: [{ propertyId: "asc" }, { createdAt: "asc" }],
   });
@@ -48,6 +51,9 @@ exportRouter.get("/issues.csv", async (req, res) => {
       "Property address",
       "Issue #",
       "Title",
+      "Category",
+      "Room",
+      "Tags",
       "Priority",
       "Status",
       "Technician",
@@ -86,6 +92,9 @@ exportRouter.get("/issues.csv", async (req, res) => {
       i.property.address,
       n,
       i.title,
+      categoryLabel(i.category),
+      i.roomName,
+      i.tags.map((t) => t.tag.name).join(" | "),
       i.priority,
       i.status,
       i.technician?.name ?? "",
@@ -124,18 +133,21 @@ exportRouter.get("/technicians.csv", async (_req, res) => {
     include: { issues: { select: { status: true, estimatedHours: true, actualHours: true, scheduledFor: true, dueDate: true } } },
   });
   const rows: Cell[][] = [
-    ["Name", "Trade", "Phone", "Active", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Hours per week", "Open issues", "Open estimated hours", "Completed issues", "Completed actual hours", "Notes", "Technician ID"],
+    ["Name", "Trade", "Covers", "Phone", "Active", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Hours per week", "Open issues", "Open estimated hours", "Completed issues", "Completed actual hours", "Notes", "Technician ID"],
   ];
   for (const t of technicians) {
-    const { weeklyHours } = serializeTechnician(t);
+    const { weeklyHours, categories } = serializeTechnician(t);
+    const week = parseWeek(t.weeklyHours);
     const open = t.issues.filter((i) => i.status !== "completed");
     const done = t.issues.filter((i) => i.status === "completed");
     rows.push([
       t.name,
       t.trade,
+      categories.map(categoryLabel).filter(Boolean).join(" | "),
       t.phone,
       t.active,
-      ...weeklyHours,
+      // The shift each day rather than a bare number, so the sheet reads like a rota.
+      ...week.map((shift) => (shift ? `${shift.start}-${shift.end}` : "off")),
       weeklyHours.reduce((a, b) => a + b, 0),
       open.length,
       open.reduce((s, i) => s + (i.estimatedHours ?? 0), 0),

@@ -66,6 +66,8 @@ export async function createOccurrence(scheduleId: string, opts: { force?: boole
       description: schedule.description,
       actionNeeded: schedule.actionNeeded,
       priority: schedule.priority,
+      category: schedule.category,
+      roomName: schedule.roomName,
       technicianId: schedule.technicianId,
       estimatedHours: schedule.estimatedHours,
       lat: schedule.lat,

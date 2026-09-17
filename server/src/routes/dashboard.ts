@@ -21,6 +21,7 @@ dashboardRouter.get("/", async (_req, res) => {
         technician: { select: { id: true, name: true, color: true, trade: true } },
         photos: { select: { id: true }, orderBy: { createdAt: "desc" }, take: 1 },
         checklist: { select: { done: true } },
+        tags: { include: { tag: true } },
       },
       orderBy: { createdAt: "asc" },
     }),

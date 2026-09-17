@@ -18,6 +18,9 @@ import { plannerRouter } from "./routes/planner";
 import { calendarRouter } from "./routes/calendar";
 import { insightsRouter } from "./routes/insights";
 import { backupsRouter } from "./routes/backups";
+import { tagsRouter } from "./routes/tags";
+import { rotaRouter } from "./routes/rota";
+import { seedTags } from "./lib/taxonomy";
 import { startBackupSchedule } from "./lib/backup";
 import { ADMIN_ONLY, attachUser, requireAuth } from "./middleware/requireAuth";
 import { usersRouter } from "./routes/users";
@@ -80,6 +83,8 @@ app.use("/api/contractors", requireAuth, contractorsRouter);
 app.use("/api/planner", requireAuth, plannerRouter);
 app.use("/api/insights", requireAuth, insightsRouter);
 app.use("/api/backups", requireAuth, backupsRouter);
+app.use("/api/tags", requireAuth, tagsRouter);
+app.use("/api/rota", requireAuth, rotaRouter);
 // Not behind requireAuth: the secret token in the feed URL is what authorises it, so a
 // calendar app can subscribe. The router guards its own session-only endpoints.
 app.use("/api/calendar", calendarRouter);
@@ -102,6 +107,11 @@ async function backfillDueDates() {
   if (missing.length) console.log(`Backfilled due dates for ${missing.length} issue(s).`);
 }
 backfillDueDates().catch((err) => console.error("due date backfill failed", err));
+
+// The hotel/tourism tag set, created once on an empty install.
+seedTags()
+  .then((n) => n && console.log(`Seeded ${n} default tags.`))
+  .catch((err) => console.error("tag seed failed", err));
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

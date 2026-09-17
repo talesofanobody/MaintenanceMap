@@ -1272,3 +1272,239 @@
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(0.75); }
 }
+
+/* ------------------------------------------------------------------ */
+/* Card rail: the issues, as cards, down the right of every view       */
+/* ------------------------------------------------------------------ */
+.dash-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+}
+
+.dash-body > .dash-main {
+  min-width: 0;
+}
+
+.dash-rail {
+  border-left: 1px solid var(--d-border);
+  background: var(--d-bg);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  min-height: 0;
+  justify-content: flex-start;
+}
+
+.rail-card {
+  position: relative;
+  background: var(--d-surface);
+  border: 1px solid var(--d-border);
+  border-left: 5px solid var(--d-muted);
+  border-radius: 12px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.rail-card.pri-urgent { border-left-color: var(--d-red); }
+.rail-card.pri-high { border-left-color: var(--d-orange); }
+.rail-card.pri-medium { border-left-color: var(--d-yellow); }
+.rail-card.pri-low { border-left-color: var(--d-green); }
+
+/* Sized to its content: a lead card with no description shouldn't stretch into a void. */
+.rail-card.lead {
+  flex: 0 1 auto;
+  background: var(--d-surface-2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.rail-card.is-overdue {
+  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.5);
+}
+
+.rail-card-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: var(--d-cyan);
+  animation: rail-fill linear forwards;
+}
+
+@keyframes rail-fill {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+.rail-card-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.rail-cat {
+  font-family: var(--d-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--d-cyan);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.rail-due {
+  margin-left: auto;
+  font-family: var(--d-font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  color: var(--d-muted);
+}
+
+.rail-due.overdue {
+  color: var(--d-red);
+  font-weight: 700;
+}
+
+.rail-title {
+  margin: 1px 0 0;
+  font-size: 19px;
+  line-height: 1.2;
+  font-weight: 700;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.rail-card.lead .rail-title {
+  font-size: 23px;
+  -webkit-line-clamp: 3;
+}
+
+.rail-where {
+  margin: 0;
+  font-size: 13px;
+  color: var(--d-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rail-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.rail-desc {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: #cbd8ef;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+.rail-card-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 6px;
+  font-family: var(--d-font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+}
+
+.rail-tech {
+  color: var(--d-cyan);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rail-tech.unassigned {
+  color: var(--d-amber);
+}
+
+.rail-status {
+  margin-left: auto;
+  color: var(--d-muted);
+  white-space: nowrap;
+}
+
+.rail-photo {
+  width: 100%;
+  max-height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-top: 6px;
+}
+
+.rail-empty {
+  border: 1px dashed var(--d-border);
+  border-radius: 12px;
+  padding: 24px 14px;
+  text-align: center;
+  color: var(--d-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rail-empty strong {
+  color: var(--d-green);
+  font-size: 20px;
+}
+
+/* The board keeps every row in one ranked list and creeps through it. */
+.board-body {
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.board-body::-webkit-scrollbar {
+  display: none;
+}
+
+.board-room,
+.board-cat {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--d-muted);
+}
+
+.board-cat {
+  color: var(--d-cyan);
+}
+
+@media (max-width: 1100px) {
+  .dash-body {
+    grid-template-columns: 1fr 300px;
+  }
+
+  .rail-card:not(.lead) .rail-desc {
+    display: none;
+  }
+}

@@ -4,6 +4,7 @@ import { MapContainer, Marker, Polygon, TileLayer, useMap } from "react-leaflet"
 import L from "leaflet";
 import { api } from "../api";
 import { money } from "../components/CostPanel";
+import { categoryLabel } from "../types";
 import type { Issue, Priority, Property, Status } from "../types";
 import { PRIORITIES, PRIORITY_DESCRIPTIONS, PRIORITY_LABELS, STATUS_LABELS } from "../types";
 import { boundsOf, geoJsonToLatLngs, WORLD_RING } from "../lib/geo";
@@ -246,6 +247,22 @@ export default function Report() {
                 </header>
 
                 <dl className="issue-card-grid">
+                  <div>
+                    <dt>Category</dt>
+                    <dd>
+                      {categoryLabel(issue.category) || "—"}
+                      {issue.roomName ? ` · ${issue.roomName}` : ""}
+                      {issue.tags && issue.tags.length > 0 && (
+                        <span className="report-tags">
+                          {issue.tags.map((t) => (
+                            <span key={t.tagId} className="tag-chip static" style={{ borderColor: t.tag.color, color: t.tag.color }}>
+                              {t.tag.name}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </dd>
+                  </div>
                   <div>
                     <dt>Description</dt>
                     <dd>{issue.description || "—"}</dd>

@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useSettings } from "../settings/SettingsContext";
 import Backups from "../components/Backups";
+import TagAdmin from "../components/TagAdmin";
 import { PRIORITY_SHORT_LABELS, type AppSettings, type Priority } from "../types";
 
 const ORDER: Priority[] = ["urgent", "high", "medium", "low"];
@@ -144,6 +145,7 @@ export default function Settings() {
       </form>
 
       <div className="settings-form" style={{ marginTop: 20 }}>
+        <TagAdmin />
         <Backups />
       </div>
     </div>

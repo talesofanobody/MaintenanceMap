@@ -22,6 +22,9 @@ export interface QueuedIssue {
     priority: Priority;
     status: Status;
     comments?: string | null;
+    category?: string | null;
+    roomName?: string | null;
+    tagIds?: string[];
     lat: number;
     lng: number;
     technicianId?: string | null;

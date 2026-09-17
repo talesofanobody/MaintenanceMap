@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { parseColor, parseOptionalHours, parseOptionalString, parseWeeklyHours, ValidationError } from "../lib/validation";
+import { parseColor, parseOptionalHours, parseOptionalString, ValidationError } from "../lib/validation";
+import { DEFAULT_WEEK, parseWeek, parseWeekInput, weekToHours } from "../lib/shifts";
+import { parseCategoryList, parseStoredList } from "../lib/taxonomy";
 import { ADMIN_ONLY } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 
@@ -17,15 +19,11 @@ const ASSIGNMENT_SELECT = {
   propertyId: true,
 } as const;
 
-export function serializeTechnician<T extends { weeklyHours: string }>(tech: T) {
-  let weeklyHours: number[] = [8, 8, 8, 8, 8, 0, 0];
-  try {
-    const parsed = JSON.parse(tech.weeklyHours);
-    if (Array.isArray(parsed) && parsed.length === 7) weeklyHours = parsed.map(Number);
-  } catch {
-    // fall back to the default week
-  }
-  return { ...tech, weeklyHours };
+// `shifts` carries the start and end times; `weeklyHours` stays as the derived hours per
+// day so capacity, planning and load code keeps working unchanged.
+export function serializeTechnician<T extends { weeklyHours: string; categories?: string }>(tech: T) {
+  const shifts = parseWeek(tech.weeklyHours);
+  return { ...tech, shifts, weeklyHours: weekToHours(shifts), categories: parseStoredList(tech.categories ?? "[]") };
 }
 
 techniciansRouter.get("/", async (_req, res) => {
@@ -39,7 +37,7 @@ techniciansRouter.get("/", async (_req, res) => {
 });
 
 techniciansRouter.post("/", ADMIN_ONLY, async (req, res) => {
-  const { name, trade, phone, color, weeklyHours, notes, active, hourlyRate } = req.body;
+  const { name, trade, phone, color, weeklyHours, shifts, notes, active, hourlyRate, categories } = req.body;
   if (!name || typeof name !== "string" || !name.trim()) {
     return res.status(400).json({ error: "name is required" });
   }
@@ -50,7 +48,8 @@ techniciansRouter.post("/", ADMIN_ONLY, async (req, res) => {
         trade: parseOptionalString(trade, "trade", 120) ?? null,
         phone: parseOptionalString(phone, "phone", 60) ?? null,
         color: parseColor(color) ?? "#2563eb",
-        weeklyHours: JSON.stringify(parseWeeklyHours(weeklyHours) ?? [8, 8, 8, 8, 8, 0, 0]),
+        weeklyHours: parseWeekInput(shifts ?? weeklyHours) ?? JSON.stringify(DEFAULT_WEEK),
+        categories: parseCategoryList(categories) ?? "[]",
         notes: parseOptionalString(notes, "notes", 2000) ?? null,
         hourlyRate: parseOptionalHours(hourlyRate, "hourlyRate") ?? null,
         active: active === undefined ? true : !!active,
@@ -65,12 +64,13 @@ techniciansRouter.post("/", ADMIN_ONLY, async (req, res) => {
 });
 
 techniciansRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
-  const { name, trade, phone, color, weeklyHours, notes, active, hourlyRate } = req.body;
+  const { name, trade, phone, color, weeklyHours, shifts, notes, active, hourlyRate, categories } = req.body;
   if (name !== undefined && (typeof name !== "string" || !name.trim())) {
     return res.status(400).json({ error: "name cannot be empty" });
   }
   try {
-    const parsedHours = parseWeeklyHours(weeklyHours);
+    const parsedHours = parseWeekInput(shifts ?? weeklyHours);
+    const parsedCategories = parseCategoryList(categories);
     const technician = await prisma.technician.update({
       where: { id: req.params.id },
       data: {
@@ -78,7 +78,8 @@ techniciansRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
         ...(trade !== undefined ? { trade: parseOptionalString(trade, "trade", 120) } : {}),
         ...(phone !== undefined ? { phone: parseOptionalString(phone, "phone", 60) } : {}),
         ...(color !== undefined ? { color: parseColor(color) } : {}),
-        ...(parsedHours !== undefined ? { weeklyHours: JSON.stringify(parsedHours) } : {}),
+        ...(parsedHours !== undefined ? { weeklyHours: parsedHours } : {}),
+        ...(parsedCategories !== undefined ? { categories: parsedCategories } : {}),
         ...(hourlyRate !== undefined ? { hourlyRate: parseOptionalHours(hourlyRate, "hourlyRate") } : {}),
         ...(notes !== undefined ? { notes: parseOptionalString(notes, "notes", 2000) } : {}),
         ...(active !== undefined ? { active: !!active } : {}),

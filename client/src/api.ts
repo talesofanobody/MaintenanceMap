@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -6,6 +6,8 @@ export interface TechnicianInput {
   phone?: string | null;
   color?: string;
   weeklyHours?: number[];
+  shifts?: (Shift | null)[];
+  categories?: string[];
   hourlyRate?: number | null;
   notes?: string | null;
   active?: boolean;
@@ -118,6 +120,14 @@ export const api = {
   runBackup: () => request<BackupFile>("/backups/run", { method: "POST" }),
   deleteBackup: (name: string) => request<void>(`/backups/${encodeURIComponent(name)}`, { method: "DELETE" }),
   backupUrl: (name: string) => `${BASE}/backups/${encodeURIComponent(name)}`,
+
+  listTags: () => request<{ tags: Tag[]; categories: Category[] }>("/tags"),
+  createTag: (data: { name: string; color?: string }) => request<Tag>("/tags", { method: "POST", body: JSON.stringify(data) }),
+  updateTag: (id: string, data: { name?: string; color?: string; active?: boolean }) => request<Tag>(`/tags/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteTag: (id: string) => request<void>(`/tags/${id}`, { method: "DELETE" }),
+
+  getRota: (week?: string) => request<Rota>(`/rota${week ? `?week=${week}` : ""}`),
+  listRooms: (propertyId: string) => request<string[]>(`/issues/rooms/${propertyId}`),
 
   listProperties: () => request<Property[]>("/properties"),
   createProperty: (data: { name: string; address?: string; notes?: string }) =>

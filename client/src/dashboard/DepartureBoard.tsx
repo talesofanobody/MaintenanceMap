@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { PRIORITY_LABELS, PRIORITY_SHORT_LABELS } from "../types";
+import { PRIORITY_LABELS, PRIORITY_SHORT_LABELS, categoryShort } from "../types";
 import { formatHours, initials, todayStr } from "../lib/capacity";
 import { activeIssueIds, buildBoard, dueCell, isOverdue, startCell, statusBoardLabel, type BoardFilters, type BoardSection, type GroupMode } from "./derive";
 import { useDashboard } from "./useDashboardData";
 import { useSettings } from "../settings/SettingsContext";
 
-const ROWS_PER_PAGE = 13;
-const PAGE_MS = 10000;
+const SCROLL_STEP_MS = 60;
 
 type Line =
   | { kind: "section"; section: BoardSection }
@@ -24,19 +23,37 @@ function flatten(sections: BoardSection[]): Line[] {
   return lines;
 }
 
-function paginate(lines: Line[]): Line[][] {
-  const pages: Line[][] = [];
-  let page: Line[] = [];
-  for (const line of lines) {
-    // Keep a section header with at least one of its rows.
-    if (page.length >= ROWS_PER_PAGE || (line.kind === "section" && page.length >= ROWS_PER_PAGE - 1)) {
-      pages.push(page);
-      page = [];
-    }
-    page.push(line);
-  }
-  if (page.length) pages.push(page);
-  return pages.length ? pages : [[]];
+/**
+ * Wall displays can hold more rows than fit. Rather than paging — which hides whole
+ * priorities for ten seconds at a time — the board keeps every row in one ranked list and
+ * creeps down it, pausing at each end.
+ */
+function useCreepScroll(dependency: unknown) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    let direction = 1;
+    let hold = 40;
+    const timer = setInterval(() => {
+      const slack = el.scrollHeight - el.clientHeight;
+      if (slack <= 4) return;
+      if (hold > 0) {
+        hold -= 1;
+        return;
+      }
+      el.scrollTop += direction;
+      if (el.scrollTop >= slack - 1 || el.scrollTop <= 0) {
+        direction *= -1;
+        hold = 40;
+      }
+    }, SCROLL_STEP_MS);
+    return () => clearInterval(timer);
+  }, [dependency]);
+
+  return ref;
 }
 
 // Grouping and filters live in the URL (?group=technician&tech=…&property=…) so a
@@ -70,25 +87,11 @@ export default function DepartureBoard({ showControls = true }: { showControls?:
   const today = todayStr();
   const [filters, setFilters] = useBoardFilters();
   const sections = useMemo(() => (data ? buildBoard(data, today, filters) : []), [data, today, filters]);
-  const pages = useMemo(() => paginate(flatten(sections)), [sections]);
-  const [page, setPage] = useState(0);
-
-  useEffect(() => {
-    if (pages.length <= 1) {
-      setPage(0);
-      return;
-    }
-    const timer = setInterval(() => setPage((p) => (p + 1) % pages.length), PAGE_MS);
-    return () => clearInterval(timer);
-  }, [pages.length]);
-
-  useEffect(() => {
-    if (page >= pages.length) setPage(0);
-  }, [pages.length, page]);
+  const lines = useMemo(() => flatten(sections), [sections]);
+  const bodyRef = useCreepScroll(`${filters.group}-${lines.length}`);
 
   if (!data) return null;
 
-  const lines = pages[page] ?? [];
   const totalRows = sections.reduce((n, s) => n + s.rows.length, 0);
   const overdueTotal = sections.reduce((n, s) => n + s.rows.filter((i) => isOverdue(i, today)).length, 0);
 
@@ -150,7 +153,7 @@ export default function DepartureBoard({ showControls = true }: { showControls?:
         </div>
       )}
 
-      <div className="board-body" key={`${page}-${filters.group}`}>
+      <div className="board-body" ref={bodyRef} key={filters.group}>
         {lines.map((line, idx) => {
           if (line.kind === "section") {
             const s = line.section;
@@ -222,9 +225,13 @@ export default function DepartureBoard({ showControls = true }: { showControls?:
               </span>
               <span className="board-col-issue">
                 {issue.title.toUpperCase()}
+                {issue.category && <span className="board-cat">{categoryShort(issue.category).toUpperCase()}</span>}
                 {issue.workOrderNumber && <span className="board-wo">{issue.workOrderNumber}</span>}
               </span>
-              <span className="board-col-loc">{issue.property.name.toUpperCase()}</span>
+              <span className="board-col-loc">
+                {issue.property.name.toUpperCase()}
+                {issue.roomName && <span className="board-room">{issue.roomName.toUpperCase()}</span>}
+              </span>
               <span className="board-col-pri">
                 <span className={`dash-tag dash-tag-${issue.priority}`}>{PRIORITY_SHORT_LABELS[issue.priority].toUpperCase()}</span>
               </span>
@@ -237,16 +244,6 @@ export default function DepartureBoard({ showControls = true }: { showControls?:
         })}
       </div>
 
-      {pages.length > 1 && (
-        <div className="board-pager">
-          {pages.map((_, i) => (
-            <span key={i} className={i === page ? "on" : ""} />
-          ))}
-          <span className="board-pager-label">
-            Page {page + 1} of {pages.length}
-          </span>
-        </div>
-      )}
     </div>
   );
 }

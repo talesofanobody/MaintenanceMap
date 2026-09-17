@@ -3,11 +3,26 @@ import { Link } from "react-router-dom";
 import { api, TechnicianInput } from "../api";
 import type { Technician } from "../types";
 import Contractors from "../components/Contractors";
-import { PRIORITY_SHORT_LABELS, WEEKDAYS } from "../types";
+import { CATEGORIES, PRIORITY_SHORT_LABELS, WEEKDAYS, categoryLabel, type Shift, type Week } from "../types";
 import { formatHours, initials, loadSummary, relativeDay, todayStr } from "../lib/capacity";
 
 const SWATCHES = ["#2563eb", "#0891b2", "#16a34a", "#ca8a04", "#ea580c", "#dc2626", "#9333ea", "#db2777", "#475569"];
-const DEFAULT_HOURS = [8, 8, 8, 8, 8, 0, 0];
+const DEFAULT_SHIFT: Shift = { start: "08:00", end: "16:00" };
+const DEFAULT_WEEK: Week = [DEFAULT_SHIFT, DEFAULT_SHIFT, DEFAULT_SHIFT, DEFAULT_SHIFT, DEFAULT_SHIFT, null, null];
+const PRESETS: { label: string; week: Week }[] = [
+  { label: "Mon–Fri 08:00–16:00", week: [DEFAULT_SHIFT, DEFAULT_SHIFT, DEFAULT_SHIFT, DEFAULT_SHIFT, DEFAULT_SHIFT, null, null] },
+  { label: "Mon–Sat 07:00–15:00", week: Array.from({ length: 7 }, (_, i) => (i < 6 ? { start: "07:00", end: "15:00" } : null)) },
+  { label: "Late 14:00–22:00", week: Array.from({ length: 7 }, (_, i) => (i < 5 ? { start: "14:00", end: "22:00" } : null)) },
+  { label: "Clear", week: [null, null, null, null, null, null, null] },
+];
+
+function shiftHours(shift: Shift | null): number {
+  if (!shift) return 0;
+  const [sh, sm] = shift.start.split(":").map(Number);
+  const [eh, em] = shift.end.split(":").map(Number);
+  const mins = eh * 60 + em - (sh * 60 + sm);
+  return mins > 0 ? Math.round((mins / 60) * 100) / 100 : 0;
+}
 
 interface FormState {
   name: string;
@@ -15,7 +30,8 @@ interface FormState {
   hourlyRate: string;
   phone: string;
   color: string;
-  weeklyHours: number[];
+  shifts: Week;
+  categories: string[];
   notes: string;
   active: boolean;
 }
@@ -27,7 +43,8 @@ function toForm(t?: Technician): FormState {
     hourlyRate: t?.hourlyRate != null ? String(t.hourlyRate) : "",
     phone: t?.phone ?? "",
     color: t?.color ?? SWATCHES[Math.floor(Math.random() * SWATCHES.length)],
-    weeklyHours: t?.weeklyHours ?? DEFAULT_HOURS,
+    shifts: t?.shifts ?? DEFAULT_WEEK,
+    categories: t?.categories ?? [],
     notes: t?.notes ?? "",
     active: t?.active ?? true,
   };
@@ -38,9 +55,19 @@ function TechnicianForm({ initial, onCancel, onSaved }: { initial?: Technician; 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function setHours(idx: number, value: string) {
-    const n = value === "" ? 0 : Math.max(0, Math.min(24, Number(value)));
-    setForm((f) => ({ ...f, weeklyHours: f.weeklyHours.map((h, i) => (i === idx ? n : h)) }));
+  function setShift(idx: number, part: "start" | "end", value: string) {
+    setForm((f) => ({
+      ...f,
+      shifts: f.shifts.map((shift, i) => (i === idx ? { ...(shift ?? DEFAULT_SHIFT), [part]: value } : shift)),
+    }));
+  }
+
+  function toggleDay(idx: number, on: boolean) {
+    setForm((f) => ({ ...f, shifts: f.shifts.map((shift, i) => (i === idx ? (on ? shift ?? DEFAULT_SHIFT : null) : shift)) }));
+  }
+
+  function toggleCategory(key: string) {
+    setForm((f) => ({ ...f, categories: f.categories.includes(key) ? f.categories.filter((c) => c !== key) : [...f.categories, key] }));
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -57,7 +84,8 @@ function TechnicianForm({ initial, onCancel, onSaved }: { initial?: Technician; 
       hourlyRate: form.hourlyRate === "" ? null : Number(form.hourlyRate),
       phone: form.phone.trim() || null,
       color: form.color,
-      weeklyHours: form.weeklyHours,
+      shifts: form.shifts,
+      categories: form.categories,
       notes: form.notes.trim() || null,
       active: form.active,
     };
@@ -72,7 +100,8 @@ function TechnicianForm({ initial, onCancel, onSaved }: { initial?: Technician; 
     }
   }
 
-  const weekTotal = form.weeklyHours.reduce((a, b) => a + b, 0);
+  const weekTotal = form.shifts.reduce((sum, shift) => sum + shiftHours(shift), 0);
+  const invalidDay = form.shifts.findIndex((shift) => shift !== null && shiftHours(shift) <= 0);
 
   return (
     <form className="card form technician-form" onSubmit={handleSubmit}>
@@ -126,29 +155,54 @@ function TechnicianForm({ initial, onCancel, onSaved }: { initial?: Technician; 
 
       <div className="field">
         <span className="field-label">
-          Working hours per day <span className="muted">— {formatHours(weekTotal)} a week</span>
+          Working week <span className="muted">— {formatHours(weekTotal)} across {form.shifts.filter(Boolean).length} day{form.shifts.filter(Boolean).length === 1 ? "" : "s"}</span>
         </span>
-        <div className="hours-grid">
-          {WEEKDAYS.map((d, i) => (
-            <label key={d} className="hours-cell">
-              <span>{d}</span>
-              <input type="number" min={0} max={24} step={0.5} value={form.weeklyHours[i]} onChange={(e) => setHours(i, e.target.value)} />
-            </label>
+        <div className="shift-grid">
+          {WEEKDAYS.map((d, i) => {
+            const shift = form.shifts[i];
+            return (
+              <div key={d} className={`shift-row ${shift ? "" : "is-off"}`}>
+                <label className="shift-day">
+                  <input type="checkbox" checked={!!shift} onChange={(e) => toggleDay(i, e.target.checked)} aria-label={`${d} working`} />
+                  <span>{d}</span>
+                </label>
+                {shift ? (
+                  <>
+                    <input type="time" value={shift.start} onChange={(e) => setShift(i, "start", e.target.value)} aria-label={`${d} start time`} />
+                    <span className="shift-dash">to</span>
+                    <input type="time" value={shift.end} onChange={(e) => setShift(i, "end", e.target.value)} aria-label={`${d} end time`} />
+                    <span className="shift-hours">{shiftHours(shift) > 0 ? formatHours(shiftHours(shift)) : "—"}</span>
+                  </>
+                ) : (
+                  <span className="muted small shift-off">Not working</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {invalidDay >= 0 && <span className="hint hint-warn">{WEEKDAYS[invalidDay]} finishes before it starts.</span>}
+        <div className="chip-group">
+          {PRESETS.map((preset) => (
+            <button type="button" key={preset.label} className="chip" onClick={() => setForm({ ...form, shifts: preset.week })}>
+              {preset.label}
+            </button>
           ))}
         </div>
-        <div className="chip-group">
-          <button type="button" className="chip" onClick={() => setForm({ ...form, weeklyHours: [8, 8, 8, 8, 8, 0, 0] })}>
-            Mon–Fri, 8h
-          </button>
-          <button type="button" className="chip" onClick={() => setForm({ ...form, weeklyHours: [8, 8, 8, 8, 8, 4, 0] })}>
-            Mon–Sat
-          </button>
-          <button type="button" className="chip" onClick={() => setForm({ ...form, weeklyHours: [4, 4, 4, 4, 4, 0, 0] })}>
-            Part-time
-          </button>
-          <button type="button" className="chip" onClick={() => setForm({ ...form, weeklyHours: [0, 0, 0, 0, 0, 0, 0] })}>
-            Clear
-          </button>
+      </div>
+
+      <div className="field">
+        <span className="field-label">
+          Covers <span className="muted">— used to suggest who should take an issue</span>
+        </span>
+        <div className="tag-picker">
+          {CATEGORIES.map((c) => {
+            const on = form.categories.includes(c.key);
+            return (
+              <button type="button" key={c.key} className={`tag-chip ${on ? "on" : ""}`} aria-pressed={on} onClick={() => toggleCategory(c.key)}>
+                {c.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -214,6 +268,9 @@ export default function Technicians() {
           <a className="btn btn-ghost" href={api.exportCostsUrl()} download title="Every cost line across all properties">
             Export costs
           </a>
+          <Link className="btn btn-secondary" to="/technicians/rota">
+            Week schedule
+          </Link>
           {!adding && (
             <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
               + Add technician
@@ -330,14 +387,35 @@ export default function Technicians() {
                   </div>
                 </div>
 
-                <div className="week-strip" aria-label="Weekly hours">
-                  {WEEKDAYS.map((d, i) => (
-                    <span key={d} className={`week-day ${t.weeklyHours[i] ? "" : "off"}`}>
-                      <em>{d}</em>
-                      {t.weeklyHours[i] ? formatHours(t.weeklyHours[i]) : "—"}
-                    </span>
-                  ))}
+                <div className="week-strip" aria-label="Working week">
+                  {WEEKDAYS.map((d, i) => {
+                    const shift = t.shifts?.[i] ?? null;
+                    return (
+                      <span key={d} className={`week-day ${shift ? "" : "off"}`}>
+                        <em>{d}</em>
+                        {shift ? (
+                          <>
+                            <b>{shift.start}</b>
+                            <b>{shift.end}</b>
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </span>
+                    );
+                  })}
                 </div>
+
+                {t.categories?.length > 0 && (
+                  <div className="covers-line">
+                    <span className="muted small">Covers</span>
+                    {t.categories.map((key) => (
+                      <span key={key} className="tag-chip static">
+                        {categoryLabel(key)}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {t.assignments.length > 0 && (
                   <ul className="assignment-list">

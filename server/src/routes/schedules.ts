@@ -4,6 +4,7 @@ import { ADMIN_ONLY } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { parseOptionalDay, parseOptionalHours, parseOptionalString, ValidationError } from "../lib/validation";
 import { cadenceText, createOccurrence, serializeSchedule, UNITS } from "../lib/schedules";
+import { parseCategory } from "../lib/taxonomy";
 
 export const schedulesRouter = Router();
 
@@ -53,6 +54,10 @@ async function parseBody(body: any, partial: boolean) {
       data.technicianId = tech.id;
     }
   }
+  const category = parseCategory(body.category);
+  if (category !== undefined) data.category = category;
+  const roomName = parseOptionalString(body.roomName, "roomName", 120);
+  if (roomName !== undefined) data.roomName = roomName;
   const est = parseOptionalHours(body.estimatedHours, "estimatedHours");
   if (est !== undefined) data.estimatedHours = est;
   if (body.lat !== undefined || body.lng !== undefined) {

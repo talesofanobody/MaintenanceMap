@@ -1,5 +1,6 @@
 import { prisma } from "../db";
 import { dayFrom, daysBetween } from "./validation";
+import { parseWeek, weekToHours } from "./shifts";
 
 const SEVERITY: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 /** Planning figure for a job with no estimate, so a day can still be filled sensibly. */
@@ -37,13 +38,7 @@ export function metresBetween(a: { lat: number; lng: number }, b: { lat: number;
 }
 
 function capacityFor(weeklyHours: string, day: string): number {
-  let hours: number[] = [8, 8, 8, 8, 8, 0, 0];
-  try {
-    const parsed = JSON.parse(weeklyHours);
-    if (Array.isArray(parsed) && parsed.length === 7) hours = parsed.map(Number);
-  } catch {
-    /* default week */
-  }
+  const hours = weekToHours(parseWeek(weeklyHours));
   const [y, m, d] = day.split("-").map(Number);
   // Monday-first index, matching how work hours are entered.
   const idx = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
