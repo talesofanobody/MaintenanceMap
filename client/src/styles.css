@@ -3169,6 +3169,9 @@ li.unread .bell-item:hover {
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    /* Fade the right edge so it's clear the nav scrolls to more items. */
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
   }
 
   .app-nav::-webkit-scrollbar {
