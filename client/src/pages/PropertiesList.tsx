@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { isNetworkError, readCache, writeCache } from "../offline/cache";
 import type { Property } from "../types";
 import { useCurrentUser } from "../auth/AuthContext";
 
@@ -18,8 +19,21 @@ export default function PropertiesList() {
     setLoading(true);
     api
       .listProperties()
-      .then(setProperties)
-      .catch((e) => setError(e.message))
+      .then((list) => {
+        setProperties(list);
+        setError(null);
+        writeCache("properties", list);
+      })
+      .catch((e) => {
+        // With no connection, show the list as it was last seen rather than an error.
+        const cached = isNetworkError(e) ? readCache<Property[]>("properties") : null;
+        if (cached) {
+          setProperties(cached.value);
+          setError(null);
+        } else {
+          setError(e.message);
+        }
+      })
       .finally(() => setLoading(false));
   }
 

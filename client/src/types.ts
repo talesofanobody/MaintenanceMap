@@ -224,6 +224,13 @@ export interface CalendarFeed {
   path: string;
 }
 
+export interface BackupFile {
+  name: string;
+  bytes: number;
+  createdAt: string;
+  includesPhotos: boolean;
+}
+
 export interface TechnicianRef {
   id: string;
   name: string;

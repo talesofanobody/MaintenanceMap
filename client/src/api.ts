@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppNotification, AppSettings, AppUser, CalendarFeed, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -113,6 +113,11 @@ export const api = {
 
   getCalendarFeed: () => request<CalendarFeed>("/calendar/feed"),
   regenerateCalendarFeed: () => request<CalendarFeed>("/calendar/feed/regenerate", { method: "POST" }),
+
+  listBackups: () => request<{ directory: string; backups: BackupFile[] }>("/backups"),
+  runBackup: () => request<BackupFile>("/backups/run", { method: "POST" }),
+  deleteBackup: (name: string) => request<void>(`/backups/${encodeURIComponent(name)}`, { method: "DELETE" }),
+  backupUrl: (name: string) => `${BASE}/backups/${encodeURIComponent(name)}`,
 
   listProperties: () => request<Property[]>("/properties"),
   createProperty: (data: { name: string; address?: string; notes?: string }) =>

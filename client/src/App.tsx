@@ -13,6 +13,7 @@ import Activity from "./pages/Activity";
 import DashboardLayout from "./dashboard/DashboardLayout";
 import NotificationBell from "./notifications/NotificationBell";
 import ActiveTimer from "./time/ActiveTimer";
+import OfflineBar from "./offline/OfflineBar";
 import MyDay from "./pages/MyDay";
 import Settings from "./pages/Settings";
 import Schedules from "./pages/Schedules";
@@ -74,6 +75,7 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
           </button>
         </div>
       </header>
+      <OfflineBar />
       <main className="app-main">
         <Outlet />
       </main>

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useSettings } from "../settings/SettingsContext";
+import Backups from "../components/Backups";
 import { PRIORITY_SHORT_LABELS, type AppSettings, type Priority } from "../types";
 
 const ORDER: Priority[] = ["urgent", "high", "medium", "low"];
@@ -141,6 +142,10 @@ export default function Settings() {
           {savedAt && !dirty && <span className="muted small">Saved.</span>}
         </div>
       </form>
+
+      <div className="settings-form" style={{ marginTop: 20 }}>
+        <Backups />
+      </div>
     </div>
   );
 }

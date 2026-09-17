@@ -17,6 +17,8 @@ import { contractorsRouter } from "./routes/contractors";
 import { plannerRouter } from "./routes/planner";
 import { calendarRouter } from "./routes/calendar";
 import { insightsRouter } from "./routes/insights";
+import { backupsRouter } from "./routes/backups";
+import { startBackupSchedule } from "./lib/backup";
 import { ADMIN_ONLY, attachUser, requireAuth } from "./middleware/requireAuth";
 import { usersRouter } from "./routes/users";
 import { activityRouter } from "./routes/activity";
@@ -77,6 +79,7 @@ app.use("/api/schedules", requireAuth, schedulesRouter);
 app.use("/api/contractors", requireAuth, contractorsRouter);
 app.use("/api/planner", requireAuth, plannerRouter);
 app.use("/api/insights", requireAuth, insightsRouter);
+app.use("/api/backups", requireAuth, backupsRouter);
 // Not behind requireAuth: the secret token in the feed URL is what authorises it, so a
 // calendar app can subscribe. The router guards its own session-only endpoints.
 app.use("/api/calendar", calendarRouter);
@@ -108,6 +111,9 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 // Turns due/start dates into reminders every 15 minutes.
 startScheduler();
+
+// One database + photos archive a day, kept for a fortnight.
+startBackupSchedule();
 
 purgeExpiredSessions();
 setInterval(purgeExpiredSessions, 6 * 60 * 60 * 1000).unref();

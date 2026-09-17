@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import { api } from "../api";
+import { clearCache, isNetworkError, readCache, writeCache } from "../offline/cache";
 import type { AuthUser } from "../types";
 
 type AuthState =
@@ -7,6 +8,8 @@ type AuthState =
   | { status: "needs-setup" }
   | { status: "anonymous" }
   | { status: "authenticated"; user: AuthUser };
+
+const USER_CACHE = "auth.user";
 
 interface AuthContextValue {
   state: AuthState;
@@ -22,32 +25,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: "loading" });
 
   const refresh = useCallback(async () => {
-    const status = await api.getAuthStatus();
-    if (status.needsSetup) {
-      setState({ status: "needs-setup" });
-    } else if (status.authenticated && status.user) {
-      setState({ status: "authenticated", user: status.user });
-    } else {
-      setState({ status: "anonymous" });
+    try {
+      const status = await api.getAuthStatus();
+      if (status.needsSetup) {
+        setState({ status: "needs-setup" });
+      } else if (status.authenticated && status.user) {
+        // Remembered so a reload with no connection doesn't look like being signed out.
+        writeCache(USER_CACHE, status.user);
+        setState({ status: "authenticated", user: status.user });
+      } else {
+        localStorage.removeItem("mm.cache." + USER_CACHE);
+        setState({ status: "anonymous" });
+      }
+    } catch (err) {
+      const cached = isNetworkError(err) ? readCache<AuthUser>(USER_CACHE) : null;
+      if (cached) {
+        // Offline: carry on as whoever was last signed in. The session cookie is still
+        // in the browser, so the first request after reconnecting settles it properly.
+        setState({ status: "authenticated", user: cached.value });
+      } else {
+        setState({ status: "anonymous" });
+      }
     }
   }, []);
 
   useEffect(() => {
-    refresh().catch(() => setState({ status: "anonymous" }));
+    refresh();
   }, [refresh]);
 
   const login = useCallback(async (username: string, password: string) => {
     const result = await api.login(username, password);
+    writeCache(USER_CACHE, result.user!);
     setState({ status: "authenticated", user: result.user! });
   }, []);
 
   const setup = useCallback(async (username: string, password: string) => {
     const result = await api.setupAccount(username, password);
+    writeCache(USER_CACHE, result.user!);
     setState({ status: "authenticated", user: result.user! });
   }, []);
 
   const logout = useCallback(async () => {
     await api.logout();
+    // Signing out clears the offline copies too — someone else may use this device.
+    clearCache();
     setState({ status: "anonymous" });
   }, []);
 

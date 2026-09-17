@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MapContainer, Marker, Polygon, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { api } from "../api";
+import { isNetworkError, readCache, writeCache } from "../offline/cache";
 import type { Issue, Priority, Property, Status } from "../types";
 import { PRIORITIES, PRIORITY_LABELS, STATUSES, STATUS_LABELS } from "../types";
 import { boundsOf, centroidOf, geoJsonToLatLngs, latLngsToGeoJson, WORLD_RING } from "../lib/geo";
@@ -82,14 +83,30 @@ export default function PropertyWorkspace() {
   const [hasLocated, setHasLocated] = useState(false);
   const [guideDismissed, setGuideDismissed] = useState(true);
 
+  const [fromCache, setFromCache] = useState(false);
+
   const load = useCallback(() => {
     if (!id) return;
     Promise.all([api.getProperty(id), api.listIssues(id)])
       .then(([p, i]) => {
         setProperty(p);
         setIssues(i);
+        setFromCache(false);
+        setError(null);
+        // Keep the last good copy so this property still opens with no connection.
+        writeCache(`property.${id}`, { property: p, issues: i });
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => {
+        const cached = isNetworkError(e) ? readCache<{ property: Property; issues: Issue[] }>(`property.${id}`) : null;
+        if (cached) {
+          setProperty(cached.value.property);
+          setIssues(cached.value.issues);
+          setFromCache(true);
+          setError(null);
+        } else {
+          setError(e.message);
+        }
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -260,6 +277,11 @@ export default function PropertyWorkspace() {
             ← <span className="hide-mobile">Properties</span>
           </Link>
           <h2 title={property.name}>{property.name}</h2>
+          {fromCache && (
+            <span className="badge badge-warn" title="Shown from the copy saved on this device. New issues you log will be sent when you're back online.">
+              Offline copy
+            </span>
+          )}
           {guideDismissed && canManage && (
             <button type="button" className="btn btn-ghost btn-small hide-mobile" onClick={showGuide} title="Show the getting-started guide">
               ? Guide

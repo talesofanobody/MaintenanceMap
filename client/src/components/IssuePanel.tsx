@@ -3,6 +3,7 @@ import { api } from "../api";
 import TimeLog from "../time/TimeLog";
 import Checklist from "./Checklist";
 import CostPanel from "./CostPanel";
+import { offlineSupported, queueIssue } from "../offline/queue";
 import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
 import { capacityOn, committedOn, defaultDueDate, formatHours, relativeDay, slaProgress, todayStr } from "../lib/capacity";
@@ -314,6 +315,26 @@ export default function IssuePanel({
             }
           : full;
         await api.updateIssue(issue.id, payload as Partial<Issue>);
+      } else if (!navigator.onLine && offlineSupported()) {
+        // No connection: keep the issue (and its photos) on the device and send it later.
+        await queueIssue({
+          propertyId,
+          payload: {
+            title: full.title,
+            description: full.description ?? null,
+            actionNeeded: full.actionNeeded ?? null,
+            priority,
+            status,
+            comments: full.comments ?? null,
+            lat: finalLat,
+            lng: finalLng,
+            technicianId: technicianId || null,
+            estimatedHours: estimate,
+            scheduledFor: scheduledFor || null,
+            dueDate: dueDate || null,
+          },
+          photos: staged.map((s) => ({ name: s.file.name, type: s.file.type, blob: s.file })),
+        });
       } else {
         const created = await api.createIssue({ propertyId, ...full });
         for (const s of staged) {
@@ -323,7 +344,37 @@ export default function IssuePanel({
       onSaved();
       onClose();
     } catch (err: any) {
-      setError(err.message);
+      // A create that failed because the network dropped mid-save is still worth keeping.
+      const networkDown = !isEdit && offlineSupported() && (!navigator.onLine || /fetch|network|load failed/i.test(err?.message ?? ""));
+      if (networkDown) {
+        try {
+          await queueIssue({
+            propertyId,
+            payload: {
+              title: title.trim(),
+              description: description.trim() || null,
+              actionNeeded: actionNeeded.trim() || null,
+              priority,
+              status,
+              comments: comments.trim() || null,
+              lat: finalLat,
+              lng: finalLng,
+              technicianId: technicianId || null,
+              estimatedHours: estimate,
+              scheduledFor: scheduledFor || null,
+              dueDate: dueDate || null,
+            },
+            photos: staged.map((s) => ({ name: s.file.name, type: s.file.type, blob: s.file })),
+          });
+          onSaved();
+          onClose();
+          return;
+        } catch {
+          setError("Couldn't reach the server and couldn't save this on the device either.");
+        }
+      } else {
+        setError(err.message);
+      }
     } finally {
       setSaving(false);
     }

@@ -10,6 +10,8 @@ server/prisma/dev.db
 server/prisma/dev.db-journal
 server/uploads/*
 !server/uploads/.gitkeep
+server/backups/
+server/prisma/shadow.db
 
 # client
 client/dist/
