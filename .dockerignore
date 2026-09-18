@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/build
+.git
+.gitignore
+*.log
+
+# Never bake local data into an image.
+.env
+**/.env
+**/.env.local
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/prisma/shadow.db
+server/uploads/*
+server/backups

@@ -1,7 +1,17 @@
+import fs from "fs";
 import path from "path";
 import multer from "multer";
 
-export const UPLOADS_DIR = path.join(__dirname, "..", "..", "uploads");
+/**
+ * Where uploaded photos are written. Configurable so a container can point it at a
+ * mounted volume; otherwise it sits next to the source as it always has.
+ */
+export const UPLOADS_DIR = process.env.UPLOADS_DIR
+  ? path.resolve(process.env.UPLOADS_DIR)
+  : path.join(__dirname, "..", "..", "uploads");
+
+// A fresh volume starts empty, and sharp won't create the directory for us.
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/heic", "image/heif", "image/webp"]);
 // iPhone HEIC files often arrive as application/octet-stream, so also accept by extension.

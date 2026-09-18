@@ -117,6 +117,113 @@ are on you as the deployer:
 - **Keep the backups folder off the public web root**, and copy the archives somewhere else — they
   contain the whole database and every photo.
 
+## Self-hosting on a box at home
+
+This is the setup the app is built for: one machine you own, one container, one folder holding
+everything that matters. No monthly bill, no cloud database, no storage bucket.
+
+### What you need
+
+A mini PC with **4 GB RAM and a 128 GB SSD** is more than enough — an N100-class machine is around
+£120–150 and idles at 6–10 W, so it costs a few pounds a year to leave on. A Raspberry Pi 5 works
+too. Photo processing is the only demanding part, and 4 GB handles a 30 MB iPhone photo without
+complaint.
+
+Plug it in by ethernet if you can. Wi-Fi works, but this is a machine nobody looks at, and a
+dropped connection nobody notices is worse than a cable.
+
+### Set it up
+
+Install a server OS (Ubuntu Server LTS or Debian, no desktop needed), then Docker:
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER   # log out and back in
+```
+
+Then the app:
+
+```bash
+git clone https://github.com/talesofanobody/MaintenanceMap.git
+cd MaintenanceMap
+cp .env.example .env
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # paste into SESSION_SECRET
+docker compose up -d --build
+```
+
+The first build takes a few minutes. After that it's running on port 8080, and it will start itself
+again after a reboot or a crash.
+
+Open `http://<the machine's address>:8080` from any device on your network and create the first
+account — that one becomes the admin.
+
+### Making it reachable from outside
+
+Technicians on site and guests scanning a QR code are not on your home Wi-Fi, so the app needs a
+public address. **Don't forward ports on your router** for this — it puts your home IP in the QR
+codes and exposes the machine directly.
+
+**Cloudflare Tunnel** is the better answer and is free. It makes an outbound connection from the
+mini PC to Cloudflare, so nothing has to be opened on your router, your home IP stays private, and
+HTTPS is handled for you. It needs a domain on a (free) Cloudflare account — about £10 a year.
+
+1. Add your domain to Cloudflare, then go to **Zero Trust → Networks → Tunnels** and create one.
+2. Point its public hostname (say `maintenance.yourdomain.com`) at `http://app:4000`.
+3. Copy the tunnel token into `CLOUDFLARE_TUNNEL_TOKEN` in `.env`.
+4. `docker compose --profile tunnel up -d`
+
+**Tailscale Funnel** does the same job with no domain at all — you get a public
+`something.ts.net` HTTPS address. It's uglier to read, which matters not at all inside a QR code.
+
+**Or keep it on your own network.** If every property is somewhere your Wi-Fi reaches, skip both
+and use the local address. Guest reporting still works for anyone on that network.
+
+Either way, print your QR codes *after* the public address is working: the codes contain whatever
+address the browser was showing when you made them.
+
+### Get the backups off the machine
+
+The app writes a nightly archive of the database and every photo to `/data/backups`, and keeps a
+fortnight. **That is on the same disk as the data it's protecting** — it survives a mistake, not a
+dead SSD or a stolen box.
+
+Copy them somewhere else. Cheapest reliable option, run from another machine:
+
+```bash
+# On the mini PC, find where the volume actually lives:
+docker volume inspect $(docker volume ls -q --filter name=maintenancemap) --format '{{ .Mountpoint }}'
+
+# Then from another machine, nightly via its crontab:
+rsync -az --delete user@minipc:/var/lib/docker/volumes/<that volume>/_data/backups/ ~/mm-backups/
+```
+
+Or point `rclone` at any cloud storage, or write to a USB drive plugged into the mini PC — anything
+that means the archives exist in two places. Admins can also download the latest archive from
+**Settings** at any time.
+
+### Keeping it running
+
+- **After a power cut**, Docker restarts the container by itself. Set *Restore on AC Power Loss* to
+  **On** in the mini PC's BIOS so the machine itself comes back too — this is the step people forget.
+- **To update**: `git pull && docker compose up -d --build`. Database migrations run on start, so
+  there's nothing else to do. Take a backup first.
+- **To see what it's doing**: `docker compose logs -f app`.
+- **To back up by hand right now**: **Settings → Download backup**, or
+  `docker compose exec app sh -c "ls /data/backups"`.
+
+### Where everything lives
+
+Inside the container, one volume holds the lot:
+
+| Path | What |
+|---|---|
+| `/data/maintenancemap.db` | the SQLite database |
+| `/data/uploads` | every photo, full-size and thumbnail |
+| `/data/backups` | the nightly archives |
+
+Nothing is written anywhere else, so that volume *is* your install. Copy it and you've copied
+everything.
+
 ## Using the app
 
 ### Sign in and accounts

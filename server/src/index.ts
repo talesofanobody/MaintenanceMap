@@ -1,4 +1,6 @@
 import express from "express";
+import path from "path";
+import fs from "fs";
 import cors from "cors";
 import session from "express-session";
 import { propertiesRouter } from "./routes/properties";
@@ -101,6 +103,39 @@ app.use("/api/technicians", requireAuth, techniciansRouter);
 app.use("/api/dashboard", requireAuth, dashboardRouter);
 app.use("/api/export", requireAuth, ADMIN_ONLY, exportRouter);
 app.use("/api/guest-reports", requireAuth, ADMIN_ONLY, guestReportsRouter);
+
+/**
+ * Serve the built client from this same process when CLIENT_DIST points at it. That
+ * puts the app and its API on one origin, which is what the session cookie wants and
+ * what a self-hosted install gets by default — no CORS, no second service to run.
+ */
+const CLIENT_DIST = process.env.CLIENT_DIST ? path.resolve(process.env.CLIENT_DIST) : null;
+if (CLIENT_DIST && fs.existsSync(path.join(CLIENT_DIST, "index.html"))) {
+  app.use(
+    express.static(CLIENT_DIST, {
+      index: false,
+      setHeaders(res, filePath) {
+        const name = path.basename(filePath);
+        // Vite fingerprints everything under assets/, so those can be cached forever.
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        } else if (name === "sw.js" || name === "index.html") {
+          // A cached service worker or shell would pin people to an old release.
+          res.setHeader("Cache-Control", "no-cache");
+        }
+      },
+    })
+  );
+
+  // Everything else is the app shell. Routing is hash-based, so this mostly catches
+  // people typing the bare address, but an unknown /api path must still 404 as JSON.
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/")) return next();
+    res.setHeader("Cache-Control", "no-cache");
+    res.sendFile(path.join(CLIENT_DIST, "index.html"));
+  });
+  console.log(`Serving the client from ${CLIENT_DIST}`);
+}
 
 // Issues created before due dates existed get one from their priority's turnaround,
 // counted from the day they were logged.

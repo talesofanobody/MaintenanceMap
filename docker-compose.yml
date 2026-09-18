@@ -1,0 +1,33 @@
+services:
+  app:
+    build: .
+    image: maintenancemap
+    restart: unless-stopped
+    # Only reachable from this machine. The tunnel below is what puts it on the
+    # internet; drop the "127.0.0.1:" prefix only if you mean to expose the port
+    # to your whole home network.
+    ports:
+      - "127.0.0.1:8080:4000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      # Behind Cloudflare Tunnel (or any reverse proxy), so read the forwarded
+      # protocol and client IP rather than the proxy's.
+      TRUST_PROXY: "1"
+    volumes:
+      - maintenancemap-data:/data
+
+  # Puts the app on the internet over HTTPS without opening a port on your router.
+  # Off unless you ask for it: `docker compose --profile tunnel up -d`.
+  # In the Cloudflare dashboard, point the tunnel's public hostname at http://app:4000.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
+
+volumes:
+  maintenancemap-data:

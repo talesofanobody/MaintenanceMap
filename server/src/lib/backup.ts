@@ -4,11 +4,11 @@ import os from "os";
 import path from "path";
 import { promisify } from "util";
 import { prisma } from "../db";
+import { UPLOADS_DIR } from "./upload";
 
 const run = promisify(execFile);
 
 export const BACKUP_DIR = process.env.BACKUP_DIR ? path.resolve(process.env.BACKUP_DIR) : path.resolve(process.cwd(), "backups");
-const UPLOADS_DIR = process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.resolve(process.cwd(), "uploads");
 /** How many backups to keep; older ones are deleted after each successful run. */
 const KEEP = Number(process.env.BACKUP_KEEP) > 0 ? Number(process.env.BACKUP_KEEP) : 14;
 
