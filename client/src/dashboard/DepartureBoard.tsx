@@ -5,8 +5,7 @@ import { formatHours, initials, todayStr } from "../lib/capacity";
 import { activeIssueIds, buildBoard, dueCell, isOverdue, startCell, statusBoardLabel, type BoardFilters, type BoardSection, type GroupMode } from "./derive";
 import { useDashboard } from "./useDashboardData";
 import { useSettings } from "../settings/SettingsContext";
-
-const SCROLL_STEP_MS = 60;
+import { useCreepScroll } from "./useCreepScroll";
 
 type Line =
   | { kind: "section"; section: BoardSection }
@@ -21,39 +20,6 @@ function flatten(sections: BoardSection[]): Line[] {
     for (const issue of section.rows) lines.push({ kind: "row", section, issue });
   }
   return lines;
-}
-
-/**
- * Wall displays can hold more rows than fit. Rather than paging — which hides whole
- * priorities for ten seconds at a time — the board keeps every row in one ranked list and
- * creeps down it, pausing at each end.
- */
-function useCreepScroll(dependency: unknown) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.scrollTop = 0;
-    let direction = 1;
-    let hold = 40;
-    const timer = setInterval(() => {
-      const slack = el.scrollHeight - el.clientHeight;
-      if (slack <= 4) return;
-      if (hold > 0) {
-        hold -= 1;
-        return;
-      }
-      el.scrollTop += direction;
-      if (el.scrollTop >= slack - 1 || el.scrollTop <= 0) {
-        direction *= -1;
-        hold = 40;
-      }
-    }, SCROLL_STEP_MS);
-    return () => clearInterval(timer);
-  }, [dependency]);
-
-  return ref;
 }
 
 // Grouping and filters live in the URL (?group=technician&tech=…&property=…) so a

@@ -9,6 +9,7 @@ const TITLES: Record<string, string> = {
   "/dashboard": "TV mode",
   "/dashboard/map": "Live map",
   "/dashboard/board": "Work board",
+  "/dashboard/tickets": "Ticket board",
   "/dashboard/summary": "Summary",
 };
 
@@ -61,6 +62,7 @@ export default function DashboardLayout() {
             </NavLink>
             <NavLink to="/dashboard/map">Map</NavLink>
             <NavLink to="/dashboard/board">Board</NavLink>
+            <NavLink to="/dashboard/tickets">Tickets</NavLink>
             <NavLink to="/dashboard/summary">Summary</NavLink>
           </nav>
           <div className="dash-bar-right">

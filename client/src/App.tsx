@@ -23,6 +23,7 @@ import Reports from "./pages/Reports";
 import { SettingsProvider } from "./settings/SettingsContext";
 import MapDashboard from "./dashboard/MapDashboard";
 import DepartureBoard from "./dashboard/DepartureBoard";
+import TicketBoard from "./dashboard/TicketBoard";
 import SummaryBoard from "./dashboard/SummaryBoard";
 import TvView from "./dashboard/TvView";
 import GuestReport, { parseIntakeHash } from "./pages/GuestReport";
@@ -123,6 +124,7 @@ function DashboardRoutes() {
       <Route index element={<TvView />} />
       <Route path="map" element={<MapDashboard />} />
       <Route path="board" element={<DepartureBoard />} />
+      <Route path="tickets" element={<TicketBoard />} />
       <Route path="summary" element={<SummaryBoard />} />
     </Route>
   );

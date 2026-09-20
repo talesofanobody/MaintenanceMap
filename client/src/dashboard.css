@@ -1508,3 +1508,352 @@
     display: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Ticket board — a kitchen-display screen for maintenance. Read from a doorway:
+   big countdowns, colour that means one thing, and nothing that needs squinting.
+   --------------------------------------------------------------------------- */
+
+.kds {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  min-height: 0;
+}
+
+.kds-allclear {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--d-muted);
+}
+
+.kds-allclear h2 {
+  margin: 0 0 6px;
+  font-size: 44px;
+  color: var(--d-green);
+}
+
+.kds-summary {
+  display: flex;
+  gap: 26px;
+  align-items: baseline;
+  flex: none;
+}
+
+.kds-tally {
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--d-muted);
+}
+
+.kds-tally strong {
+  font-family: var(--d-font-mono);
+  font-size: 30px;
+  color: var(--d-text);
+  margin-right: 8px;
+}
+
+.kds-tally.is-late strong {
+  color: var(--d-red);
+}
+
+.kds-tally.is-critical strong {
+  color: var(--d-orange);
+}
+
+.kds-lanes {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.kds-lane {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--d-surface);
+  border: 1px solid var(--d-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.kds-lane.has-late {
+  border-color: var(--d-red);
+}
+
+.kds-lane-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--d-surface-2);
+  border-bottom: 1px solid var(--d-border);
+}
+
+.kds-lane-head h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--d-text);
+}
+
+.kds-count {
+  font-family: var(--d-font-mono);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--d-muted);
+  margin-left: auto;
+}
+
+.kds-late-count {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #fff;
+  background: var(--d-red);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+/* The scrolling queue. Scrollbars are hidden: nobody is dragging one on a wall. */
+.kds-cards {
+  list-style: none;
+  margin: 0;
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: none;
+}
+
+.kds-cards::-webkit-scrollbar {
+  display: none;
+}
+
+.kds-clear {
+  text-align: center;
+  padding: 26px 0;
+  color: var(--d-green);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.kds-card {
+  --heat: var(--d-border);
+  background: var(--d-surface-2);
+  border: 1px solid var(--d-border);
+  border-left: 7px solid var(--heat);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 5px;
+}
+
+.kds-card.heat-ok {
+  --heat: var(--d-green);
+}
+
+.kds-card.heat-soon {
+  --heat: var(--d-yellow);
+}
+
+.kds-card.heat-critical {
+  --heat: var(--d-orange);
+  background: #2a1d10;
+  border-color: var(--d-orange);
+}
+
+/* Late cards are the only thing on the board that moves, so movement means one thing. */
+.kds-card.heat-late {
+  --heat: var(--d-red);
+  background: #2c1418;
+  border-color: var(--d-red);
+  animation: kds-alarm 1.8s ease-in-out infinite;
+}
+
+@keyframes kds-alarm {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.28); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kds-card.heat-late {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.35);
+  }
+}
+
+.kds-card.is-emergency {
+  border-left-width: 11px;
+}
+
+.kds-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kds-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.kds-clock strong {
+  font-family: var(--d-font-mono);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--heat);
+  font-variant-numeric: tabular-nums;
+}
+
+.kds-clock span {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--d-muted);
+}
+
+.kds-pri {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--d-muted);
+  white-space: nowrap;
+}
+
+.kds-pri.p-critical,
+.kds-pri.p-urgent {
+  color: var(--d-red);
+}
+
+.kds-pri.p-high {
+  color: var(--d-orange);
+}
+
+.kds-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.22;
+  color: var(--d-text);
+  /* Two lines, then clipped — a wall display is not the place to read an essay. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kds-where {
+  margin: 0;
+  font-size: 14px;
+  color: var(--d-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kds-where strong {
+  color: var(--d-cyan);
+}
+
+.kds-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 1px;
+}
+
+.kds-cat {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--d-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.kds-crew {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.kds-crew em {
+  font-size: 12px;
+  color: var(--d-muted);
+  font-style: italic;
+}
+
+.kds-face {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+}
+
+/* Fewer, wider lanes on a smaller screen rather than four unreadable slivers. */
+@media (max-width: 1200px) {
+  .kds-lanes {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .kds-lanes {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Anything above a laptop is probably the actual television. */
+@media (min-width: 1800px) {
+  .kds-title {
+    font-size: 23px;
+  }
+
+  .kds-clock strong {
+    font-size: 42px;
+  }
+
+  .kds-lane-head h2 {
+    font-size: 22px;
+  }
+}
+
+/* The ticket board is itself a wall of cards, so the rail beside it would be the same
+   jobs twice. Hide it and give the lanes the whole screen — in TV mode too, which is
+   why this keys off the board being on screen rather than off the route. */
+.dash-body:has(.kds) {
+  grid-template-columns: 1fr;
+}
+
+.dash-body:has(.kds) .dash-rail {
+  display: none;
+}

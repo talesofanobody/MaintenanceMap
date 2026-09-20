@@ -3,25 +3,34 @@ import { useSearchParams } from "react-router-dom";
 import MapDashboard from "./MapDashboard";
 import DepartureBoard from "./DepartureBoard";
 import SummaryBoard from "./SummaryBoard";
+import TicketBoard, { ticketBoardSeconds } from "./TicketBoard";
+import { useDashboard } from "./useDashboardData";
+import { isOpenStatus } from "../types";
 
-type ViewKey = "map" | "board" | "summary";
+type ViewKey = "map" | "board" | "tickets" | "summary";
 
-const LABELS: Record<ViewKey, string> = { map: "Live map", board: "Work board", summary: "Summary" };
-const DEFAULT_SECONDS: Record<ViewKey, number> = { map: 45, board: 30, summary: 20 };
+const LABELS: Record<ViewKey, string> = { map: "Live map", board: "Work board", tickets: "Ticket board", summary: "Summary" };
+const DEFAULT_SECONDS: Record<ViewKey, number> = { map: 45, board: 30, tickets: 30, summary: 20 };
 
-// TV mode rotates through the boards. Tune it with ?map=60&board=30&summary=15,
+// TV mode rotates through the boards. Tune it with ?map=60&board=30&tickets=45,
 // or drop a view with ?summary=0. Space pauses, ←/→ skip.
 export default function TvView() {
   const [params] = useSearchParams();
+  const { data } = useDashboard();
+  // The ticket board earns more time when there is more on it, so a busy morning
+  // isn't cut off mid-scroll. An explicit ?tickets= in the URL always wins.
+  const openCount = (data?.issues ?? []).filter((i) => isOpenStatus(i.status)).length;
+
   const sequence = useMemo(() => {
-    return (["map", "board", "summary"] as ViewKey[])
+    return (["map", "board", "tickets", "summary"] as ViewKey[])
       .map((key) => {
         const raw = params.get(key);
-        const seconds = raw === null ? DEFAULT_SECONDS[key] : Math.max(0, Number(raw) || 0);
+        const fallback = key === "tickets" ? ticketBoardSeconds(openCount) : DEFAULT_SECONDS[key];
+        const seconds = raw === null ? fallback : Math.max(0, Number(raw) || 0);
         return { key, seconds };
       })
       .filter((s) => s.seconds > 0);
-  }, [params]);
+  }, [params, openCount]);
 
   const [step, setStep] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -84,6 +93,7 @@ export default function TvView() {
       <div className="tv-body" key={`${current.key}-${round}`}>
         {current.key === "map" && <MapDashboard />}
         {current.key === "board" && <DepartureBoard showControls={false} />}
+        {current.key === "tickets" && <TicketBoard />}
         {current.key === "summary" && <SummaryBoard />}
       </div>
     </div>

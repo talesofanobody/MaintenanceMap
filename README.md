@@ -13,7 +13,8 @@ with clock in/out, a drag-and-drop scheduler for the whole crew's day, emergenci
 of a day back and put it right again afterwards, vacation and time off, a map of where everyone
 probably is, a planner that fills someone's day by urgency and proximity, recurring maintenance
 that creates its own jobs, reminders and escalation when work runs late, wall-screen dashboards,
-trend and portfolio reports, a calendar feed, printable property reports, CSV exports, nightly
+trend and portfolio reports, a kitchen-display ticket board for the wall, a calendar feed, printable
+property reports, CSV exports, nightly
 backups — and it keeps working on a phone with no signal, sending what you logged once you're back in
 range.
 
@@ -631,7 +632,7 @@ It refreshes itself every 15 seconds, has a clock and a live indicator, and a **
 down the right**: the top card is the one in focus, with its priority, category, room, tags,
 description and photo, and the next three are queued below it. The rail rotates every 12 seconds, and
 the live map flies to whatever is on top, so the two always agree. Press **F** or use the button for
-fullscreen. Four views:
+fullscreen. Five views:
 
 - **Map** — every property outline with every open issue pinned, flying to each in turn (12 seconds
   each, worst first). The card rail alongside it says what you're looking at and what's next.
@@ -647,11 +648,38 @@ fullscreen. Four views:
   rows pulse green, and long lists page automatically. Filter by technician or property with the
   dropdowns — the choice goes into the URL (`?group=technician&tech=…&property=…`), so a TV can be
   pointed at one technician's or one property's board, and the same filters apply to the live map.
+- **Tickets** — a kitchen-display board, the kind a kitchen runs on. See below.
 - **Summary** — KPIs (open, urgent, high, in progress, overdue, unassigned, closed in the last 7
   days, average time to resolve), today's crew capacity bars, a "needs attention" list, and open
   issues per property.
-- **TV** — rotates Map (45s) → Board (30s) → Summary (20s). Tune it in the URL, e.g.
+- **TV** — rotates Map (45s) → Board (30s) → Tickets → Summary (20s). Tune it in the URL, e.g.
   `/#/dashboard?map=60&board=30&summary=0` (0 skips a view). Space pauses, ←/→ skip.
+
+### The ticket board
+
+**Dashboards → Tickets** is a kitchen-display screen for maintenance: one card per open job, in four
+lanes — **Waiting**, **Taken**, **On the job**, **Held up** — with a big countdown to when each one
+should be finished.
+
+- **The clock is the point.** Under an hour a card counts down in minutes and seconds; above that in
+  hours and minutes; past two days, in days. Once a job is late the number turns red, gains a **+**
+  and counts *up*.
+- **Colour means one thing: how much trouble it is in.** Green is fine, yellow is getting on, orange
+  is running out, red is late and is the only thing on the board that moves. A card is judged both
+  on the clock and on the share of its window that has gone, and takes whichever is worse — so a
+  two-hour emergency and a thirty-day repaint both go red when they genuinely need somebody, rather
+  than the long job looking calm at hour 719.
+- **The worst work is at the top of every lane**: late first, then whoever runs out soonest, then by
+  priority. The running order settles every 15 seconds rather than every second, so cards don't
+  jump about while somebody is reading them — the countdowns keep ticking regardless.
+- **More than fits?** The lane scrolls itself, creeping down the list and back up with a pause at
+  each end, so nothing is hidden waiting for a page to turn. In the TV rotation the board also earns
+  more time on screen the more there is on it (30 seconds, up to 75), so a busy morning is not cut
+  off mid-scroll.
+- **Cards clear themselves.** Completing or cancelling a job takes it off the board at the next
+  refresh. When there is nothing open at all, the board says **All clear**.
+- The strip along the top counts what is overdue, what is running out, and what is open. The rail
+  is hidden on this view — the board is already a wall of cards.
 
 The dashboards use the same login as everything else — sign in once on the TV's browser and the
 30-day session keeps it live.
