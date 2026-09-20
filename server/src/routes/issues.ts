@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { defaultDueDate, parseOptionalDay, parseOptionalHours, parseOptionalString, ValidationError } from "../lib/validation";
+import { computeDeadline, endOfDay, parseOptionalDay, parseOptionalHours, parseOptionalString, ValidationError } from "../lib/validation";
+import { isClosed, OPEN_STATUSES, PRIORITY_SET, STATUS_SET, STATUS_WORDS } from "../lib/workflow";
+import { isOnCrew, resolveAssignees, syncAssignees } from "../lib/crew";
+import { releaseEmergency } from "../lib/dayplan";
 import { ADMIN_ONLY, CAN_EDIT } from "../middleware/requireAuth";
 import { describeChanges, logActivity } from "../lib/activity";
 import { adminUserIds, issueLine, notifyUsers, priorityWord, technicianUserId } from "../lib/notify";
@@ -8,8 +11,6 @@ import { getSettings } from "../lib/settings";
 import { COST_KINDS, issueCosts } from "../lib/costs";
 import { parseCategory, resolveTagIds, setIssueTags } from "../lib/taxonomy";
 import { messagesRouter } from "./messages";
-
-const STATUS_WORD: Record<string, string> = { pending: "pending", in_progress: "in progress", completed: "completed" };
 
 // Fields a technician may change on an issue assigned to them.
 const TECHNICIAN_FIELDS = ["status", "actualHours", "closedAt", "description", "actionNeeded", "category", "roomName", "tagIds"] as const;
@@ -22,12 +23,15 @@ async function technicianName(id: string | null): Promise<string | null> {
 
 export const issuesRouter = Router();
 
-const PRIORITIES = new Set(["low", "medium", "high", "urgent"]);
-const STATUSES = new Set(["pending", "in_progress", "completed"]);
+const PRIORITIES = PRIORITY_SET;
+const STATUSES = STATUS_SET;
+const TECH_SELECT = { select: { id: true, name: true, color: true, trade: true } } as const;
 
 const ISSUE_INCLUDE = {
   photos: true,
-  technician: { select: { id: true, name: true, color: true, trade: true } },
+  technician: TECH_SELECT,
+  // The whole crew, lead included, so a caller never has to merge two fields.
+  assignees: { include: { technician: TECH_SELECT }, orderBy: { createdAt: "asc" as const } },
   checklist: { orderBy: { position: "asc" as const } },
   tags: { include: { tag: true } },
   messages: { orderBy: { createdAt: "asc" as const } },
@@ -115,7 +119,7 @@ issuesRouter.get("/", async (req, res) => {
     where: {
       ...(propertyId ? { propertyId: String(propertyId) } : {}),
       ...(technicianId ? { technicianId: String(technicianId) } : {}),
-      ...(open ? { status: { not: "completed" } } : {}),
+      ...(open ? { status: { in: OPEN_STATUSES } } : {}),
     },
     include: ISSUE_INCLUDE,
     orderBy: { createdAt: "desc" },
@@ -178,7 +182,24 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
 
   const finalStatus = status ?? "pending";
   const finalPriority = priority ?? "medium";
-  const { slaDays } = await getSettings();
+  const { responseHours } = await getSettings();
+
+  let crew: string[] | undefined;
+  try {
+    crew = await resolveAssignees(req.body);
+  } catch (err) {
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+  // A technician logging work can put themselves on it, nobody else.
+  if (req.user!.role === "technician" && crew && crew.some((id) => id !== req.user!.technicianId)) {
+    return res.status(403).json({ error: "You can only assign issues to yourself." });
+  }
+  const leadId = crew && crew.length ? crew[0] : (extras.technicianId ?? null);
+
+  // Cancelled work is closed too — it just was never resolved.
+  const closesNow = isClosed(finalStatus);
+  const deadline = computeDeadline(finalPriority, responseHours, { scheduledFor: extras.scheduledFor ?? null });
   const issue = await prisma.issue.create({
     data: {
       propertyId,
@@ -194,14 +215,16 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
       roomName: extras.roomName ?? null,
       lat,
       lng,
-      closedAt: finalStatus === "completed" ? extras.closed ?? new Date() : null,
-      technicianId: extras.technicianId ?? null,
+      closedAt: closesNow ? extras.closed ?? new Date() : null,
+      technicianId: leadId,
       estimatedHours: extras.estimatedHours ?? null,
       actualHours: finalStatus === "completed" ? extras.actualHours ?? null : null,
       scheduledFor: extras.scheduledFor ?? null,
-      // Every issue carries a due date so boards can order by it; fall back to the
-      // priority's turnaround from the start date (or today).
-      dueDate: extras.dueDate ?? defaultDueDate(finalPriority, extras.scheduledFor ?? null, slaDays),
+      isEmergency: !!req.body.isEmergency,
+      // Every issue carries both: a day so the planning views can order by it, and the
+      // moment it is actually due, which is the only thing a two-hour job can be judged on.
+      dueDate: extras.dueDate ?? deadline.dueDate,
+      dueAt: extras.dueDate ? endOfDay(extras.dueDate) : deadline.dueAt,
     },
     include: ISSUE_INCLUDE,
   });
@@ -214,6 +237,14 @@ issuesRouter.post("/", CAN_EDIT, async (req, res) => {
   if (extras.tagIds?.length) {
     await setIssueTags(issue.id, extras.tagIds);
     issue.tags = (await prisma.issueTag.findMany({ where: { issueId: issue.id }, include: { tag: true } })) as typeof issue.tags;
+  }
+  if (leadId || (crew && crew.length)) {
+    await syncAssignees(issue.id, crew && crew.length ? crew : leadId ? [leadId] : []);
+    issue.assignees = (await prisma.issueAssignee.findMany({
+      where: { issueId: issue.id },
+      include: { technician: TECH_SELECT },
+      orderBy: { createdAt: "asc" },
+    })) as typeof issue.assignees;
   }
   if (acceptingReport) {
     // The photos the guest took become the issue's photos: one owner each, so deleting
@@ -266,9 +297,13 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
   if (!existing) return res.status(404).json({ error: "not found" });
 
   if (req.user!.role === "technician") {
-    if (existing.technicianId !== req.user!.technicianId) {
+    // Anyone on the crew can update the job they were sent to, not only the lead.
+    if (!(await isOnCrew(existing.id, req.user!.technicianId))) {
       return res.status(403).json({ error: "You can only update issues assigned to you." });
     }
+    // Anything outside this list — the crew, the priority, the dates — is dropped
+    // rather than refused, so a client sending a whole issue back still saves the
+    // fields it was allowed to change.
     const limited: Record<string, unknown> = {};
     for (const key of TECHNICIAN_FIELDS) if (key in req.body) limited[key] = req.body[key];
     req.body = limited;
@@ -295,13 +330,42 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
   // date was supplied), kept while it stays completed, cleared when it is reopened.
   const nextStatus = status ?? existing.status;
   let nextClosedAt: Date | null;
-  if (nextStatus === "completed") {
+  if (isClosed(nextStatus)) {
     nextClosedAt = extras.closed !== undefined ? extras.closed ?? new Date() : existing.closedAt ?? new Date();
   } else {
     nextClosedAt = null;
   }
 
-  const { slaDays } = await getSettings();
+  const { responseHours } = await getSettings();
+
+  let crew: string[] | undefined;
+  try {
+    crew = await resolveAssignees(req.body);
+  } catch (err) {
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+  if (crew !== undefined && req.user!.role === "technician") {
+    return res.status(403).json({ error: "Only an admin can change who is on a job." });
+  }
+
+  /**
+   * Recompute the deadline when the priority or the start date moves, unless a date was
+   * given by hand. Raising something to critical has to move its deadline to two hours
+   * from now, or the new priority means nothing.
+   */
+  const priorityChanged = priority !== undefined && priority !== existing.priority;
+  const startChanged = extras.scheduledFor !== undefined && extras.scheduledFor !== existing.scheduledFor;
+  let deadlineFields: { dueDate?: string; dueAt?: Date } = {};
+  if (extras.dueDate !== undefined) {
+    const day = extras.dueDate ?? computeDeadline(priority ?? existing.priority, responseHours, { scheduledFor: extras.scheduledFor ?? existing.scheduledFor }).dueDate;
+    deadlineFields = { dueDate: day, dueAt: endOfDay(day) };
+  } else if (priorityChanged || startChanged) {
+    const next = computeDeadline(priority ?? existing.priority, responseHours, {
+      scheduledFor: extras.scheduledFor !== undefined ? extras.scheduledFor : existing.scheduledFor,
+    });
+    deadlineFields = { dueDate: next.dueDate, dueAt: next.dueAt };
+  }
   const issue = await prisma.issue.update({
     where: { id: req.params.id },
     data: {
@@ -317,12 +381,11 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
       ...(extras.roomName !== undefined ? { roomName: extras.roomName } : {}),
       ...(lat !== undefined ? { lat } : {}),
       ...(lng !== undefined ? { lng } : {}),
-      ...(extras.technicianId !== undefined ? { technicianId: extras.technicianId } : {}),
+      ...(crew !== undefined ? { technicianId: crew[0] ?? null } : extras.technicianId !== undefined ? { technicianId: extras.technicianId } : {}),
+      ...(req.body.isEmergency !== undefined ? { isEmergency: !!req.body.isEmergency } : {}),
       ...(extras.estimatedHours !== undefined ? { estimatedHours: extras.estimatedHours } : {}),
       ...(extras.scheduledFor !== undefined ? { scheduledFor: extras.scheduledFor } : {}),
-      ...(extras.dueDate !== undefined
-        ? { dueDate: extras.dueDate ?? defaultDueDate(priority ?? existing.priority, extras.scheduledFor ?? existing.scheduledFor, slaDays) }
-        : {}),
+      ...deadlineFields,
       // Actual hours come from clock in/out entries (or a manual figure on completion);
       // an ordinary edit never wipes them.
       ...(extras.actualHours !== undefined ? { actualHours: extras.actualHours } : {}),
@@ -332,6 +395,31 @@ issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
   });
 
   if (extras.tagIds !== undefined) await setIssueTags(issue.id, extras.tagIds);
+  if (crew !== undefined) {
+    await syncAssignees(issue.id, crew);
+    // The update above was read before the crew changed, so re-read it rather than
+    // handing back the previous line-up.
+    issue.assignees = (await prisma.issueAssignee.findMany({
+      where: { issueId: issue.id },
+      include: { technician: TECH_SELECT },
+      orderBy: { createdAt: "asc" },
+    })) as typeof issue.assignees;
+  }
+
+  // An emergency that has been dealt with stops displacing the day it was dropped into.
+  if (issue.isEmergency && !isClosed(existing.status) && isClosed(issue.status)) {
+    const restored = await releaseEmergency(issue.id);
+    if (restored) {
+      await logActivity(req, {
+        action: "issue.emergency_cleared",
+        entityType: "issue",
+        entityId: issue.id,
+        issueId: issue.id,
+        propertyId: issue.propertyId,
+        summary: `Emergency closed — ${restored} job${restored === 1 ? "" : "s"} moved back to where they were`,
+      });
+    }
+  }
 
   const changes = describeChanges(
     { ...existing, technicianId: await technicianName(existing.technicianId) },
@@ -382,7 +470,7 @@ async function notifyAboutUpdate(actorId: string, actorName: string, before: Iss
     await notifyUsers([techUser], { ...meta, kind: "assigned", title: `Assigned to you: ${after.title}`, body: line }, actorId);
   } else if (techUser) {
     if (statusChanged) {
-      await notifyUsers([techUser], { ...meta, kind: "status", title: `${after.title} is now ${STATUS_WORD[after.status] ?? after.status}`, body: `${actorName} · ${line}` }, actorId);
+      await notifyUsers([techUser], { ...meta, kind: "status", title: `${after.title} is now ${STATUS_WORDS[after.status as keyof typeof STATUS_WORDS] ?? after.status}`, body: `${actorName} · ${line}` }, actorId);
     }
     if (before.priority !== after.priority) {
       await notifyUsers([techUser], { ...meta, kind: "priority", title: `Priority now ${priorityWord(after.priority)}: ${after.title}`, body: line }, actorId);
@@ -393,7 +481,7 @@ async function notifyAboutUpdate(actorId: string, actorName: string, before: Iss
   }
 
   if (statusChanged) {
-    await notifyUsers(await adminUserIds(), { ...meta, kind: "status", title: `${actorName} marked "${after.title}" ${STATUS_WORD[after.status] ?? after.status}`, body: line }, actorId);
+    await notifyUsers(await adminUserIds(), { ...meta, kind: "status", title: `${actorName} marked "${after.title}" ${STATUS_WORDS[after.status as keyof typeof STATUS_WORDS] ?? after.status}`, body: line }, actorId);
   }
 }
 
@@ -416,7 +504,7 @@ async function issueForEdit(req: Parameters<typeof issuesRouter.get>[1] extends 
     res.status(404).json({ error: "not found" });
     return null;
   }
-  if (req.user!.role === "technician" && issue.technicianId !== req.user!.technicianId) {
+  if (req.user!.role === "technician" && !(await isOnCrew(issue.id, req.user!.technicianId))) {
     res.status(403).json({ error: "You can only update issues assigned to you." });
     return null;
   }

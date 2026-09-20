@@ -2,11 +2,13 @@ import { Router } from "express";
 import { ADMIN_ONLY } from "../middleware/requireAuth";
 import { getSettings, saveSettings, DEFAULT_SETTINGS } from "../lib/settings";
 import { ValidationError } from "../lib/validation";
+import { describeWindow, PRIORITY_ORDER } from "../lib/workflow";
 import { logActivity } from "../lib/activity";
 
 export const settingsRouter = Router();
 
-// Everyone signed in can read settings (the client needs turnaround days for due-date defaults).
+// Everyone signed in can read settings (the client needs the response windows to show
+// a default deadline on the issue form).
 settingsRouter.get("/", async (_req, res) => {
   res.json({ settings: await getSettings(), defaults: DEFAULT_SETTINGS });
 });
@@ -16,13 +18,15 @@ settingsRouter.put("/", ADMIN_ONLY, async (req, res) => {
     const before = await getSettings();
     const settings = await saveSettings(req.body);
     const changes: string[] = [];
-    for (const p of ["urgent", "high", "medium", "low"] as const) {
-      if (before.slaDays[p] !== settings.slaDays[p]) changes.push(`${p} turnaround ${before.slaDays[p]} → ${settings.slaDays[p]} days`);
+    for (const p of PRIORITY_ORDER) {
+      if (before.responseHours[p] !== settings.responseHours[p]) {
+        changes.push(`${p} window ${describeWindow(before.responseHours[p])} → ${describeWindow(settings.responseHours[p])}`);
+      }
     }
     if (before.warnAtPercent !== settings.warnAtPercent) changes.push(`warning at ${before.warnAtPercent}% → ${settings.warnAtPercent}%`);
     if (before.escalation.enabled !== settings.escalation.enabled) changes.push(`escalation ${settings.escalation.enabled ? "on" : "off"}`);
-    if (before.escalation.afterOverdueDays !== settings.escalation.afterOverdueDays) {
-      changes.push(`escalate after ${before.escalation.afterOverdueDays} → ${settings.escalation.afterOverdueDays} overdue days`);
+    if (before.escalation.afterOverdueHours !== settings.escalation.afterOverdueHours) {
+      changes.push(`escalate after ${describeWindow(before.escalation.afterOverdueHours)} → ${describeWindow(settings.escalation.afterOverdueHours)} overdue`);
     }
     await logActivity(req, {
       action: "settings.updated",

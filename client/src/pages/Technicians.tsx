@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, TechnicianInput } from "../api";
 import type { Technician } from "../types";
 import Contractors from "../components/Contractors";
+import TimeOffPanel from "../components/TimeOffPanel";
 import { CATEGORIES, PRIORITY_SHORT_LABELS, WEEKDAYS, categoryLabel, type Shift, type Week } from "../types";
 import { formatHours, initials, loadSummary, relativeDay, todayStr } from "../lib/capacity";
 
@@ -446,6 +447,8 @@ export default function Technicians() {
           })}
         </div>
       )}
+
+      <TimeOffPanel technicians={technicians} />
 
       <Contractors />
     </div>

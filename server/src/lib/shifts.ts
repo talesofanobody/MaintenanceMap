@@ -16,9 +16,19 @@ export function minutesOf(time: string): number {
   return Number(m[1]) * 60 + Number(m[2]);
 }
 
+const DAY_MINUTES = 24 * 60;
+
+/** True when the shift runs past midnight, like a 22:00–07:00 night. */
+export function crossesMidnight(shift: Shift): boolean {
+  return minutesOf(shift.end) <= minutesOf(shift.start);
+}
+
 export function shiftHours(shift: Shift | null): number {
   if (!shift) return 0;
-  const span = minutesOf(shift.end) - minutesOf(shift.start);
+  const start = minutesOf(shift.start);
+  const end = minutesOf(shift.end);
+  // A night technician finishing at 07:00 works nine hours, not minus fifteen.
+  const span = end > start ? end - start : DAY_MINUTES - start + end;
   return span > 0 ? Math.round((span / 60) * 100) / 100 : 0;
 }
 
@@ -86,7 +96,8 @@ export function parseWeekInput(value: unknown): string | undefined {
       const start = (entry as any).start;
       const end = (entry as any).end;
       if (typeof start !== "string" || typeof end !== "string") throw new ValidationError("each working day needs a start and end time");
-      if (minutesOf(end) <= minutesOf(start)) throw new ValidationError(`a shift ending ${end} can't start at ${start}`);
+      // end before start means it runs into the next morning, which the night crew do.
+      if (minutesOf(end) === minutesOf(start)) throw new ValidationError(`a shift starting and ending at ${start} is zero hours long`);
       return { start, end };
     }
     throw new ValidationError("invalid working day");

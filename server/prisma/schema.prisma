@@ -69,27 +69,29 @@ model Session {
 }
 
 model Technician {
-  id          String      @id @default(cuid())
+  id          String          @id @default(cuid())
   name        String
   trade       String?
   phone       String?
-  color       String      @default("#2563eb")
-  active      Boolean     @default(true)
+  color       String          @default("#2563eb")
+  active      Boolean         @default(true)
   // Hours available per weekday, Monday first, stored as a JSON array of 7 numbers.
   // Either 7 numbers (legacy hours per day) or 7 shift objects {start,end} / null,
   // Monday first. Read through parseShifts, which normalises both shapes.
-  weeklyHours String      @default("[{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},null,null]")
+  weeklyHours String          @default("[{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},{\"start\":\"08:00\",\"end\":\"16:00\"},null,null]")
   // Work categories this technician covers, as a JSON array of category keys.
-  categories  String      @default("[]")
+  categories  String          @default("[]")
   // Charge-out rate used to value clocked time on an issue.
   hourlyRate  Float?
   notes       String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
   issues      Issue[]
   timeEntries TimeEntry[]
   schedules   Schedule[]
   user        User?
+  assignments IssueAssignee[]
+  timeOff     TimeOff[]
 }
 
 model Property {
@@ -139,6 +141,17 @@ model Issue {
   // and when it must be done by.
   scheduledFor     String?
   dueDate          String?
+  // The moment this is due. A two-hour job needs a time, not a date; dueDate stays as
+  // the day it falls on so the day-level planning views keep working unchanged.
+  dueAt            DateTime?
+  // Position in the assigned technician's day, lowest first. Set by the scheduler.
+  dayOrder         Int?
+  // Emergencies are slotted in ahead of planned work and push the rest back.
+  isEmergency      Boolean         @default(false)
+  // While an emergency has displaced this job, the emergency that did it and the slot
+  // to put it back in once that emergency closes.
+  shiftedBy        String?
+  orderBeforeShift Int?
   // Set when the scheduler last raised this issue's priority for being overdue.
   escalatedAt      DateTime?
   // Set when a recurring maintenance schedule created this issue.
@@ -152,6 +165,7 @@ model Issue {
   costs            Cost[]
   tags             IssueTag[]
   messages         Message[]
+  assignees        IssueAssignee[]
   guestReport      GuestReport?
 
   @@index([propertyId])
@@ -345,4 +359,35 @@ model GuestReport {
 
   @@index([status, createdAt])
   @@index([propertyId])
+}
+
+// A technician working on an issue. An issue can have up to four, and the one in
+// Issue.technicianId is the lead — they are mirrored here too, so "what is this person
+// on today" is a single query.
+model IssueAssignee {
+  id           String     @id @default(cuid())
+  issueId      String
+  issue        Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  technicianId String
+  technician   Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([issueId, technicianId])
+  @@index([technicianId])
+}
+
+// Days a technician is not available: vacation, sick leave, training. Inclusive of both
+// ends, stored as YYYY-MM-DD like every other calendar day in the app.
+model TimeOff {
+  id           String     @id @default(cuid())
+  technicianId String
+  technician   Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  startDay     String
+  endDay       String
+  kind         String     @default("vacation") // vacation | sick | training | other
+  note         String?
+  createdAt    DateTime   @default(now())
+
+  @@index([technicianId, startDay])
+  @@index([startDay, endDay])
 }

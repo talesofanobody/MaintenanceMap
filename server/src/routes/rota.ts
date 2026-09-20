@@ -3,6 +3,7 @@ import { prisma } from "../db";
 import { parseWeek, shiftHours, type Shift } from "../lib/shifts";
 import { parseStoredList } from "../lib/taxonomy";
 import { DATE_ONLY, dayFrom } from "../lib/validation";
+import { OPEN_STATUSES } from "../lib/workflow";
 
 export const rotaRouter = Router();
 
@@ -30,7 +31,7 @@ rotaRouter.get("/", async (req, res) => {
     orderBy: { name: "asc" },
     include: {
       issues: {
-        where: { status: { not: "completed" }, scheduledFor: { gte: start, lte: end } },
+        where: { status: { in: OPEN_STATUSES }, scheduledFor: { gte: start, lte: end } },
         select: { id: true, title: true, priority: true, estimatedHours: true, scheduledFor: true, roomName: true, category: true, property: { select: { name: true } } },
         orderBy: { scheduledFor: "asc" },
       },

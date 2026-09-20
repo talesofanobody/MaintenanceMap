@@ -2,24 +2,37 @@ import { FormEvent, useEffect, useState } from "react";
 import { useSettings } from "../settings/SettingsContext";
 import Backups from "../components/Backups";
 import TagAdmin from "../components/TagAdmin";
-import { PRIORITY_SHORT_LABELS, type AppSettings, type Priority } from "../types";
+import { PRIORITY_DESCRIPTIONS, PRIORITY_SHORT_LABELS, type AppSettings, type Priority } from "../types";
+import { describeWindow } from "../lib/capacity";
 
-const ORDER: Priority[] = ["urgent", "high", "medium", "low"];
+const ORDER: Priority[] = ["critical", "urgent", "high", "medium", "low"];
+
+/**
+ * Compares two settings by value. JSON.stringify would do it, except that it is
+ * sensitive to key order, and the server returns the priorities in its own order —
+ * which made a freshly saved form look like it still had unsaved changes.
+ */
+function sameSettings(a: AppSettings, b: AppSettings): boolean {
+  if (Number(a.warnAtPercent) !== Number(b.warnAtPercent)) return false;
+  if (!!a.escalation.enabled !== !!b.escalation.enabled) return false;
+  if (Number(a.escalation.afterOverdueHours) !== Number(b.escalation.afterOverdueHours)) return false;
+  return ORDER.every((p) => Number(a.responseHours[p]) === Number(b.responseHours[p]));
+}
 
 export default function Settings() {
   const ctx = useSettings();
-  const [draft, setDraft] = useState<AppSettings>({ slaDays: { ...ctx.slaDays }, warnAtPercent: ctx.warnAtPercent, escalation: { ...ctx.escalation } });
+  const [draft, setDraft] = useState<AppSettings>({ responseHours: { ...ctx.responseHours }, warnAtPercent: ctx.warnAtPercent, escalation: { ...ctx.escalation } });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
   // Adopt the server values once they arrive (the provider starts with fallbacks).
   useEffect(() => {
-    setDraft({ slaDays: { ...ctx.slaDays }, warnAtPercent: ctx.warnAtPercent, escalation: { ...ctx.escalation } });
+    setDraft({ responseHours: { ...ctx.responseHours }, warnAtPercent: ctx.warnAtPercent, escalation: { ...ctx.escalation } });
   }, [ctx.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function setSla(p: Priority, value: string) {
-    setDraft((d) => ({ ...d, slaDays: { ...d.slaDays, [p]: value === "" ? ("" as unknown as number) : Number(value) } }));
+  function setWindow(p: Priority, value: string) {
+    setDraft((d) => ({ ...d, responseHours: { ...d.responseHours, [p]: value === "" ? ("" as unknown as number) : Number(value) } }));
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -36,14 +49,14 @@ export default function Settings() {
     }
   }
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify({ slaDays: ctx.slaDays, warnAtPercent: ctx.warnAtPercent, escalation: ctx.escalation });
+  const dirty = !sameSettings(draft, { responseHours: ctx.responseHours, warnAtPercent: ctx.warnAtPercent, escalation: ctx.escalation });
 
   return (
     <div className="page">
       <div className="page-header">
         <div>
           <h1>Settings</h1>
-          <p className="muted">Turnaround targets and what happens when work runs late. Changes apply to issues logged from now on and to the reminder checks.</p>
+          <p className="muted">Response windows and what happens when work runs late. Changes apply to issues logged from now on and to the reminder checks.</p>
         </div>
       </div>
 
@@ -51,10 +64,12 @@ export default function Settings() {
 
       <form className="settings-form" onSubmit={handleSubmit}>
         <section className="card settings-section">
-          <h2>Turnaround by priority</h2>
+          <h2>Response window by priority</h2>
           <p>
-            Days allowed to resolve an issue, counted from its start date (or the day it was logged). New issues get a due date from this automatically; it can
-            still be changed per issue.
+            <strong>Hours</strong> to resolve an issue, counted from the moment it is logged. Anything under 24 hours is a
+            stopwatch — a critical job logged at 16:00 with a two-hour window is late at 18:01, not tomorrow. Longer windows are
+            counted in days from the start date, as before. Every new issue gets its deadline from this, and it can still be
+            changed job by job.
           </p>
           <div className="sla-grid">
             {ORDER.map((p) => (
@@ -62,16 +77,18 @@ export default function Settings() {
                 <span className={`tag tag-${p}`}>{PRIORITY_SHORT_LABELS[p]}</span>
                 <input
                   type="number"
-                  min={0}
-                  max={365}
+                  min={1}
+                  max={8760}
                   step={1}
                   inputMode="numeric"
-                  value={draft.slaDays[p]}
-                  onChange={(e) => setSla(p, e.target.value)}
-                  aria-label={`${PRIORITY_SHORT_LABELS[p]} turnaround in days`}
+                  value={draft.responseHours[p]}
+                  onChange={(e) => setWindow(p, e.target.value)}
+                  aria-label={`${PRIORITY_SHORT_LABELS[p]} response window in hours`}
                   required
                 />
-                <span className="muted small">{Number(draft.slaDays[p]) === 0 ? "same day" : `${draft.slaDays[p]} day${Number(draft.slaDays[p]) === 1 ? "" : "s"}`}</span>
+                <span className="muted small">
+                  {describeWindow(Number(draft.responseHours[p]))} · {PRIORITY_DESCRIPTIONS[p]}
+                </span>
               </label>
             ))}
           </div>
@@ -79,7 +96,7 @@ export default function Settings() {
 
         <section className="card settings-section">
           <h2>Running-out-of-time warning</h2>
-          <p>Technicians get a reminder, and boards flag the issue as at risk, once this share of the turnaround has been used. Set to 0 to turn it off.</p>
+          <p>Technicians get a reminder, and boards flag the issue as at risk, once this share of the response window has gone. Set to 0 to turn it off.</p>
           <div className="settings-row">
             Warn at
             <input
@@ -92,14 +109,14 @@ export default function Settings() {
               onChange={(e) => setDraft((d) => ({ ...d, warnAtPercent: e.target.value === "" ? ("" as unknown as number) : Number(e.target.value) }))}
               aria-label="Warn at percent of turnaround"
             />
-            % of the turnaround
+            % of the window
           </div>
         </section>
 
         <section className="card settings-section">
           <h2>Automatic escalation</h2>
           <p>
-            Overdue issues climb one priority level after a set number of days, and again every time that many days pass — so a forgotten low-priority job
+            Overdue issues climb one priority level after a set number of hours, and again every time that many hours pass — so a forgotten low-priority job
             works its way up the boards until someone deals with it. Each escalation is recorded in the activity log and notifies the technician and admins.
           </p>
           <label className="checkbox-row">
@@ -115,17 +132,17 @@ export default function Settings() {
             <input
               type="number"
               min={1}
-              max={90}
+              max={2160}
               step={1}
               inputMode="numeric"
-              value={draft.escalation.afterOverdueDays}
+              value={draft.escalation.afterOverdueHours}
               disabled={!draft.escalation.enabled}
               onChange={(e) =>
-                setDraft((d) => ({ ...d, escalation: { ...d.escalation, afterOverdueDays: e.target.value === "" ? ("" as unknown as number) : Number(e.target.value) } }))
+                setDraft((d) => ({ ...d, escalation: { ...d.escalation, afterOverdueHours: e.target.value === "" ? ("" as unknown as number) : Number(e.target.value) } }))
               }
-              aria-label="Escalate after days overdue"
+              aria-label="Escalate after hours overdue"
             />
-            day{Number(draft.escalation.afterOverdueDays) === 1 ? "" : "s"} overdue
+            hour{Number(draft.escalation.afterOverdueHours) === 1 ? "" : "s"} overdue ({describeWindow(Number(draft.escalation.afterOverdueHours))})
           </div>
         </section>
 
@@ -136,7 +153,7 @@ export default function Settings() {
           <button
             type="button"
             className="btn btn-ghost"
-            onClick={() => setDraft({ slaDays: { ...ctx.defaults.slaDays }, warnAtPercent: ctx.defaults.warnAtPercent, escalation: { ...ctx.defaults.escalation } })}
+            onClick={() => setDraft({ responseHours: { ...ctx.defaults.responseHours }, warnAtPercent: ctx.defaults.warnAtPercent, escalation: { ...ctx.defaults.escalation } })}
           >
             Reset to defaults
           </button>

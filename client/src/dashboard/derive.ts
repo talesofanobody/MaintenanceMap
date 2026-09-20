@@ -3,7 +3,7 @@ import { PRIORITIES } from "../types";
 import { addDays, loadSummary, slaProgress, todayStr, type LoadSummary } from "../lib/capacity";
 import { durationMs } from "../lib/dates";
 
-export const SEVERITY: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+export const SEVERITY: Record<Priority, number> = { critical: 0, urgent: 1, high: 2, medium: 3, low: 4 };
 
 // Boards and the live map all use the same order: priority first, then whatever is
 // due soonest, then the earliest start, then age.

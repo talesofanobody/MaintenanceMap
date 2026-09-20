@@ -5,6 +5,7 @@ import { DEFAULT_WEEK, parseWeek, parseWeekInput, weekToHours } from "../lib/shi
 import { parseCategoryList, parseStoredList } from "../lib/taxonomy";
 import { ADMIN_ONLY } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
+import { OPEN_STATUSES } from "../lib/workflow";
 
 export const techniciansRouter = Router();
 
@@ -30,7 +31,7 @@ techniciansRouter.get("/", async (_req, res) => {
   const technicians = await prisma.technician.findMany({
     orderBy: [{ active: "desc" }, { name: "asc" }],
     include: {
-      issues: { where: { status: { not: "completed" } }, select: ASSIGNMENT_SELECT },
+      issues: { where: { status: { in: OPEN_STATUSES } }, select: ASSIGNMENT_SELECT },
     },
   });
   res.json(technicians.map(({ issues, ...t }) => ({ ...serializeTechnician(t), assignments: issues })));
@@ -84,7 +85,7 @@ techniciansRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
         ...(notes !== undefined ? { notes: parseOptionalString(notes, "notes", 2000) } : {}),
         ...(active !== undefined ? { active: !!active } : {}),
       },
-      include: { issues: { where: { status: { not: "completed" } }, select: ASSIGNMENT_SELECT } },
+      include: { issues: { where: { status: { in: OPEN_STATUSES } }, select: ASSIGNMENT_SELECT } },
     });
     const { issues, ...rest } = technician;
     await logActivity(req, {

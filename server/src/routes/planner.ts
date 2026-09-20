@@ -5,6 +5,8 @@ import { logActivity } from "../lib/activity";
 import { DATE_ONLY, dayFrom } from "../lib/validation";
 import { planDay } from "../lib/planner";
 import { issueLine, notifyUsers, technicianUserId } from "../lib/notify";
+import { OPEN_STATUSES } from "../lib/workflow";
+import { syncAssignees } from "../lib/crew";
 
 export const plannerRouter = Router();
 
@@ -37,7 +39,7 @@ plannerRouter.post("/apply", CAN_EDIT, async (req, res) => {
   const technician = await prisma.technician.findUnique({ where: { id: technicianId } });
   if (!technician) return res.status(404).json({ error: "Technician not found" });
 
-  const issues = await prisma.issue.findMany({ where: { id: { in: issueIds }, status: { not: "completed" } }, include: { property: { select: { name: true } } } });
+  const issues = await prisma.issue.findMany({ where: { id: { in: issueIds }, status: { in: OPEN_STATUSES } }, include: { property: { select: { name: true } } } });
   if (issues.length === 0) return res.status(400).json({ error: "None of those jobs are open." });
   // A technician can't quietly take work that belongs to someone else.
   if (req.user!.role === "technician" && issues.some((i) => i.technicianId && i.technicianId !== technicianId)) {
@@ -45,6 +47,8 @@ plannerRouter.post("/apply", CAN_EDIT, async (req, res) => {
   }
 
   await prisma.issue.updateMany({ where: { id: { in: issues.map((i) => i.id) } }, data: { scheduledFor: day, technicianId } });
+  // Applying a plan assigns the lead; mirror it so the crew table agrees.
+  for (const issue of issues) await syncAssignees(issue.id, [technicianId]);
   await logActivity(req, {
     action: "planner.applied",
     entityType: "technician",

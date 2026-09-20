@@ -5,10 +5,10 @@ import Checklist from "./Checklist";
 import CostPanel from "./CostPanel";
 import MessageThread from "./MessageThread";
 import { offlineSupported, queueIssue } from "../offline/queue";
-import { CATEGORIES, categoryLabel, type Tag } from "../types";
+import { CATEGORIES, categoryLabel, MAX_ASSIGNEES, type Tag } from "../types";
 import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
-import { capacityOn, committedOn, defaultDueDate, formatHours, relativeDay, slaProgress, todayStr } from "../lib/capacity";
+import { capacityOn, committedOn, defaultDueDate, describeWindow, formatHours, relativeDay, slaProgress, timeLeftPhrase, todayStr } from "../lib/capacity";
 import { useSettings } from "../settings/SettingsContext";
 import type { ActivityEntry, GuestReport, Issue, Photo, Priority, Status, Technician } from "../types";
 import { PRIORITIES, PRIORITY_LABELS, PRIORITY_SHORT_LABELS, STATUSES, STATUS_LABELS } from "../types";
@@ -110,7 +110,10 @@ export default function IssuePanel({
 }: Props) {
   const isEdit = !!issue;
   // A technician can edit their own issues (limited fields) and log new ones.
-  const ownIssue = !!issue && !!currentTechnicianId && issue.technicianId === currentTechnicianId;
+  const ownIssue =
+    !!issue &&
+    !!currentTechnicianId &&
+    (issue.technicianId === currentTechnicianId || !!issue.assignees?.some((a) => a.technicianId === currentTechnicianId));
   const canEdit = canManage || !isEdit || ownIssue;
   const limited = !canManage;
   const [title, setTitle] = useState(issue?.title ?? (intakeReport ? titleFromDescription(intakeReport.description) : ""));
@@ -123,11 +126,19 @@ export default function IssuePanel({
   const [workOrderUrl, setWorkOrderUrl] = useState(issue?.workOrderUrl ?? "");
   // On a new issue this becomes the opening message; on an existing one the thread owns it.
   const [firstMessage, setFirstMessage] = useState("");
-  const { slaDays, warnAtPercent } = useSettings();
+  const { responseHours, warnAtPercent } = useSettings();
   const [closedDate, setClosedDate] = useState(toDateInputValue(issue?.closedAt));
   const [closedDateTouched, setClosedDateTouched] = useState(false);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
-  const [technicianId, setTechnicianId] = useState(issue?.technicianId ?? (limited && currentTechnicianId ? currentTechnicianId : ""));
+  // The whole crew, lead first. A crew of one behaves exactly as the old single field did.
+  const [crew, setCrew] = useState<string[]>(() => {
+    if (issue?.assignees?.length) return issue.assignees.map((a) => a.technicianId);
+    if (issue?.technicianId) return [issue.technicianId];
+    return limited && currentTechnicianId ? [currentTechnicianId] : [];
+  });
+  const technicianId = crew[0] ?? "";
+  const setTechnicianId = (id: string) => setCrew(id ? [id, ...crew.slice(1).filter((x) => x !== id)] : crew.slice(1));
+  const [isEmergency, setIsEmergency] = useState(issue?.isEmergency ?? false);
   const [estimatedHours, setEstimatedHours] = useState(issue?.estimatedHours != null ? String(issue.estimatedHours) : "");
   const [actualHours, setActualHours] = useState(issue?.actualHours != null ? String(issue.actualHours) : "");
   const [category, setCategory] = useState(issue?.category ?? intakeReport?.category ?? "");
@@ -136,7 +147,7 @@ export default function IssuePanel({
   const [tags, setTags] = useState<Tag[]>([]);
   const [tagIds, setTagIds] = useState<string[]>(issue?.tags?.map((t) => t.tagId) ?? []);
   const [scheduledFor, setScheduledFor] = useState(issue?.scheduledFor ?? "");
-  const [dueDate, setDueDate] = useState(issue?.dueDate ?? (issue ? "" : defaultDueDate("medium", null, slaDays)));
+  const [dueDate, setDueDate] = useState(issue?.dueDate ?? (issue ? "" : defaultDueDate("medium", null, responseHours)));
   const [dueTouched, setDueTouched] = useState(!!issue);
   const [lat, setLat] = useState<number | null>(issue?.lat ?? draftLatLng?.lat ?? null);
   const [lng, setLng] = useState<number | null>(issue?.lng ?? draftLatLng?.lng ?? null);
@@ -187,10 +198,10 @@ export default function IssuePanel({
   }, [issue]);
 
   // Until the user picks a due date themselves, keep it in step with the priority's
-  // turnaround, counted from the start date (or today).
+  // response window, counted from the start date (or today).
   useEffect(() => {
-    if (!dueTouched) setDueDate(defaultDueDate(priority, scheduledFor || null, slaDays));
-  }, [priority, scheduledFor, dueTouched, slaDays]);
+    if (!dueTouched) setDueDate(defaultDueDate(priority, scheduledFor || null, responseHours));
+  }, [priority, scheduledFor, dueTouched, responseHours]);
 
   const effectiveLat = draftLatLng?.lat ?? lat;
   const effectiveLng = draftLatLng?.lng ?? lng;
@@ -355,7 +366,8 @@ export default function IssuePanel({
         lat: finalLat,
         lng: finalLng,
         closedAt: closedIso,
-        technicianId: technicianId || null,
+        technicianIds: crew,
+        isEmergency,
         estimatedHours: estimate,
         ...(status === "completed" ? { actualHours: parseHours(actualHours) } : {}),
         scheduledFor: scheduledFor || null,
@@ -458,7 +470,7 @@ export default function IssuePanel({
   }
 
   const lock = limited && isEdit;
-  const risk = issue ? slaProgress(issue, todayStr(), warnAtPercent) : null;
+  const risk = issue ? slaProgress(issue, new Date(), warnAtPercent) : null;
   const riskState = risk?.state ?? "none";
 
   return (
@@ -473,11 +485,14 @@ export default function IssuePanel({
 
       {isEdit && issue && risk && riskState === "warning" && (
         <div className="banner banner-warn">
-          {Math.round(risk.fraction * 100)}% of this issue's turnaround has been used — due {relativeDay(issue.dueDate!).toLowerCase()}.
+          {Math.round(risk.fraction * 100)}% of the {describeWindow(responseHours[issue.priority])} allowed has gone —{" "}
+          {timeLeftPhrase(risk.hoursLeft)}.
         </div>
       )}
       {isEdit && issue && riskState === "overdue" && (
-        <div className="banner banner-error">Overdue — this was due {relativeDay(issue.dueDate!).toLowerCase()}.</div>
+        <div className="banner banner-error">
+          Overdue — {timeLeftPhrase(risk!.hoursLeft)}, due {relativeDay(issue.dueDate!).toLowerCase()}.
+        </div>
       )}
       {isEdit && !canEdit && (
         <div className="banner banner-info">This issue is assigned to {issue.technician?.name ?? "someone else"} — you can view it but not change it.</div>
@@ -724,8 +739,8 @@ export default function IssuePanel({
             </div>
             <span className="muted small">
               {dueTouched
-                ? `Turnaround for ${PRIORITY_SHORT_LABELS[priority].toLowerCase()} priority is ${slaDays[priority] === 0 ? "same day" : `${slaDays[priority]} days`}.`
-                : `Due date set automatically from priority (${slaDays[priority] === 0 ? "same day" : `${slaDays[priority]} days`}) — change it if you need to.`}
+                ? `${PRIORITY_SHORT_LABELS[priority]} work has ${describeWindow(responseHours[priority])} to be resolved.`
+                : `Deadline set from the priority (${describeWindow(responseHours[priority])}) — change it if you need to.`}
             </span>
             <span className="field-label">Assignment</span>
             {topSuggestion && !limited && (
@@ -745,22 +760,72 @@ export default function IssuePanel({
             {category && suggestions.length === 0 && canManage && (
               <span className="muted small">Nobody is set up to cover {categoryLabel(category).toLowerCase()} — set who covers what on the Technicians page.</span>
             )}
-            <label>
-              Technician
-              <select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)} disabled={limited}>
-                <option value="">Unassigned</option>
-                {selectableTechs
-                  .filter((t) => !limited || t.id === currentTechnicianId)
-                  .map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                      {t.trade ? ` — ${t.trade}` : ""}
-                      {category && t.categories?.includes(category) ? " ✓" : ""}
-                      {!t.active ? " (inactive)" : ""}
-                    </option>
-                  ))}
-              </select>
-            </label>
+            <div className="field">
+              <span className="field-label">
+                Technicians <span className="muted small">— up to {MAX_ASSIGNEES}, the first one leads</span>
+              </span>
+              {crew.length > 0 && (
+                <ul className="crew-list">
+                  {crew.map((id, index) => {
+                    const t = technicians.find((x) => x.id === id);
+                    return (
+                      <li key={id} className="crew-member">
+                        <span className="crew-dot" style={{ background: t?.color ?? "var(--text-3)" }} aria-hidden="true" />
+                        <span className="crew-name">
+                          {t?.name ?? "Unknown"}
+                          {t?.trade ? <span className="muted"> · {t.trade}</span> : null}
+                        </span>
+                        {index === 0 ? (
+                          <span className="crew-lead">Lead</span>
+                        ) : (
+                          canManage && (
+                            <button type="button" className="crew-action" onClick={() => setCrew([id, ...crew.filter((x) => x !== id)])}>
+                              Make lead
+                            </button>
+                          )
+                        )}
+                        {canManage && (
+                          <button type="button" className="crew-action danger" onClick={() => setCrew(crew.filter((x) => x !== id))} aria-label={`Remove ${t?.name ?? "technician"}`}>
+                            ✕
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {canManage && crew.length < MAX_ASSIGNEES && (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) setCrew([...crew, e.target.value]);
+                  }}
+                  aria-label="Add a technician"
+                >
+                  <option value="">{crew.length === 0 ? "Unassigned — pick someone" : "Add another…"}</option>
+                  {selectableTechs
+                    .filter((t) => !crew.includes(t.id))
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                        {t.trade ? ` — ${t.trade}` : ""}
+                        {category && t.categories?.includes(category) ? " ✓" : ""}
+                        {!t.active ? " (inactive)" : ""}
+                      </option>
+                    ))}
+                </select>
+              )}
+              {canManage && crew.length >= MAX_ASSIGNEES && (
+                <span className="muted small">That's {MAX_ASSIGNEES} — any more and it's really two jobs.</span>
+              )}
+              {limited && crew.length === 0 && <span className="muted small">Log it unassigned, or put yourself on it from Today.</span>}
+            </div>
+            {canManage && (
+              <label className="checkbox-row">
+                <input type="checkbox" checked={isEmergency} onChange={(e) => setIsEmergency(e.target.checked)} />
+                Emergency — goes to the front of the day and pushes other work back
+              </label>
+            )}
             {technicians.length === 0 && canManage && (
               <span className="muted small">No technicians yet — add them under Technicians in the top menu.</span>
             )}

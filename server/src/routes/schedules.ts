@@ -5,6 +5,7 @@ import { logActivity } from "../lib/activity";
 import { parseOptionalDay, parseOptionalHours, parseOptionalString, ValidationError } from "../lib/validation";
 import { cadenceText, createOccurrence, serializeSchedule, UNITS } from "../lib/schedules";
 import { parseCategory } from "../lib/taxonomy";
+import { OPEN_STATUSES } from "../lib/workflow";
 
 export const schedulesRouter = Router();
 
@@ -13,7 +14,7 @@ const PRIORITIES = new Set(["low", "medium", "high", "urgent"]);
 const SCHEDULE_INCLUDE = {
   property: { select: { id: true, name: true } },
   technician: { select: { id: true, name: true, color: true } },
-  issues: { where: { status: { not: "completed" } }, select: { id: true, title: true, status: true, dueDate: true }, orderBy: { dueDate: "asc" as const } },
+  issues: { where: { status: { in: OPEN_STATUSES } }, select: { id: true, title: true, status: true, dueDate: true }, orderBy: { dueDate: "asc" as const } },
 } as const;
 
 function intField(value: unknown, field: string, min: number, max: number): number | undefined {

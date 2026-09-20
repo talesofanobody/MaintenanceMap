@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "seed:roster": "ts-node --transpile-only prisma/seed-roster.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

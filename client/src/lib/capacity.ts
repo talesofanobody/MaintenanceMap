@@ -8,39 +8,107 @@ export interface WorkItem {
   dueDate?: string | null;
 }
 
-// Default turnaround per priority; mirrors the server's fallback.
-export const SLA_DAYS: Record<Priority, number> = { urgent: 0, high: 3, medium: 14, low: 30 };
+// Default response window per priority, in hours; mirrors the server's fallback.
+export const RESPONSE_HOURS: Record<Priority, number> = { critical: 2, urgent: 5, high: 72, medium: 336, low: 720 };
 
-export function defaultDueDate(priority: Priority, fromDay?: string | null, slaDays: Record<Priority, number> = SLA_DAYS): string {
-  return addDays(fromDay || todayStr(), slaDays[priority]);
+/** Windows under a day are a stopwatch; longer ones are really a number of days. */
+export function isShortFuse(hours: number): boolean {
+  return hours < 24;
+}
+
+/** "2 hours" / "3 days" — whichever way the window reads naturally. */
+export function describeWindow(hours: number): string {
+  if (!hours || hours <= 0) return "same day";
+  if (isShortFuse(hours)) return `${hours} hour${hours === 1 ? "" : "s"}`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+/** The deadline a new issue of this priority would get, as an ISO timestamp. */
+export function defaultDueAt(priority: Priority, responseHours: Record<Priority, number> = RESPONSE_HOURS, fromDay?: string | null): string {
+  const hours = responseHours[priority] ?? RESPONSE_HOURS[priority];
+  if (isShortFuse(hours)) return new Date(Date.now() + hours * 3600_000).toISOString();
+  const base = fromDay ? new Date(`${fromDay}T00:00:00Z`) : new Date();
+  const day = addDays(toDay(base), Math.round(hours / 24));
+  return `${day}T23:59:59.000Z`;
+}
+
+export function defaultDueDate(priority: Priority, fromDay?: string | null, responseHours: Record<Priority, number> = RESPONSE_HOURS): string {
+  return defaultDueAt(priority, responseHours, fromDay).slice(0, 10);
 }
 
 export type SlaState = "none" | "ok" | "warning" | "overdue" | "done";
 
 export interface SlaProgress {
   state: SlaState;
-  /** Share of the turnaround used so far, 0–1 (can exceed 1 when overdue). */
+  /** Share of the window used so far, 0–1 (can exceed 1 when overdue). */
   fraction: number;
+  /** Whole window, in hours. */
+  totalHours: number;
+  /** Time remaining, in hours; negative once overdue. */
+  hoursLeft: number;
   totalDays: number;
   daysLeft: number;
 }
 
-/** How much of an issue's turnaround has been used, measured from its start date (or the day it was logged) to its due date. */
+/**
+ * How much of an issue's response window has gone.
+ *
+ * Measured against `dueAt` when there is one, so a two-hour job is judged on the clock
+ * rather than on whether the date has rolled over. Falls back to the due date for
+ * anything logged before deadlines carried a time.
+ */
 export function slaProgress(
-  issue: { createdAt: string; scheduledFor: string | null; dueDate: string | null; status: Status },
-  today = todayStr(),
+  issue: { createdAt: string; scheduledFor: string | null; dueDate: string | null; dueAt?: string | null; status: Status },
+  now: Date | string = new Date(),
   warnAtPercent = 80
 ): SlaProgress {
-  if (issue.status === "completed") return { state: "done", fraction: 0, totalDays: 0, daysLeft: 0 };
-  if (!issue.dueDate) return { state: "none", fraction: 0, totalDays: 0, daysLeft: 0 };
-  const startDay = issue.scheduledFor && issue.scheduledFor <= today ? issue.scheduledFor : issue.createdAt.slice(0, 10);
-  const totalDays = Math.max(0, daysBetween(startDay, issue.dueDate));
-  const elapsed = daysBetween(startDay, today);
-  const daysLeft = daysBetween(today, issue.dueDate);
-  const fraction = totalDays > 0 ? elapsed / totalDays : elapsed >= 0 ? 1 : 0;
-  if (daysLeft < 0) return { state: "overdue", fraction, totalDays, daysLeft };
-  if (warnAtPercent > 0 && totalDays > 1 && fraction >= warnAtPercent / 100) return { state: "warning", fraction, totalDays, daysLeft };
-  return { state: "ok", fraction, totalDays, daysLeft };
+  const empty = { fraction: 0, totalHours: 0, hoursLeft: 0, totalDays: 0, daysLeft: 0 };
+  if (issue.status === "completed" || issue.status === "cancelled") return { state: "done", ...empty };
+
+  const at = typeof now === "string" ? new Date(`${now}T12:00:00`) : now;
+  const deadline = issue.dueAt ? new Date(issue.dueAt) : issue.dueDate ? new Date(`${issue.dueDate}T23:59:59`) : null;
+  if (!deadline || Number.isNaN(deadline.getTime())) return { state: "none", ...empty };
+
+  const today = toDay(at);
+  const startedAt =
+    issue.scheduledFor && issue.scheduledFor <= today ? new Date(`${issue.scheduledFor}T00:00:00`) : new Date(issue.createdAt);
+  const totalMs = Math.max(0, deadline.getTime() - startedAt.getTime());
+  const elapsedMs = at.getTime() - startedAt.getTime();
+  const leftMs = deadline.getTime() - at.getTime();
+
+  const totalHours = Math.round((totalMs / 3600_000) * 10) / 10;
+  const hoursLeft = Math.round((leftMs / 3600_000) * 10) / 10;
+  const shape = {
+    fraction: totalMs > 0 ? elapsedMs / totalMs : elapsedMs >= 0 ? 1 : 0,
+    totalHours,
+    hoursLeft,
+    totalDays: Math.round(totalHours / 24),
+    daysLeft: Math.ceil(hoursLeft / 24),
+  };
+
+  if (leftMs < 0) return { state: "overdue", ...shape };
+  if (warnAtPercent > 0 && totalMs > 0 && shape.fraction >= warnAtPercent / 100) return { state: "warning", ...shape };
+  return { state: "ok", ...shape };
+}
+
+/** "1h 20m left" / "2 days left" / "3h late" — what a person wants to read on a card. */
+export function timeLeftPhrase(hoursLeft: number): string {
+  const late = hoursLeft < 0;
+  const magnitude = Math.abs(hoursLeft);
+  let text: string;
+  if (magnitude < 1) text = `${Math.max(1, Math.round(magnitude * 60))}m`;
+  else if (magnitude < 24) {
+    // Round to the minute first: 1.999h is two hours, not "1h 60m".
+    const totalMinutes = Math.round(magnitude * 60);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    text = m >= 5 ? `${h}h ${m}m` : `${h}h`;
+  } else {
+    const days = Math.round(magnitude / 24);
+    text = `${days} day${days === 1 ? "" : "s"}`;
+  }
+  return late ? `${text} late` : `${text} left`;
 }
 
 export function daysBetween(fromDay: string, toDay: string): number {

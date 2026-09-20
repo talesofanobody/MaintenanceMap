@@ -27,6 +27,8 @@ import SummaryBoard from "./dashboard/SummaryBoard";
 import TvView from "./dashboard/TvView";
 import GuestReport, { parseIntakeHash } from "./pages/GuestReport";
 import Requests from "./pages/Requests";
+import Scheduler from "./pages/Scheduler";
+import CrewMap from "./pages/CrewMap";
 import { useEffect, useState } from "react";
 
 export function BrandMark() {
@@ -80,6 +82,8 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
             {(user.technicianId || isAdmin) && <NavLink to="/today">Today</NavLink>}
             <NavLink to="/properties">Properties</NavLink>
             {isAdmin && <NavLink to="/technicians">Technicians</NavLink>}
+            {isAdmin && <NavLink to="/scheduler">Scheduler</NavLink>}
+            {isAdmin && <NavLink to="/crew">Crew map</NavLink>}
             {isAdmin && <NavLink to="/schedules">Schedules</NavLink>}
             <NavLink to="/dashboard">Dashboards</NavLink>
             {isAdmin && <RequestsLink />}
@@ -167,6 +171,8 @@ function AppRoutes() {
           <Route path="/account" element={<Account />} />
           {isAdmin && <Route path="/technicians" element={<Technicians />} />}
           {isAdmin && <Route path="/technicians/rota" element={<Rota />} />}
+          {isAdmin && <Route path="/scheduler" element={<Scheduler />} />}
+          {isAdmin && <Route path="/crew" element={<CrewMap />} />}
           {isAdmin && <Route path="/schedules" element={<Schedules />} />}
           {isAdmin && <Route path="/requests" element={<Requests />} />}
           {isAdmin && <Route path="/reports" element={<Reports />} />}

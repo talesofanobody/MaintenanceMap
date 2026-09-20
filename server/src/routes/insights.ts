@@ -3,6 +3,7 @@ import { prisma } from "../db";
 import { ADMIN_ONLY } from "../middleware/requireAuth";
 import { costsByIssue } from "../lib/costs";
 import { dayFrom } from "../lib/validation";
+import { OPEN_STATUSES } from "../lib/workflow";
 
 export const insightsRouter = Router();
 
@@ -29,7 +30,7 @@ insightsRouter.get("/trends", ADMIN_ONLY, async (req, res) => {
 
   const [issues, costs, contractorSpend] = await Promise.all([
     prisma.issue.findMany({
-      where: { OR: [{ createdAt: { gte: since } }, { closedAt: { gte: since } }, { status: { not: "completed" } }] },
+      where: { OR: [{ createdAt: { gte: since } }, { closedAt: { gte: since } }, { status: { in: OPEN_STATUSES } }] },
       select: {
         id: true,
         priority: true,

@@ -10,6 +10,8 @@ const BADGE: Record<Priority, string> = {
   medium: '<circle cx="20" cy="20" r="17"/>',
   high: '<path d="M20 3.5 L37 34 L3 34 Z" stroke-linejoin="round"/>',
   urgent: '<path d="M13 3 L27 3 L37 13 L37 27 L27 37 L13 37 L3 27 L3 13 Z" stroke-linejoin="round"/>',
+  // Critical keeps the octagon so it reads as "stop" from across a room, but darker.
+  critical: '<path d="M13 3 L27 3 L37 13 L37 27 L27 37 L13 37 L3 27 L3 13 Z" stroke-linejoin="round"/>',
 };
 
 const GLYPH: Record<Priority, string> = {
@@ -17,10 +19,22 @@ const GLYPH: Record<Priority, string> = {
   medium: '<text x="20" y="27" text-anchor="middle" font-size="20" font-weight="800" font-family="system-ui, sans-serif" fill="#1f2937">!</text>',
   high: '<text x="20" y="30" text-anchor="middle" font-size="19" font-weight="800" font-family="system-ui, sans-serif" fill="#fff">!</text>',
   urgent: '<text x="20" y="27" text-anchor="middle" font-size="19" font-weight="900" font-family="system-ui, sans-serif" fill="#fff">!!</text>',
+  critical: '<text x="20" y="27" text-anchor="middle" font-size="18" font-weight="900" font-family="system-ui, sans-serif" fill="#fff">!!!</text>',
 };
+
+const WORKING_BADGE =
+  '<g><circle cx="7" cy="33" r="6.5" fill="#2563eb" stroke="#fff" stroke-width="1.8"/><path d="M4.5 33 A2.5 2.5 0 0 1 9.5 33" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M4 31 h6" stroke="#fff" stroke-width="1.6"/></g>';
+const PAUSED_BADGE =
+  '<g><circle cx="7" cy="33" r="6.5" fill="#a16207" stroke="#fff" stroke-width="1.8"/><path d="M5.2 30.4 v5.2 M8.8 30.4 v5.2" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></g>';
+const CANCELLED_BADGE =
+  '<g><circle cx="7" cy="33" r="6.5" fill="#64748b" stroke="#fff" stroke-width="1.8"/><path d="M4.6 30.6 L9.4 35.4 M9.4 30.6 L4.6 35.4" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></g>';
 
 const STATUS_BADGE: Record<Status, string> = {
   pending: "",
+  accepted: WORKING_BADGE,
+  on_hold: PAUSED_BADGE,
+  needs_parts: PAUSED_BADGE,
+  cancelled: CANCELLED_BADGE,
   in_progress:
     '<g><circle cx="7" cy="33" r="6.5" fill="#2563eb" stroke="#fff" stroke-width="1.8"/><path d="M4.5 33 A2.5 2.5 0 0 1 9.5 33" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M4 31 h6" stroke="#fff" stroke-width="1.6"/></g>',
   completed:

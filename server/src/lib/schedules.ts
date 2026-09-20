@@ -2,6 +2,7 @@ import { prisma } from "../db";
 import { dayFrom, DATE_ONLY } from "./validation";
 import { adminUserIds, issueLine, notifyUsers, technicianUserId } from "./notify";
 import { logActivity } from "./activity";
+import { syncAssignees } from "./crew";
 
 export const UNITS = new Set(["days", "weeks", "months"]);
 
@@ -79,6 +80,8 @@ export async function createOccurrence(scheduleId: string, opts: { force?: boole
     },
     include: { technician: { select: { name: true } } },
   });
+  // The generated job has a lead, so it needs the crew row to match.
+  if (schedule.technicianId) await syncAssignees(issue.id, [schedule.technicianId]);
   await prisma.schedule.update({
     where: { id: schedule.id },
     data: { nextDue: advanceDay(schedule.nextDue, schedule.every, schedule.unit), lastCreatedAt: now },

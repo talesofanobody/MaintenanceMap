@@ -2,14 +2,16 @@
 
 A self-hosted web app for running property maintenance from a map. Draw a property's border over
 satellite imagery, drop pins for issues (or let the app place them from a photo's GPS metadata), and
-track the work from there: priority and status, category, room, tags, who it's assigned to, start and due
+track the work from there: priority and status, category, room, tags, the crew on it, start and due
 dates, checklists, photos, time clocked on site, what it cost, and the work order in your EAM.
 
 Guests and staff without a login can report a problem themselves, by scanning a code in the room,
 and an admin accepts or turns down what comes in.
 
 Around that sits the rest of a working day: per-person logins for admins and technicians, a day sheet
-with clock in/out, a planner that fills someone's day by urgency and proximity, recurring maintenance
+with clock in/out, a drag-and-drop scheduler for the whole crew's day, emergencies that push the rest
+of a day back and put it right again afterwards, vacation and time off, a map of where everyone
+probably is, a planner that fills someone's day by urgency and proximity, recurring maintenance
 that creates its own jobs, reminders and escalation when work runs late, wall-screen dashboards,
 trend and portfolio reports, a calendar feed, printable property reports, CSV exports, nightly
 backups — and it keeps working on a phone with no signal, sending what you logged once you're back in
@@ -180,6 +182,25 @@ and use the local address. Guest reporting still works for anyone on that networ
 
 Either way, print your QR codes *after* the public address is working: the codes contain whatever
 address the browser was showing when you made them.
+
+### Loading your crew
+
+`server/prisma/roster.ts` holds a maintenance crew taken from a printed weekly schedule — names,
+trades, the work categories each trade covers, and a shift pattern per role. Load it with:
+
+```bash
+cd server && npm run seed:roster
+# or, in the container:
+docker compose exec app npx ts-node prisma/seed-roster.ts
+```
+
+It is safe to run more than once: anyone already on the books is left exactly as they are, so
+editing someone in the app and re-running will not undo the edit. Edit `roster.ts` to make it your
+own crew.
+
+**Check the shifts.** They are the pattern typical of each role on the sheet, not a per-person
+transcription, and the sheet's own rows do not line up reliably enough to trust cell by cell. Every
+shift is editable on the Technicians page.
 
 ### Get the backups off the machine
 
@@ -488,20 +509,105 @@ months). The technician is notified, or the admins are if nobody is assigned.
 **Run now** creates the next occurrence early, **Pause** stops it without losing the history, and
 deleting a schedule leaves the jobs it already created alone.
 
-### Turnaround targets, warnings and escalation
+### Response windows, warnings and escalation
 
 **Settings** (admin) holds the rules the app applies on your behalf:
 
-- **Turnaround by priority** — the days allowed to resolve an issue of each priority (urgent: same
-  day, high: 3, medium: 14, low: 30 by default). New issues get their due date from this, counted
-  from the start date or the day they were logged, and it can still be changed per issue.
-- **Running-out-of-time warning** — once this share of the turnaround has been used (80% by
-  default), the technician gets a reminder, the board shows **AT RISK**, the Today page flags the
-  row, and the issue panel says how much of the turnaround has gone. Set it to 0 to switch it off.
-- **Automatic escalation** — an overdue issue climbs one priority level after a set number of days,
-  and again each time that many days pass, so a forgotten low-priority job works its way up the
-  boards until somebody deals with it. Every escalation is recorded in the activity log and notifies
-  the technician and the admins. Can be switched off.
+- **Response window by priority** — the **hours** allowed to resolve an issue of each priority.
+  The defaults are Critical **2 hours**, Urgent **5 hours**, High 3 days, Medium 14 days, Low 30
+  days.
+
+  Anything under a day is a stopwatch: a critical job logged at 16:00 is late at 18:01, not
+  tomorrow. Longer windows are counted in days from the start date, as they always were. Every
+  issue carries both a **deadline** (the moment) and a **due date** (the day it falls on), so the
+  boards and the planner keep working by day while the countdown is honest to the minute.
+
+  Raising an issue's priority moves its deadline with it — put something on Critical and it is due
+  two hours from that moment.
+- **Running-out-of-time warning** — once this share of the window has gone (80% by default), the
+  technician gets a reminder, the board shows **AT RISK**, the Today page flags the row, and the
+  issue panel says how long is left. Set it to 0 to switch it off.
+- **Automatic escalation** — an overdue issue climbs one priority level after a set number of
+  **hours** overdue, and again each time that many hours pass, so a forgotten low-priority job
+  works its way up the boards until somebody deals with it. Every escalation is recorded in the
+  activity log and notifies the technician and the admins. Can be switched off.
+
+### How a job moves: the status workflow
+
+Every issue is in one of seven states:
+
+| Status | What it means |
+|---|---|
+| **Requested** | Logged, nobody has picked it up yet |
+| **Accepted** | A technician has taken it on |
+| **In Progress** | Being worked on now |
+| **On Hold** | Parked on something — access, a decision, a guest in the room |
+| **Needs Parts** | Waiting on a part or a delivery |
+| **Completed** | Done, with a close date and the time it took |
+| **Cancelled** | Called off — closed, but never resolved |
+
+The first five count as open: they sit on the boards, in the queues and in the counts. The last two
+are closed. **Cancelled work is closed but never counts as resolved** — it leaves the boards
+immediately and stays out of the average-time-to-resolve figures, because counting an abandoned job
+as a fast one would flatter the numbers.
+
+### Crews: up to four technicians on a job
+
+A job can carry up to four technicians. The first is the **lead** — they are who it is booked to,
+who the day scheduler places, and whose name appears on the boards. The others are there because
+the job needs more than one pair of hands.
+
+Everyone on the crew can update the job they were sent to: status, notes, photos, the checklist,
+costs, their own clock in/out. Only an admin changes **who** is on it. Add and remove people in the
+issue panel, and use **Make lead** to change who runs it.
+
+### Vacation and time off
+
+**Technicians → Time off** books someone off: vacation, sick leave, training or anything else, over
+a single day or a range. While they are off:
+
+- their column on the day scheduler is greyed out and marked, and work can't be dropped on them;
+- the rota shows the period;
+- the crew map reads them as away rather than guessing at a position.
+
+Booking someone off when they already have work scheduled in that period does not move the work —
+it tells you how many jobs clash so you can decide where they go.
+
+### The day scheduler
+
+**Scheduler** (admin) is the day, technician by technician. Each column is one person's shift with
+their jobs laid end to end from the start of it, so every job has a start and finish time worked
+out from the one before it and its own estimate.
+
+- **Drag a card onto a technician** to give them the job for that day. Drop it on the narrow gap
+  above an existing card to place it in front of that one; drop it anywhere else in the column to
+  put it at the end.
+- **Drag it back to Unassigned** to take it off the day entirely.
+- The bar under each name shows how full the day is, and turns red when the work booked runs past
+  the end of the shift.
+- Jump between days with the arrows, and filter to one trade when 50 columns is too many.
+
+### Emergencies: slotting one in
+
+A burst pipe does not wait for the schedule. The **⚡** on any card slots that job into the front of
+the technician's day and pushes everything behind it one place later.
+
+The shift is **linear and reversible**: each displaced job remembers exactly where it was and which
+emergency moved it. When the emergency is completed or cancelled, the day goes straight back to the
+order somebody planned — it does not re-sort or re-optimise. A second emergency on the same day
+stacks without losing the original positions.
+
+Displaced cards are marked *pushed* while it lasts, and both the technician and the admins are told.
+
+### Where the crew are
+
+**Crew map** (admin) puts a pin on each technician showing where they probably are.
+
+This is worked out from **clock-ins** — the job someone is clocked into, or the last one they
+finished today. **Nobody's phone is tracked.** A live pin pulses; an older one fades and goes
+dashed, and every row says how long ago the reading is, because a confident wrong pin is worse than
+an honest vague one. People with no clock-in today are listed as "not clocked in" rather than
+guessed at.
 
 ### Notifications
 
@@ -707,13 +813,16 @@ for a file. Tip: give the map a second to finish loading imagery before printing
 - `Property`: name, address, notes, boundary (GeoJSON polygon), center lat/lng, whether guest
   reporting is open and the secret in its public link
 - `Technician`: name, trade, phone, colour, active flag, the working week as a start and end time
-  per day, the categories they cover, hourly rate
+  per day (a shift may run past midnight, for the night crew), the categories they cover, hourly rate
+- `IssueAssignee`: who is on a job — up to four per issue, the lead mirrored from `Issue.technicianId`
+- `TimeOff`: a technician away from a start day to an end day, with the kind and an optional note
 - `Tag` / `IssueTag`: the tag list and which issues carry which tags
 - `Contractor`: name, trade, phone, email, notes, active flag
 - `Issue`: title, description, action needed, priority, status, work order flag/number/EAM link,
   lat/lng, closed-at timestamp (managed from the status), assigned technician,
-  estimated/actual hours, start date, due date (always set), category, room, when it was last
-  escalated, and the schedule that created it; belongs to a property
+  estimated/actual hours, start date, due date and the deadline behind it, place in the assigned
+  technician's day, whether it is an emergency and which emergency (if any) pushed it back,
+  category, room, when it was last escalated, and the schedule that created it; belongs to a property
 - `Message`: one line of an issue's conversation — the author's login and name as it stood at
   the time, the text, when it was posted and when it was last edited
 - `GuestReport`: what someone without a login sent in — room, issue type, description, any location

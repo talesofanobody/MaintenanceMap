@@ -1,25 +1,25 @@
 import { prisma } from "../db";
 import { ValidationError } from "./validation";
+import { DEFAULT_RESPONSE_HOURS, PRIORITY_ORDER, PRIORITY_WORDS, type PriorityKey } from "./workflow";
 
-export type PriorityKey = "urgent" | "high" | "medium" | "low";
-export const PRIORITY_ORDER: PriorityKey[] = ["low", "medium", "high", "urgent"];
+export { PRIORITY_ORDER, nextPriority, type PriorityKey } from "./workflow";
 
 export interface AppSettings {
-  /** Calendar days allowed to resolve an issue of each priority (0 = same day). */
-  slaDays: Record<PriorityKey, number>;
-  /** Warn the technician once this share of the turnaround has elapsed (0 disables). */
+  /** Hours allowed to resolve an issue of each priority, counted from when it is logged. */
+  responseHours: Record<PriorityKey, number>;
+  /** Warn the technician once this share of the window has elapsed (0 disables). */
   warnAtPercent: number;
   escalation: {
     enabled: boolean;
-    /** Raise the priority one level once an issue is overdue by this many days, and again every N days. */
-    afterOverdueDays: number;
+    /** Raise the priority one level once an issue is overdue by this many hours, and again every N hours. */
+    afterOverdueHours: number;
   };
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  slaDays: { urgent: 0, high: 3, medium: 14, low: 30 },
+  responseHours: { ...DEFAULT_RESPONSE_HOURS },
   warnAtPercent: 80,
-  escalation: { enabled: true, afterOverdueDays: 3 },
+  escalation: { enabled: true, afterOverdueHours: 72 },
 };
 
 const ROW_ID = "app";
@@ -28,7 +28,7 @@ let cache: AppSettings | null = null;
 export async function getSettings(): Promise<AppSettings> {
   if (cache) return cache;
   const row = await prisma.setting.findUnique({ where: { id: ROW_ID } });
-  let stored: Partial<AppSettings> = {};
+  let stored: Record<string, any> = {};
   if (row) {
     try {
       stored = JSON.parse(row.json);
@@ -51,11 +51,41 @@ export async function saveSettings(input: unknown): Promise<AppSettings> {
   return next;
 }
 
-function merge(stored: Partial<AppSettings>): AppSettings {
+/** Clears the cached copy; only the tests and the settings route need this. */
+export function forgetSettings(): void {
+  cache = null;
+}
+
+/**
+ * Reads whatever shape is on disk. Installs written before response windows were
+ * measured in hours stored whole days per priority, so those are converted rather than
+ * thrown away — and they had no "critical", which picks up the default.
+ */
+function merge(stored: Record<string, any>): AppSettings {
+  const hours: Record<string, number> = { ...DEFAULT_SETTINGS.responseHours };
+  if (stored.slaDays && typeof stored.slaDays === "object") {
+    for (const [key, days] of Object.entries(stored.slaDays)) {
+      if (typeof days === "number" && Number.isFinite(days)) hours[key] = Math.max(1, Math.round(days * 24));
+    }
+  }
+  if (stored.responseHours && typeof stored.responseHours === "object") {
+    for (const [key, value] of Object.entries(stored.responseHours)) {
+      if (typeof value === "number" && Number.isFinite(value)) hours[key] = value;
+    }
+  }
+  const esc = stored.escalation ?? {};
   return {
-    slaDays: { ...DEFAULT_SETTINGS.slaDays, ...(stored.slaDays ?? {}) },
+    responseHours: hours as Record<PriorityKey, number>,
     warnAtPercent: stored.warnAtPercent ?? DEFAULT_SETTINGS.warnAtPercent,
-    escalation: { ...DEFAULT_SETTINGS.escalation, ...(stored.escalation ?? {}) },
+    escalation: {
+      enabled: esc.enabled === undefined ? DEFAULT_SETTINGS.escalation.enabled : !!esc.enabled,
+      afterOverdueHours:
+        typeof esc.afterOverdueHours === "number"
+          ? esc.afterOverdueHours
+          : typeof esc.afterOverdueDays === "number"
+            ? esc.afterOverdueDays * 24
+            : DEFAULT_SETTINGS.escalation.afterOverdueHours,
+    },
   };
 }
 
@@ -71,29 +101,28 @@ function intIn(value: unknown, field: string, min: number, max: number): number 
 export function validate(input: unknown): AppSettings {
   if (!input || typeof input !== "object") throw new ValidationError("settings must be an object");
   const body = input as Record<string, any>;
-  const sla = body.slaDays ?? {};
-  const slaDays = {
-    urgent: intIn(sla.urgent ?? DEFAULT_SETTINGS.slaDays.urgent, "Urgent turnaround", 0, 365),
-    high: intIn(sla.high ?? DEFAULT_SETTINGS.slaDays.high, "High turnaround", 0, 365),
-    medium: intIn(sla.medium ?? DEFAULT_SETTINGS.slaDays.medium, "Medium turnaround", 0, 365),
-    low: intIn(sla.low ?? DEFAULT_SETTINGS.slaDays.low, "Low turnaround", 0, 365),
-  };
-  if (!(slaDays.urgent <= slaDays.high && slaDays.high <= slaDays.medium && slaDays.medium <= slaDays.low)) {
-    throw new ValidationError("Turnaround must not get shorter as priority goes down (urgent ≤ high ≤ medium ≤ low).");
+  const given = body.responseHours ?? {};
+  const responseHours = {} as Record<PriorityKey, number>;
+  for (const key of PRIORITY_ORDER) {
+    responseHours[key] = intIn(given[key] ?? DEFAULT_SETTINGS.responseHours[key], `${PRIORITY_WORDS[key]} response window`, 1, 8760);
+  }
+  // Ascending priority must not get a longer window than the one below it.
+  for (let i = 1; i < PRIORITY_ORDER.length; i++) {
+    const lower = PRIORITY_ORDER[i - 1];
+    const higher = PRIORITY_ORDER[i];
+    if (responseHours[higher] > responseHours[lower]) {
+      throw new ValidationError(
+        `${PRIORITY_WORDS[higher]} can't have a longer window than ${PRIORITY_WORDS[lower]} — the more urgent the work, the less time there is.`
+      );
+    }
   }
   const esc = body.escalation ?? {};
   return {
-    slaDays,
+    responseHours,
     warnAtPercent: intIn(body.warnAtPercent ?? DEFAULT_SETTINGS.warnAtPercent, "Warning threshold", 0, 100),
     escalation: {
       enabled: esc.enabled === undefined ? DEFAULT_SETTINGS.escalation.enabled : !!esc.enabled,
-      afterOverdueDays: intIn(esc.afterOverdueDays ?? DEFAULT_SETTINGS.escalation.afterOverdueDays, "Escalate after", 1, 90),
+      afterOverdueHours: intIn(esc.afterOverdueHours ?? DEFAULT_SETTINGS.escalation.afterOverdueHours, "Escalate after", 1, 2160),
     },
   };
-}
-
-export function nextPriority(priority: string): PriorityKey | null {
-  const idx = PRIORITY_ORDER.indexOf(priority as PriorityKey);
-  if (idx < 0 || idx === PRIORITY_ORDER.length - 1) return null;
-  return PRIORITY_ORDER[idx + 1];
 }

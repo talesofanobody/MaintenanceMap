@@ -1,13 +1,13 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth/AuthContext";
-import { SLA_DAYS } from "../lib/capacity";
+import { RESPONSE_HOURS } from "../lib/capacity";
 import type { AppSettings } from "../types";
 
 export const FALLBACK_SETTINGS: AppSettings = {
-  slaDays: SLA_DAYS,
+  responseHours: RESPONSE_HOURS,
   warnAtPercent: 80,
-  escalation: { enabled: true, afterOverdueDays: 3 },
+  escalation: { enabled: true, afterOverdueHours: 72 },
 };
 
 interface SettingsContextValue extends AppSettings {

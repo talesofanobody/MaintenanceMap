@@ -2,6 +2,8 @@ import { Router, type Request } from "express";
 import { prisma } from "../db";
 import { ADMIN_ONLY, CAN_EDIT } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
+import { isClosed, STATUS_WORDS } from "../lib/workflow";
+import { isOnCrew } from "../lib/crew";
 
 export const timeRouter = Router();
 
@@ -72,8 +74,11 @@ timeRouter.post("/clock-in", CAN_EDIT, async (req, res) => {
 
   const issue = await prisma.issue.findUnique({ where: { id: issueId } });
   if (!issue) return res.status(404).json({ error: "Issue not found" });
-  if (issue.status === "completed") return res.status(400).json({ error: "This issue is already completed. Reopen it to log more time." });
-  if (req.user!.role === "technician" && issue.technicianId && issue.technicianId !== technicianId) {
+  if (isClosed(issue.status)) {
+    return res.status(400).json({ error: `This issue is already ${STATUS_WORDS[issue.status as keyof typeof STATUS_WORDS] ?? issue.status}. Reopen it to log more time.` });
+  }
+  // Unassigned work is fair game; assigned work is for the crew on it.
+  if (req.user!.role === "technician" && issue.technicianId && !(await isOnCrew(issue.id, technicianId))) {
     return res.status(403).json({ error: "That issue is assigned to someone else." });
   }
   const technician = await prisma.technician.findUnique({ where: { id: technicianId } });

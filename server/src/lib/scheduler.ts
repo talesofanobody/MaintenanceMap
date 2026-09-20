@@ -1,5 +1,6 @@
 import { prisma } from "../db";
 import { dayFrom, daysBetween } from "./validation";
+import { describeWindow, isShortFuse, OPEN_STATUSES } from "./workflow";
 import { getSettings, nextPriority } from "./settings";
 import { logActivity } from "./activity";
 import { generateDueOccurrences } from "./schedules";
@@ -19,7 +20,7 @@ export async function runScheduledChecks(now = new Date()): Promise<{ created: n
   // Recurring maintenance first, so freshly created jobs get today's reminders too.
   let created = await generateDueOccurrences(now);
   const open = await prisma.issue.findMany({
-    where: { status: { not: "completed" } },
+    where: { status: { in: OPEN_STATUSES } },
     include: {
       property: { select: { name: true } },
       technician: { select: { name: true, user: { select: { id: true, active: true } } } },
@@ -30,6 +31,7 @@ export async function runScheduledChecks(now = new Date()): Promise<{ created: n
     const techUser = issue.technician?.user?.active ? issue.technician.user.id : null;
     const line = issueLine(issue, issue.property.name);
     const base = { issueId: issue.id, propertyId: issue.propertyId };
+    const windowHours = settings.responseHours[issue.priority as keyof typeof settings.responseHours] ?? 336;
 
     if (issue.scheduledFor === today && techUser) {
       created += await notifyUsers([techUser], {
@@ -62,40 +64,55 @@ export async function runScheduledChecks(now = new Date()): Promise<{ created: n
       });
     }
 
-    if (issue.dueDate && issue.dueDate < today) {
+    // Lateness is measured against the deadline itself. A two-hour job logged at 16:00
+    // is late at 18:01 — waiting for the date to roll over would miss the entire point.
+    const deadline = issue.dueAt ?? null;
+    const overdueMs = deadline ? now.getTime() - deadline.getTime() : 0;
+    const isOverdue = overdueMs > 0;
+
+    if (isOverdue) {
+      const lateFor = overdueMs / 3_600_000;
+      const lateText = lateFor < 24 ? `${Math.max(1, Math.round(lateFor))}h late` : `${Math.round(lateFor / 24)}d late`;
       created += await notifyUsers([techUser, ...admins], {
         ...base,
         kind: "overdue",
         title: `Overdue: ${issue.title}`,
-        body: `${line}${issue.technician ? ` · ${issue.technician.name}` : " · unassigned"}`,
-        // Re-dating an overdue issue resets the reminder.
-        dedupeKey: `overdue:${issue.id}:${issue.dueDate}`,
+        body: `${lateText} · ${line}${issue.technician ? ` · ${issue.technician.name}` : " · unassigned"}`,
+        // Re-dating an overdue issue resets the reminder. Short-fuse work re-nags hourly,
+        // day-scale work once a day, so a two-hour breach isn't a single easy-to-miss line.
+        dedupeKey: `overdue:${issue.id}:${deadline!.toISOString()}:${
+          isShortFuse(windowHours) ? `${today}T${String(now.getUTCHours()).padStart(2, "0")}` : today
+        }`,
       });
     }
 
-    // Running out of turnaround: warn the technician once a set share of the time has gone.
-    if (issue.dueDate && issue.dueDate > today && techUser && settings.warnAtPercent > 0) {
-      const startDay = issue.scheduledFor && issue.scheduledFor <= today ? issue.scheduledFor : dayFrom(issue.createdAt, 0);
-      const total = daysBetween(startDay, issue.dueDate);
-      const elapsed = daysBetween(startDay, today);
-      if (total > 1 && elapsed / total >= settings.warnAtPercent / 100) {
+    // Running out of time: warn once a set share of the window has gone.
+    if (deadline && !isOverdue && techUser && settings.warnAtPercent > 0) {
+      const startedAt = issue.scheduledFor && issue.scheduledFor <= today ? new Date(`${issue.scheduledFor}T00:00:00Z`) : issue.createdAt;
+      const total = deadline.getTime() - startedAt.getTime();
+      const elapsed = now.getTime() - startedAt.getTime();
+      if (total > 0 && elapsed / total >= settings.warnAtPercent / 100) {
+        const left = Math.max(0, deadline.getTime() - now.getTime()) / 3_600_000;
         created += await notifyUsers([techUser], {
           ...base,
           kind: "due_soon",
           title: `Running out of time: ${issue.title}`,
-          body: `${Math.round((elapsed / total) * 100)}% of the ${total}-day turnaround used · ${line}`,
-          dedupeKey: `at_risk:${issue.id}:${issue.dueDate}`,
+          body: `${Math.round((elapsed / total) * 100)}% of the ${describeWindow(windowHours)} used · ${
+            left < 1 ? "under an hour left" : `${Math.round(left)}h left`
+          } · ${line}`,
+          dedupeKey: `at_risk:${issue.id}:${deadline.toISOString()}`,
         });
       }
     }
 
-    // Overdue long enough: raise the priority one level (and again every N days), so it climbs the boards.
-    if (settings.escalation.enabled && issue.dueDate && issue.dueDate < today) {
-      const overdueDays = daysBetween(issue.dueDate, today);
+    // Overdue long enough: raise the priority one level (and again every N hours), so it climbs the boards.
+    if (settings.escalation.enabled && isOverdue) {
+      const overdueHours = overdueMs / 3_600_000;
+      const overdueDays = Math.floor(overdueHours / 24);
       const next = nextPriority(issue.priority);
-      const sinceLast = issue.escalatedAt ? (now.getTime() - issue.escalatedAt.getTime()) / 86_400_000 : Infinity;
-      const every = settings.escalation.afterOverdueDays;
-      if (next && overdueDays >= every && sinceLast >= every) {
+      const sinceLast = issue.escalatedAt ? (now.getTime() - issue.escalatedAt.getTime()) / 3_600_000 : Infinity;
+      const every = settings.escalation.afterOverdueHours;
+      if (next && overdueHours >= every && sinceLast >= every) {
         await prisma.issue.update({ where: { id: issue.id }, data: { priority: next, escalatedAt: now } });
         await logActivity(null, {
           action: "issue.escalated",
@@ -103,13 +120,15 @@ export async function runScheduledChecks(now = new Date()): Promise<{ created: n
           entityId: issue.id,
           issueId: issue.id,
           propertyId: issue.propertyId,
-          summary: `"${issue.title}": Priority: ${issue.priority} → ${next} (automatic — overdue ${overdueDays} day${overdueDays === 1 ? "" : "s"})`,
+          summary: `"${issue.title}": Priority: ${issue.priority} → ${next} (automatic — overdue ${
+            overdueHours < 24 ? `${Math.round(overdueHours)} hour${Math.round(overdueHours) === 1 ? "" : "s"}` : `${overdueDays} day${overdueDays === 1 ? "" : "s"}`
+          })`,
         });
         created += await notifyUsers([techUser, ...admins], {
           ...base,
           kind: "priority",
           title: `Escalated to ${priorityWord(next)}: ${issue.title}`,
-          body: `Overdue ${overdueDays} day${overdueDays === 1 ? "" : "s"} · ${issue.property.name}${issue.technician ? ` · ${issue.technician.name}` : " · unassigned"}`,
+          body: `Overdue ${overdueHours < 24 ? `${Math.round(overdueHours)}h` : `${overdueDays}d`} · ${issue.property.name}${issue.technician ? ` · ${issue.technician.name}` : " · unassigned"}`,
           dedupeKey: `escalate:${issue.id}:${next}:${today}`,
         });
       }

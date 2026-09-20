@@ -33,8 +33,6 @@ export function parseOptionalDay(value: unknown, field: string): string | null |
   return value;
 }
 
-// Default turnaround per priority, used when an issue is saved without a due date.
-export const SLA_DAYS: Record<string, number> = { urgent: 0, high: 3, medium: 14, low: 30 };
 
 export function dayFrom(date: Date, offsetDays: number): string {
   const d = new Date(date.getTime() + offsetDays * 24 * 60 * 60 * 1000);
@@ -49,13 +47,42 @@ export function daysBetween(fromDay: string, toDay: string): number {
   return Math.round((parse(toDay) - parse(fromDay)) / 86_400_000);
 }
 
-export function defaultDueDate(priority: string, baseDay?: string | null, slaDays: Record<string, number> = SLA_DAYS): string {
-  const offset = slaDays[priority] ?? 14;
-  if (baseDay && DATE_ONLY.test(baseDay)) {
-    const [y, m, d] = baseDay.split("-").map(Number);
-    return dayFrom(new Date(Date.UTC(y, m - 1, d)), offset);
+/** Midnight UTC at the start of a YYYY-MM-DD day. */
+export function startOfDay(day: string): Date {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+/** The last instant of a YYYY-MM-DD day, which is when day-based work is due. */
+export function endOfDay(day: string): Date {
+  return new Date(startOfDay(day).getTime() + 24 * 3600_000 - 1000);
+}
+
+export interface Deadline {
+  /** The moment it must be resolved by. */
+  dueAt: Date;
+  /** The day that moment falls on, which is what the planning views order by. */
+  dueDate: string;
+}
+
+/**
+ * When a job of this priority has to be finished.
+ *
+ * Anything under a day is a stopwatch: a two-hour job logged at 16:00 is due at 18:00
+ * today, whatever the planner says. Longer windows are really a number of days and are
+ * counted from the day the work is due to start, so moving a start date moves the
+ * deadline with it — which is how it has always behaved.
+ */
+export function computeDeadline(priority: string, responseHours: Record<string, number>, opts: { now?: Date; scheduledFor?: string | null } = {}): Deadline {
+  const now = opts.now ?? new Date();
+  const hours = responseHours[priority] ?? 336;
+  if (hours < 24) {
+    const dueAt = new Date(now.getTime() + hours * 3600_000);
+    return { dueAt, dueDate: dayFrom(dueAt, 0) };
   }
-  return dayFrom(new Date(), offset);
+  const base = opts.scheduledFor && DATE_ONLY.test(opts.scheduledFor) ? startOfDay(opts.scheduledFor) : now;
+  const dueDate = dayFrom(base, Math.round(hours / 24));
+  return { dueAt: endOfDay(dueDate), dueDate };
 }
 
 export function parseWeeklyHours(value: unknown): number[] | undefined {

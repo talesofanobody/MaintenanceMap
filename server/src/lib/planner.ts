@@ -1,6 +1,7 @@
 import { prisma } from "../db";
 import { dayFrom, daysBetween } from "./validation";
 import { parseWeek, weekToHours } from "./shifts";
+import { OPEN_STATUSES } from "./workflow";
 
 const SEVERITY: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 /** Planning figure for a job with no estimate, so a day can still be filled sensibly. */
@@ -76,7 +77,7 @@ export async function planDay(technicianId: string, day: string, opts: { propert
 
   const candidates = await prisma.issue.findMany({
     where: {
-      status: { not: "completed" },
+      status: { in: OPEN_STATUSES },
       ...(opts.propertyId ? { propertyId: opts.propertyId } : {}),
       OR: [{ technicianId }, { technicianId: null }],
       // Anything pinned to this day, plus work due (or startable) within the horizon.

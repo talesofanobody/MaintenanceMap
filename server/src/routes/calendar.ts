@@ -3,6 +3,7 @@ import { Router } from "express";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
+import { OPEN_STATUSES } from "../lib/workflow";
 
 export const calendarRouter = Router();
 
@@ -77,7 +78,7 @@ calendarRouter.get("/:token/maintenancemap.ics", async (req, res) => {
   // Technicians see their own work; admins see the whole crew's.
   const issues = await prisma.issue.findMany({
     where: {
-      status: { not: "completed" },
+      status: { in: OPEN_STATUSES },
       ...(user.role === "technician" ? { technicianId: user.technicianId ?? "none" } : {}),
     },
     include: { property: { select: { name: true, address: true } }, technician: { select: { name: true } }, checklist: { select: { done: true } } },

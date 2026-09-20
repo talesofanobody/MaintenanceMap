@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db";
 import { serializeTechnician } from "./technicians";
+import { OPEN_STATUSES } from "../lib/workflow";
 
 export const dashboardRouter = Router();
 
@@ -15,7 +16,9 @@ dashboardRouter.get("/", async (_req, res) => {
     }),
     prisma.technician.findMany({ orderBy: [{ active: "desc" }, { name: "asc" }] }),
     prisma.issue.findMany({
-      where: { OR: [{ status: { not: "completed" } }, { closedAt: { gte: since } }] },
+      // Recently closed work still shows as "done today"; cancelled work was never
+      // done, so it leaves the boards entirely.
+      where: { OR: [{ status: { in: OPEN_STATUSES } }, { status: "completed", closedAt: { gte: since } }] },
       include: {
         property: { select: { id: true, name: true } },
         technician: { select: { id: true, name: true, color: true, trade: true } },

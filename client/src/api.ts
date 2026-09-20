@@ -1,4 +1,4 @@
-import type { GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -167,6 +167,9 @@ export const api = {
     dueDate?: string | null;
     /** Set when this issue is an accepted guest report: the photos and the record move with it. */
     guestReportId?: string;
+    /** The whole crew, lead first. Replaces technicianId, which still works. */
+    technicianIds?: string[];
+    isEmergency?: boolean;
   }) => request<Issue>("/issues", { method: "POST", body: JSON.stringify(data) }),
 
   exportIssuesUrl: (propertyId?: string) => `${BASE}/export/issues.csv${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ""}`,
@@ -192,6 +195,24 @@ export const api = {
   deletePhoto: (id: string) => request<void>(`/photos/${id}`, { method: "DELETE" }),
   photoUrl: (id: string) => `${BASE}/photos/${id}/file`,
   photoThumbUrl: (id: string) => `${BASE}/photos/${id}/thumb`,
+
+  listTimeOff: (params: { technicianId?: string; from?: string; to?: string } = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
+    return request<TimeOff[]>(`/timeoff${q.toString() ? `?${q}` : ""}`);
+  },
+  createTimeOff: (data: { technicianId: string; startDay: string; endDay?: string; kind?: TimeOffKind; note?: string }) =>
+    request<{ entry: TimeOff; clashingJobs: number }>("/timeoff", { method: "POST", body: JSON.stringify(data) }),
+  updateTimeOff: (id: string, data: { startDay?: string; endDay?: string; kind?: TimeOffKind; note?: string | null }) =>
+    request<TimeOff>(`/timeoff/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteTimeOff: (id: string) => request<void>(`/timeoff/${id}`, { method: "DELETE" }),
+
+  getSchedule: (day: string) => request<DaySchedule>(`/schedule?day=${encodeURIComponent(day)}`),
+  scheduleAssign: (data: { issueId: string; technicianId: string | null; day: string | null; position?: number | null }) =>
+    request<ScheduledJob>("/schedule/assign", { method: "PUT", body: JSON.stringify(data) }),
+  scheduleEmergency: (data: { issueId: string; technicianId: string; day: string; position?: number }) =>
+    request<{ displaced: number; day: string; technicianId: string }>("/schedule/emergency", { method: "POST", body: JSON.stringify(data) }),
+  technicianLocations: () => request<{ technicians: TechnicianLocation[]; generatedAt: string }>("/schedule/locations"),
 
   setPropertyIntake: (id: string, data: { enabled?: boolean; rotate?: boolean }) =>
     request<{ id: string; intakeEnabled: boolean; intakeToken: string | null }>(`/properties/${id}/intake`, {

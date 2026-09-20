@@ -1,5 +1,7 @@
-export type Priority = "low" | "medium" | "high" | "urgent";
-export type Status = "pending" | "in_progress" | "completed";
+export type Priority = "low" | "medium" | "high" | "urgent" | "critical";
+/** "pending" reads as Requested everywhere a person sees it. */
+export type Status = "pending" | "accepted" | "in_progress" | "on_hold" | "needs_parts" | "completed" | "cancelled";
+export type TimeOffKind = "vacation" | "sick" | "training" | "other";
 
 export interface Photo {
   id: string;
@@ -72,9 +74,10 @@ export interface AppNotification {
 }
 
 export interface AppSettings {
-  slaDays: Record<Priority, number>;
+  /** Hours allowed to resolve each priority, counted from when it was logged. */
+  responseHours: Record<Priority, number>;
   warnAtPercent: number;
-  escalation: { enabled: boolean; afterOverdueDays: number };
+  escalation: { enabled: boolean; afterOverdueHours: number };
 }
 
 export interface ChecklistItem {
@@ -372,6 +375,13 @@ export interface Issue {
   messages?: Message[];
   /** Present when the issue was accepted from a guest report. */
   guestReport?: IssueOrigin | null;
+  /** Everyone on the job, lead first. */
+  assignees?: IssueAssignee[];
+  /** The moment it is due — what a two-hour job is actually judged on. */
+  dueAt?: string | null;
+  dayOrder?: number | null;
+  isEmergency?: boolean;
+  shiftedBy?: string | null;
   scheduleId?: string | null;
   checklist?: ChecklistItem[];
   costs?: Cost[];
@@ -482,34 +492,64 @@ export interface GuestReport {
   issue: { id: string; title: string; status: Status; priority: Priority } | null;
 }
 
-export const PRIORITIES: Priority[] = ["low", "medium", "high", "urgent"];
-export const STATUSES: Status[] = ["pending", "in_progress", "completed"];
+export const PRIORITIES: Priority[] = ["low", "medium", "high", "urgent", "critical"];
+export const STATUSES: Status[] = ["pending", "accepted", "in_progress", "on_hold", "needs_parts", "completed", "cancelled"];
+/** Still someone's problem — everything that is not finished or called off. */
+export const OPEN_STATUSES: Status[] = ["pending", "accepted", "in_progress", "on_hold", "needs_parts"];
+export const CLOSED_STATUSES: Status[] = ["completed", "cancelled"];
+
+export function isOpenStatus(status: Status | string): boolean {
+  return (OPEN_STATUSES as string[]).includes(status);
+}
+export function isClosedStatus(status: Status | string): boolean {
+  return (CLOSED_STATUSES as string[]).includes(status);
+}
+
+/** A job can have a lead and three other pairs of hands. */
+export const MAX_ASSIGNEES = 4;
 
 export const PRIORITY_COLORS: Record<Priority, string> = {
   low: "#16a34a",
   medium: "#eab308",
   high: "#f97316",
   urgent: "#dc2626",
+  critical: "#7f1d1d",
 };
 
 export const PRIORITY_DESCRIPTIONS: Record<Priority, string> = {
   low: "Cosmetic or minor — schedule when convenient",
   medium: "Needs attention — plan within the month",
   high: "Deteriorating or affecting use — act soon",
-  urgent: "Safety, structural or high-risk — act now",
+  urgent: "Needs someone within hours, not days",
+  critical: "Drop everything — unsafe, flooding or a room out of service",
 };
 
 export const STATUS_LABELS: Record<Status, string> = {
-  pending: "Pending",
+  pending: "Requested",
+  accepted: "Accepted",
   in_progress: "In Progress",
+  on_hold: "On Hold",
+  needs_parts: "Needs Parts",
   completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+export const STATUS_SHORT_LABELS: Record<Status, string> = {
+  pending: "Requested",
+  accepted: "Accepted",
+  in_progress: "Working",
+  on_hold: "On hold",
+  needs_parts: "Parts",
+  completed: "Done",
+  cancelled: "Cancelled",
 };
 
 export const PRIORITY_LABELS: Record<Priority, string> = {
   low: "Low",
   medium: "Medium",
   high: "High",
-  urgent: "Urgent / High Risk",
+  urgent: "Urgent",
+  critical: "Critical",
 };
 
 export const PRIORITY_SHORT_LABELS: Record<Priority, string> = {
@@ -517,4 +557,93 @@ export const PRIORITY_SHORT_LABELS: Record<Priority, string> = {
   medium: "Medium",
   high: "High",
   urgent: "Urgent",
+  critical: "Critical",
 };
+
+export const TIME_OFF_LABELS: Record<TimeOffKind, string> = {
+  vacation: "Vacation",
+  sick: "Sick leave",
+  training: "Training",
+  other: "Away",
+};
+
+export interface TimeOff {
+  id: string;
+  technicianId: string;
+  startDay: string;
+  endDay: string;
+  kind: TimeOffKind;
+  note: string | null;
+  createdAt: string;
+  technician: TechnicianRef;
+}
+
+export interface IssueAssignee {
+  id: string;
+  issueId: string;
+  technicianId: string;
+  createdAt: string;
+  technician: TechnicianRef;
+}
+
+/** One technician's day on the scheduler board. */
+export interface ScheduleRow {
+  id: string;
+  name: string;
+  trade: string | null;
+  color: string;
+  categories: string[];
+  shift: Shift | null;
+  timeOff: { kind: TimeOffKind; note: string | null; startDay: string; endDay: string } | null;
+  capacityHours: number;
+  bookedHours: number;
+  freeHours: number;
+  jobs: ScheduledJob[];
+}
+
+export interface ScheduledJob {
+  id: string;
+  title: string;
+  priority: Priority;
+  status: Status;
+  category: string | null;
+  roomName: string | null;
+  estimatedHours: number | null;
+  dayOrder: number | null;
+  isEmergency: boolean;
+  shiftedBy: string | null;
+  dueAt: string | null;
+  dueDate: string | null;
+  scheduledFor: string | null;
+  technicianId: string | null;
+  lat: number;
+  lng: number;
+  property: string;
+  propertyId: string;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  hours: number;
+  overrunsShift?: boolean;
+}
+
+export interface DaySchedule {
+  day: string;
+  technicians: ScheduleRow[];
+  unassigned: ScheduledJob[];
+  generatedAt: string;
+}
+
+/** Where a technician probably is, worked out from their clock-ins. */
+export interface TechnicianLocation {
+  id: string;
+  name: string;
+  trade: string | null;
+  color: string;
+  timeOff: { kind: TimeOffKind } | null;
+  state: "working" | "last_seen" | "away" | "unknown";
+  lat: number | null;
+  lng: number | null;
+  issue: { id: string; title: string; roomName: string | null; property: string; propertyId: string } | null;
+  since: string | null;
+  ageMinutes: number | null;
+}

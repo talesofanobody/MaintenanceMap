@@ -11,7 +11,7 @@ import { techniciansRouter } from "./routes/technicians";
 import { dashboardRouter } from "./routes/dashboard";
 import { exportRouter } from "./routes/export";
 import { prisma } from "./db";
-import { dayFrom } from "./lib/validation";
+import { computeDeadline } from "./lib/validation";
 import { getSettings } from "./lib/settings";
 import { settingsRouter } from "./routes/settings";
 import { schedulesRouter } from "./routes/schedules";
@@ -32,6 +32,8 @@ import { notificationsRouter } from "./routes/notifications";
 import { startScheduler } from "./lib/scheduler";
 import { timeRouter } from "./routes/time";
 import { intakeRouter } from "./routes/intake";
+import { timeOffRouter } from "./routes/timeoff";
+import { scheduleRouter } from "./routes/schedule";
 import { guestReportsRouter } from "./routes/guestReports";
 
 const app = express();
@@ -89,6 +91,8 @@ app.use("/api/insights", requireAuth, insightsRouter);
 app.use("/api/backups", requireAuth, backupsRouter);
 app.use("/api/tags", requireAuth, tagsRouter);
 app.use("/api/rota", requireAuth, rotaRouter);
+app.use("/api/timeoff", requireAuth, timeOffRouter);
+app.use("/api/schedule", requireAuth, scheduleRouter);
 // Not behind requireAuth: the secret token in the feed URL is what authorises it, so a
 // calendar app can subscribe. The router guards its own session-only endpoints.
 app.use("/api/calendar", calendarRouter);
@@ -137,16 +141,17 @@ if (CLIENT_DIST && fs.existsSync(path.join(CLIENT_DIST, "index.html"))) {
   console.log(`Serving the client from ${CLIENT_DIST}`);
 }
 
-// Issues created before due dates existed get one from their priority's turnaround,
-// counted from the day they were logged.
+// Issues logged before deadlines existed get one from their priority's response window,
+// counted from the moment they were logged.
 async function backfillDueDates() {
-  const missing = await prisma.issue.findMany({ where: { dueDate: null }, select: { id: true, priority: true, createdAt: true } });
+  const missing = await prisma.issue.findMany({ where: { OR: [{ dueDate: null }, { dueAt: null }] }, select: { id: true, priority: true, createdAt: true, scheduledFor: true } });
   if (!missing.length) return;
-  const { slaDays } = await getSettings();
+  const { responseHours } = await getSettings();
   for (const issue of missing) {
-    await prisma.issue.update({ where: { id: issue.id }, data: { dueDate: dayFrom(issue.createdAt, slaDays[issue.priority as keyof typeof slaDays] ?? 14) } });
+    const { dueAt, dueDate } = computeDeadline(issue.priority, responseHours, { now: issue.createdAt, scheduledFor: issue.scheduledFor });
+    await prisma.issue.update({ where: { id: issue.id }, data: { dueDate, dueAt } });
   }
-  if (missing.length) console.log(`Backfilled due dates for ${missing.length} issue(s).`);
+  console.log(`Backfilled deadlines for ${missing.length} issue(s).`);
 }
 backfillDueDates().catch((err) => console.error("due date backfill failed", err));
 

@@ -5172,3 +5172,605 @@ li.unread .bell-item:hover {
     margin-top: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Crews, time off, the day scheduler and the crew map
+   --------------------------------------------------------------------------- */
+
+.crew-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.crew-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.crew-member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.crew-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crew-lead {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--brand-text);
+  background: var(--brand-soft);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+}
+
+.crew-action {
+  border: none;
+  background: none;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.crew-action:hover {
+  color: var(--brand);
+}
+
+.crew-action.danger:hover {
+  color: var(--danger);
+}
+
+/* Time off */
+.timeoff-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.timeoff-head h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.timeoff-form {
+  margin: 14px 0 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.timeoff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.timeoff-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+}
+
+.timeoff-row.is-now {
+  border-color: var(--p-high);
+  background: var(--p-high-soft);
+}
+
+.timeoff-row.is-past {
+  opacity: 0.55;
+}
+
+.timeoff-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+}
+
+.timeoff-when {
+  flex: 1;
+  color: var(--text-2);
+}
+
+.timeoff-now {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--p-urgent);
+}
+
+.timeoff-note {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Day scheduler */
+.sched-head {
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sched-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sched-day-label {
+  margin: 0 0 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.sched-board {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  align-items: flex-start;
+}
+
+.sched-column {
+  flex: 0 0 260px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  min-height: 160px;
+  transition: border-color var(--fast), background var(--fast);
+}
+
+.sched-column.is-over {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.sched-column.is-away {
+  opacity: 0.6;
+  background: var(--surface-2);
+}
+
+.sched-backlog {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface-2);
+}
+
+.sched-col-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sched-col-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.sched-away {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--warn-text);
+  background: var(--warn-soft);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  align-self: flex-start;
+}
+
+.sched-load {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.sched-load span {
+  display: block;
+  height: 100%;
+  background: var(--success);
+}
+
+.sched-load.is-over span {
+  background: var(--p-urgent);
+}
+
+.sched-jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  min-height: 40px;
+}
+
+.sched-slot {
+  display: block;
+}
+
+/* An invisible strip above each card: dropping here means "put it in front of this one". */
+.sched-gap {
+  height: 8px;
+  margin: -4px 0;
+  border-radius: 3px;
+}
+
+.sched-gap:hover {
+  background: var(--brand-soft);
+}
+
+.sched-job {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 7px 9px;
+  cursor: grab;
+  display: grid;
+  gap: 3px;
+}
+
+.sched-job:active {
+  cursor: grabbing;
+}
+
+.sched-job.p-critical { border-left-color: #7f1d1d; }
+.sched-job.p-urgent { border-left-color: var(--p-urgent); }
+.sched-job.p-high { border-left-color: var(--p-high); }
+.sched-job.p-medium { border-left-color: var(--p-medium); }
+.sched-job.p-low { border-left-color: var(--p-low); }
+
+.sched-job.is-emergency {
+  background: var(--p-urgent-soft);
+  border-color: var(--p-urgent);
+}
+
+.sched-job.is-shifted {
+  border-style: dashed;
+}
+
+.sched-job-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.sched-time {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+
+.sched-pri {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+
+.sched-pri.p-critical, .sched-pri.p-urgent { color: var(--p-urgent); }
+.sched-pri.p-high { color: var(--p-high); }
+
+.sched-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  line-height: 1.3;
+}
+
+.sched-title:hover {
+  text-decoration: underline;
+}
+
+.sched-flag {
+  margin-right: 3px;
+}
+
+.sched-meta {
+  font-size: 11px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sched-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.sched-status {
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+.sched-status.s-in_progress { background: var(--brand-soft); color: var(--brand-text); }
+.sched-status.s-on_hold, .sched-status.s-needs_parts { background: var(--warn-soft); color: var(--warn-text); }
+.sched-status.s-accepted { background: var(--success-soft); color: var(--success); }
+
+.sched-left.is-late { color: var(--p-urgent); font-weight: 700; }
+.sched-left.is-close { color: var(--p-high); font-weight: 600; }
+
+.sched-pushed {
+  font-style: italic;
+  color: var(--text-3);
+}
+
+.sched-emg {
+  margin-left: auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+  opacity: 0.55;
+}
+
+.sched-emg:hover {
+  opacity: 1;
+}
+
+.sched-empty {
+  font-size: 12px;
+  color: var(--text-3);
+  padding: 12px 4px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.sched-overbooked {
+  margin: 8px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--p-urgent);
+}
+
+/* Crew map */
+.crewmap-body {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 16px;
+  align-items: stretch;
+  min-height: 60vh;
+}
+
+.crewmap-map {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-height: 60vh;
+}
+
+.crewmap-map .map {
+  height: 100%;
+  min-height: 60vh;
+}
+
+.crewmap-stats {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.crewmap-stat {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.crewmap-stat strong {
+  font-size: 18px;
+  color: var(--text);
+  margin-right: 3px;
+}
+
+.crewmap-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  overflow-y: auto;
+  max-height: 72vh;
+}
+
+.crewmap-list h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.crewmap-list ul {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.crewmap-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.crewmap-row .crew-dot {
+  margin-top: 5px;
+}
+
+.crewmap-row.state-unknown,
+.crewmap-row.state-away {
+  opacity: 0.6;
+}
+
+.crewmap-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 110px;
+}
+
+.crewmap-state {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  margin-left: auto;
+  color: var(--text-2);
+}
+
+.crewmap-job {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crew-pin-wrap {
+  background: none;
+  border: none;
+}
+
+.crew-pin {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--pin);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  position: relative;
+}
+
+.crew-pin.is-stale {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.crew-pulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--pin);
+  opacity: 0.5;
+  animation: crew-ping 2.2s ease-out infinite;
+}
+
+@keyframes crew-ping {
+  0% { transform: scale(0.8); opacity: 0.55; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+
+@media (max-width: 900px) {
+  .crewmap-body {
+    grid-template-columns: 1fr;
+  }
+
+  .crewmap-list {
+    max-height: none;
+  }
+
+  .sched-column {
+    flex-basis: 220px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Header: the nav has outgrown a single fixed row
+   --------------------------------------------------------------------------- */
+
+/* Twelve destinations no longer fit on a laptop. The nav scrolls sideways within
+   its own space instead of spilling over the buttons on the right. */
+.app-header {
+  gap: 12px;
+}
+
+.app-header-left {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.app-nav {
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.app-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.app-nav a {
+  white-space: nowrap;
+  flex: none;
+}
+
+.app-header-right {
+  flex: none;
+}
+
+/* The widest screens have room for everything; tighten the spacing before the
+   nav has to scroll at all. */
+@media (max-width: 1500px) {
+  .app-header {
+    padding: 0 12px;
+  }
+
+  .app-header-left {
+    gap: 12px;
+  }
+}

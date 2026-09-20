@@ -13,7 +13,7 @@ import { formatHours, relativeDay } from "../lib/capacity";
 import { issueDivIcon, pinSvg } from "../components/issueIcon";
 import { SATELLITE_ATTRIBUTION, SATELLITE_URL } from "./PropertyWorkspace";
 
-const SEVERITY: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+const SEVERITY: Record<Priority, number> = { critical: 0, urgent: 1, high: 2, medium: 3, low: 4 };
 
 function FitReportMap({ bounds }: { bounds: L.LatLngBounds | null }) {
   const map = useMap();
@@ -73,8 +73,8 @@ export default function Report() {
   }, [issues]);
 
   const counts = useMemo(() => {
-    const byPriority: Record<Priority, number> = { low: 0, medium: 0, high: 0, urgent: 0 };
-    const byStatus: Record<Status, number> = { pending: 0, in_progress: 0, completed: 0 };
+    const byPriority: Record<Priority, number> = { low: 0, medium: 0, high: 0, urgent: 0, critical: 0 };
+    const byStatus: Record<Status, number> = { pending: 0, accepted: 0, in_progress: 0, on_hold: 0, needs_parts: 0, completed: 0, cancelled: 0 };
     for (const i of issues) {
       byPriority[i.priority] += 1;
       byStatus[i.status] += 1;
