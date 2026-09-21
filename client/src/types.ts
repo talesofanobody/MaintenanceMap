@@ -647,3 +647,131 @@ export interface TechnicianLocation {
   since: string | null;
   ageMinutes: number | null;
 }
+
+// ---------------------------------------------------------------------------
+// Inspections
+//
+// Kept together at the end of the file, and depending on nothing above it but
+// Photo and the category helpers, so the whole domain can move out with its
+// pages when it becomes an app of its own.
+// ---------------------------------------------------------------------------
+
+export type Outcome = "ok" | "flagged" | "na";
+export type Severity = "minor" | "moderate" | "major";
+export type InspectionStatus = "in_progress" | "completed" | "abandoned";
+export type ProjectStatus = "open" | "done" | "cancelled";
+
+export const OUTCOMES: Outcome[] = ["ok", "flagged", "na"];
+export const SEVERITIES: Severity[] = ["minor", "moderate", "major"];
+
+export const OUTCOME_LABELS: Record<Outcome, string> = {
+  ok: "Fine",
+  flagged: "Flag it",
+  na: "N/A",
+};
+
+export const SEVERITY_LABELS: Record<Severity, string> = {
+  minor: "Minor",
+  moderate: "Moderate",
+  major: "Major",
+};
+
+/** What each severity becomes when the finding is raised as work. */
+export const SEVERITY_PRIORITY: Record<Severity, Priority> = {
+  minor: "low",
+  moderate: "medium",
+  major: "high",
+};
+
+export interface InspectionPoint {
+  id: string;
+  sectionId: string;
+  label: string;
+  hint: string | null;
+  category: string | null;
+  position: number;
+}
+
+export interface InspectionSection {
+  id: string;
+  templateId: string;
+  name: string;
+  position: number;
+  points: InspectionPoint[];
+}
+
+export interface InspectionTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  propertyId: string | null;
+  active: boolean;
+  sortOrder: number;
+  sections: InspectionSection[];
+  pointCount: number;
+}
+
+export interface InspectionCheck {
+  id: string;
+  inspectionId: string;
+  pointId: string | null;
+  section: string;
+  label: string;
+  hint: string | null;
+  category: string | null;
+  outcome: Outcome;
+  severity: Severity | null;
+  note: string | null;
+  position: number;
+  issueId: string | null;
+  /** Photos move to the issue when a finding is raised, so the report reads them back from it. */
+  issue: { id: string; title: string; status: Status; priority: Priority; projectId: string | null; photos: Photo[] } | null;
+  photos: Photo[];
+  createdAt: string;
+}
+
+export interface Inspection {
+  id: string;
+  propertyId: string;
+  templateId: string | null;
+  templateName: string;
+  roomName: string;
+  status: InspectionStatus;
+  inspectorId: string | null;
+  inspector: string;
+  notes: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  property: { id: string; name: string };
+  checks: InspectionCheck[];
+}
+
+/** The list view carries counts instead of every line. */
+export interface InspectionSummary extends Omit<Inspection, "checks"> {
+  counts: { total: number; ok: number; flagged: number; na: number; raised: number };
+}
+
+export interface ProjectIssue {
+  id: string;
+  propertyId: string;
+  title: string;
+  status: Status;
+  priority: Priority;
+  roomName: string | null;
+  category: string | null;
+  dueAt: string | null;
+  technician: TechnicianRef | null;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  propertyId: string | null;
+  property: { id: string; name: string } | null;
+  status: ProjectStatus;
+  createdBy: string | null;
+  createdAt: string;
+  issues: ProjectIssue[];
+  counts: { total: number; open: number; done: number; progress: number };
+}

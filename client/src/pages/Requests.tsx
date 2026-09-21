@@ -108,7 +108,7 @@ export default function Requests() {
 
   return (
     <div className="page">
-      <div className="page-head">
+      <div className="page-header">
         <div>
           <h1>Requests</h1>
           <p className="muted">

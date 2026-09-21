@@ -30,6 +30,10 @@ import GuestReport, { parseIntakeHash } from "./pages/GuestReport";
 import Requests from "./pages/Requests";
 import Scheduler from "./pages/Scheduler";
 import CrewMap from "./pages/CrewMap";
+import Inspections from "./inspections/Inspections";
+import InspectionRun from "./inspections/InspectionRun";
+import InspectionReport from "./inspections/InspectionReport";
+import Projects from "./inspections/Projects";
 import { useEffect, useState } from "react";
 
 export function BrandMark() {
@@ -82,6 +86,8 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
           <nav className="app-nav" aria-label="Main">
             {(user.technicianId || isAdmin) && <NavLink to="/today">Today</NavLink>}
             <NavLink to="/properties">Properties</NavLink>
+            <NavLink to="/inspections">Inspections</NavLink>
+            {isAdmin && <NavLink to="/projects">Projects</NavLink>}
             {isAdmin && <NavLink to="/technicians">Technicians</NavLink>}
             {isAdmin && <NavLink to="/scheduler">Scheduler</NavLink>}
             {isAdmin && <NavLink to="/crew">Crew map</NavLink>}
@@ -170,6 +176,10 @@ function AppRoutes() {
           {(user.technicianId || isAdmin) && <Route path="/planner" element={<Planner />} />}
           <Route path="/properties/:id" element={<PropertyWorkspace />} />
           <Route path="/properties/:id/report" element={<Report />} />
+          <Route path="/inspections" element={<Inspections />} />
+          <Route path="/inspections/:id" element={<InspectionRun />} />
+          <Route path="/inspections/:id/report" element={<InspectionReport />} />
+          {isAdmin && <Route path="/projects" element={<Projects />} />}
           <Route path="/account" element={<Account />} />
           {isAdmin && <Route path="/technicians" element={<Technicians />} />}
           {isAdmin && <Route path="/technicians/rota" element={<Rota />} />}

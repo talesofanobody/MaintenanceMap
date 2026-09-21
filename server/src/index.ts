@@ -23,6 +23,7 @@ import { backupsRouter } from "./routes/backups";
 import { tagsRouter } from "./routes/tags";
 import { rotaRouter } from "./routes/rota";
 import { seedTags } from "./lib/taxonomy";
+import { seedTemplates } from "./lib/inspections";
 import { startBackupSchedule } from "./lib/backup";
 import { ADMIN_ONLY, attachUser, requireAuth } from "./middleware/requireAuth";
 import { usersRouter } from "./routes/users";
@@ -34,6 +35,8 @@ import { timeRouter } from "./routes/time";
 import { intakeRouter } from "./routes/intake";
 import { timeOffRouter } from "./routes/timeoff";
 import { scheduleRouter } from "./routes/schedule";
+import { inspectionsRouter } from "./routes/inspections";
+import { projectsRouter } from "./routes/projects";
 import { guestReportsRouter } from "./routes/guestReports";
 
 const app = express();
@@ -93,6 +96,8 @@ app.use("/api/tags", requireAuth, tagsRouter);
 app.use("/api/rota", requireAuth, rotaRouter);
 app.use("/api/timeoff", requireAuth, timeOffRouter);
 app.use("/api/schedule", requireAuth, scheduleRouter);
+app.use("/api/inspections", requireAuth, inspectionsRouter);
+app.use("/api/projects", requireAuth, projectsRouter);
 // Not behind requireAuth: the secret token in the feed URL is what authorises it, so a
 // calendar app can subscribe. The router guards its own session-only endpoints.
 app.use("/api/calendar", calendarRouter);
@@ -154,6 +159,11 @@ async function backfillDueDates() {
   console.log(`Backfilled deadlines for ${missing.length} issue(s).`);
 }
 backfillDueDates().catch((err) => console.error("due date backfill failed", err));
+
+// The starting inspection templates, created once on an empty install.
+seedTemplates()
+  .then((n) => n && console.log(`Seeded ${n} inspection template(s).`))
+  .catch((err) => console.error("template seed failed", err));
 
 // The hotel/tourism tag set, created once on an empty install.
 seedTags()

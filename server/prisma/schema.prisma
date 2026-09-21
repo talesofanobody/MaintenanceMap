@@ -112,29 +112,31 @@ model Property {
   issues        Issue[]
   schedules     Schedule[]
   guestReports  GuestReport[]
+  inspections   Inspection[]
+  projects      Project[]
 }
 
 model Issue {
-  id               String          @id @default(cuid())
+  id               String           @id @default(cuid())
   propertyId       String
-  property         Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   title            String
   description      String?
   actionNeeded     String?
-  priority         String          @default("medium") // low | medium | high | urgent
-  status           String          @default("pending") // pending | in_progress | completed
+  priority         String           @default("medium") // low | medium | high | urgent
+  status           String           @default("pending") // pending | in_progress | completed
   // Trade the work belongs to, used to suggest who should pick it up.
   category         String?
   // Room or sub-location within the property, e.g. "Room 214" or "Pool plant room".
   roomName         String?
-  workOrderCreated Boolean         @default(false)
+  workOrderCreated Boolean          @default(false)
   workOrderNumber  String?
   workOrderUrl     String?
   lat              Float
   lng              Float
   closedAt         DateTime?
   technicianId     String?
-  technician       Technician?     @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  technician       Technician?      @relation(fields: [technicianId], references: [id], onDelete: SetNull)
   estimatedHours   Float?
   actualHours      Float?
   // Calendar days as YYYY-MM-DD in the user's local time: when work is planned to start,
@@ -147,18 +149,21 @@ model Issue {
   // Position in the assigned technician's day, lowest first. Set by the scheduler.
   dayOrder         Int?
   // Emergencies are slotted in ahead of planned work and push the rest back.
-  isEmergency      Boolean         @default(false)
+  isEmergency      Boolean          @default(false)
   // While an emergency has displaced this job, the emergency that did it and the slot
   // to put it back in once that emergency closes.
   shiftedBy        String?
   orderBeforeShift Int?
   // Set when the scheduler last raised this issue's priority for being overdue.
   escalatedAt      DateTime?
+  // Set when several pieces of work are being run together as one job of work.
+  projectId        String?
+  project          Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
   // Set when a recurring maintenance schedule created this issue.
   scheduleId       String?
-  schedule         Schedule?       @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  schedule         Schedule?        @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
   photos           Photo[]
   timeEntries      TimeEntry[]
   checklist        ChecklistItem[]
@@ -166,10 +171,13 @@ model Issue {
   tags             IssueTag[]
   messages         Message[]
   assignees        IssueAssignee[]
+  // The inspection finding this issue was raised from, when it came from one.
+  fromCheck        InspectionCheck?
   guestReport      GuestReport?
 
   @@index([propertyId])
   @@index([technicianId])
+  @@index([projectId])
 }
 
 // One stretch of work on an issue, recorded by clocking in and out. A technician has
@@ -193,21 +201,24 @@ model TimeEntry {
 // Belongs to an issue, or to a guest report until that report is accepted and the
 // photos move across with it. Exactly one of the two is set.
 model Photo {
-  id            String       @id @default(cuid())
+  id            String           @id @default(cuid())
   issueId       String?
-  issue         Issue?       @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issue         Issue?           @relation(fields: [issueId], references: [id], onDelete: Cascade)
   guestReportId String?
-  guestReport   GuestReport? @relation(fields: [guestReportId], references: [id], onDelete: Cascade)
+  guestReport   GuestReport?     @relation(fields: [guestReportId], references: [id], onDelete: Cascade)
+  checkId       String?
+  check         InspectionCheck? @relation(fields: [checkId], references: [id], onDelete: Cascade)
   filename      String
   thumbFilename String?
-  hasGps        Boolean      @default(false)
+  hasGps        Boolean          @default(false)
   gpsLat        Float?
   gpsLng        Float?
   takenAt       DateTime?
-  createdAt     DateTime     @default(now())
+  createdAt     DateTime         @default(now())
 
   @@index([issueId])
   @@index([guestReportId])
+  @@index([checkId])
 }
 
 // Organisation-wide settings (turnaround days per priority, escalation rules), one JSON row.
@@ -390,4 +401,128 @@ model TimeOff {
 
   @@index([technicianId, startDay])
   @@index([startDay, endDay])
+}
+
+// ---------------------------------------------------------------------------
+// Inspections
+//
+// A self-contained corner of the schema: templates describe what to look at, an
+// Inspection is one walk through a room, and each InspectionCheck is one line of
+// that walk. Nothing outside this block depends on it — the only links pointing
+// the other way are Photo.checkId and Issue.fromCheck — so the whole domain can
+// be lifted into its own service later without unpicking the rest.
+// ---------------------------------------------------------------------------
+
+/// A reusable list of what to look at: "Guest room", "Public area", "Plant room".
+model InspectionTemplate {
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  /// Null means it can be used on any property.
+  propertyId  String?
+  active      Boolean             @default(true)
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  sections    InspectionSection[]
+  inspections Inspection[]
+
+  @@index([active, sortOrder])
+}
+
+/// A part of the room, so a walkthrough follows the way somebody actually moves.
+model InspectionSection {
+  id         String             @id @default(cuid())
+  templateId String
+  template   InspectionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name       String
+  position   Int                @default(0)
+  points     InspectionPoint[]
+
+  @@index([templateId, position])
+}
+
+/// One thing to look at, and what to look for.
+model InspectionPoint {
+  id        String            @id @default(cuid())
+  sectionId String
+  section   InspectionSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  label     String
+  /// The detail that stops this being a tick-box: what "not right" looks like here.
+  hint      String?
+  /// The trade this usually belongs to, carried onto any issue raised from it.
+  category  String?
+  position  Int               @default(0)
+
+  @@index([sectionId, position])
+}
+
+/// One walk through one room.
+model Inspection {
+  id           String              @id @default(cuid())
+  propertyId   String
+  property     Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  templateId   String?
+  template     InspectionTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  /// Snapshot, so renaming or deleting a template never rewrites history.
+  templateName String
+  roomName     String
+  status       String              @default("in_progress") // in_progress | completed | abandoned
+  inspectorId  String?
+  inspector    String
+  notes        String?
+  startedAt    DateTime            @default(now())
+  completedAt  DateTime?
+  checks       InspectionCheck[]
+
+  @@index([propertyId, startedAt])
+  @@index([status])
+}
+
+/// One line of a walk: a template point that was looked at, or something spotted
+/// that was not on the list at all.
+model InspectionCheck {
+  id           String     @id @default(cuid())
+  inspectionId String
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  /// Null for anything found that the template did not ask about.
+  pointId      String?
+  /// Snapshots of the template wording at the time of the walk.
+  section      String
+  label        String
+  hint         String?
+  category     String?
+  /// ok | flagged | na — "ok" lines are kept so the report shows what was checked
+  /// and passed, not only what went wrong.
+  outcome      String     @default("ok")
+  /// minor | moderate | major, on a flagged line.
+  severity     String?
+  note         String?
+  position     Int        @default(0)
+  /// Set once this finding has been turned into work.
+  issueId      String?    @unique
+  issue        Issue?     @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  photos       Photo[]
+
+  @@index([inspectionId, position])
+  @@index([outcome])
+}
+
+/// Several pieces of work run together — a room refurbishment, a floor's worth of
+/// snagging. A project is a grouping of issues, not a second kind of work.
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  propertyId  String?
+  property    Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  status      String    @default("open") // open | done | cancelled
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  issues      Issue[]
+
+  @@index([status, createdAt])
 }

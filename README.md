@@ -413,6 +413,64 @@ automatically. Each tick records who did it and when, the panel shows a progress
 shows a ☑ 2/5 count, and the property report prints the list with its ticks. Marking an issue
 completed with steps still unticked asks you to confirm first.
 
+### Room inspections
+
+**Inspections** is the detailed walk: go into a room with a checklist, look at every item on it, and
+record what is not right.
+
+Start one from **Inspections** — pick the property, type the room and choose a checklist. Two come
+with the app and can be edited or replaced:
+
+- **Guest room** — 55 points across door and entry, bathroom, beds and soft furnishings, furniture
+  and fittings, electrical and technology, climate and air, and the balcony or window
+- **Public area** — 19 points across approach and entrance, floors and walls, lighting and signage,
+  seating and fittings, and washrooms
+
+Every point carries a line saying what "right" looks like ("Full flush, refills quietly, no running
+after 60 seconds"), because the point of the exercise is the eye for detail, not the tick.
+
+The walk itself is built for a phone held in one hand. Each line has three targets — **Fine**,
+**Flag it**, **N/A** — sized for a thumb. Flagging a line opens **Minor / Moderate / Major**, a note
+box and a camera button that goes straight to the phone's camera. Everything saves as you touch it;
+there is no save button to forget. **Only what I flagged** hides the rest when you want to review
+what you have found, and **+ Found something else** records anything the checklist never thought of.
+
+When the checklist was written it did not know about your building, so a line that does not apply is
+marked N/A rather than deleted — the report then shows it was considered.
+
+Starting an inspection copies the checklist's points onto it, so a report from six months ago still
+shows the questions that were actually asked, even if the checklist has since changed.
+
+#### The report
+
+**Finish** produces the report for that room: the counts, then each finding worst-first with its
+severity, the inspector's note and the photos. It prints as it stands — the controls drop away and
+the sheet is what a contractor, an owner or an insurer would want to see.
+
+At the bottom, an admin turns findings into work. Tick the ones to raise and choose whether they
+become separate issues, a **new project**, or go into an **open project**. Each one becomes a normal
+issue on that property, in that room, with:
+
+- the priority its severity implies — major → high, moderate → medium, minor → low — and the
+  response deadline that priority carries
+- the finding's note as the description, and the checklist's "looked for" line underneath
+- its photos, moved across so whoever does the job sees what the inspector saw (the report keeps
+  showing them, read back from the issue)
+- a pin from the photo's own GPS where there was one, otherwise the property centre
+
+A finding can only be raised once, and only if it was flagged. The link back to the issue stays on
+the sheet, with its live status, so the report doubles as a record of what was done about it.
+
+#### Projects
+
+**Projects** (admin) groups issues that are being done together — a room refurbishment, a floor's
+worth of snagging from one inspection. A project shows how far through it is, and issues can be
+taken out of one without touching the work itself. Closing a project with open issues asks first.
+Deleting a project releases its issues rather than deleting them.
+
+A project is only a label over issues: the boards, the day scheduler, the reports and everything else
+carry on dealing in issues and never need to know projects exist.
+
 ### Costs, parts and contractors
 
 Each issue has a **Costs** box for what the work actually cost: parts and materials, a contractor's
@@ -856,13 +914,51 @@ for a file. Tip: give the map a second to finish loading imagery before printing
 - `GuestReport`: what someone without a login sent in — room, issue type, description, any location
   the photos carried, whether it's pending/accepted/declined, who reviewed it and the issue it became
 - `Photo`: filename, GPS presence/lat/lng, taken-at timestamp (from EXIF); belongs to an issue, or
-  to a guest report until that report is accepted and the photos move across
+  to a guest report until that report is accepted and the photos move across, or to an inspection
+  finding until that finding is raised as work
 - `ChecklistItem`: a tick-box step on an issue, with who ticked it and when
 - `TimeEntry`: one stretch of clocked work on an issue; an issue's actual hours are the sum of these
 - `Cost`: a line of spend on an issue (kind, description, amount, quantity, invoice reference, date),
   optionally attributed to a contractor
 - `Schedule`: a recurring maintenance task — cadence, lead time, next due date and a checklist
   template; creates issues on the property it belongs to
+- `InspectionTemplate` / `InspectionSection` / `InspectionPoint`: a checklist — its sections, and the
+  points in each, with the line saying what "right" looks like and the issue category it maps to
+- `Inspection`: one walk of one room — the property, the checklist used and its name as it stood at
+  the time, the room, who walked it, status, when it started and finished
+- `InspectionCheck`: one line of that walk — the point it came from (or nothing, if it was found on
+  the walk), the section and label copied at the time, the outcome, severity, note, and the issue it
+  became
+- `Project`: a name over a set of issues, with a status; deleting one releases its issues
+
+## Pulling inspections out into its own app
+
+The inspection side was built to come out later, so it is worth knowing where the edges are before
+anything else grows across them.
+
+Everything it owns lives in one place on each side:
+
+| | |
+|---|---|
+| Tables | `InspectionTemplate`, `InspectionSection`, `InspectionPoint`, `Inspection`, `InspectionCheck`, `Project` |
+| Server | `server/src/lib/inspections.ts` (vocabulary, default checklists), `server/src/routes/inspections.ts`, `server/src/routes/projects.ts` |
+| Client | `client/src/inspections/` (four pages), the inspections block at the end of `client/src/types.ts`, the inspection methods grouped at the end of `client/src/api.ts`, and the inspections block at the end of `client/src/styles.css` |
+
+There are exactly four places it touches the rest of the app, and they are all deliberate:
+
+1. **`Photo.checkId`** — a finding's photos, until it is raised as work and they move to the issue.
+2. **`Issue.fromCheck` / `Issue.projectId`** — where an issue came from and what it is grouped with.
+3. **`POST /api/inspections/:id/raise`** — the one handler that creates issues. Everything else in
+   `routes/inspections.ts` stays inside its own tables.
+4. **Property and user** — an inspection names a property and whoever walked the room.
+
+So a split looks like: lift the six tables and the three server files into a service of their own;
+`raise` becomes a call to this app's issue API instead of a local `prisma.issue.create`; the photos
+either move with it or are handed over the same API. The client pages go across whole — they import
+`api`, `useAuth`, `PhotoLightbox`, the date helpers and the shared label maps, and nothing else.
+
+Worth keeping in mind while it stays here: nothing outside the inspection code should start reading
+`InspectionCheck` directly, and nothing inside it should start reaching into issues beyond `raise`.
 
 ## Notes on swapping in Google Maps later
 

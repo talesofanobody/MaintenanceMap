@@ -85,7 +85,7 @@ export default function CrewMap() {
 
   return (
     <div className="page crewmap-page">
-      <div className="page-head">
+      <div className="page-header">
         <div>
           <h1>Where the crew are</h1>
           <p className="muted">

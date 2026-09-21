@@ -1,4 +1,4 @@
-import type { DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { Inspection, InspectionCheck, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -213,6 +213,62 @@ export const api = {
   scheduleEmergency: (data: { issueId: string; technicianId: string; day: string; position?: number }) =>
     request<{ displaced: number; day: string; technicianId: string }>("/schedule/emergency", { method: "POST", body: JSON.stringify(data) }),
   technicianLocations: () => request<{ technicians: TechnicianLocation[]; generatedAt: string }>("/schedule/locations"),
+
+  // --- Inspections. Grouped so the whole domain lifts out in one piece. ---
+  listTemplates: (params: { propertyId?: string; all?: boolean } = {}) => {
+    const q = new URLSearchParams();
+    if (params.propertyId) q.set("propertyId", params.propertyId);
+    if (params.all) q.set("all", "1");
+    return request<InspectionTemplate[]>(`/inspections/templates${q.toString() ? `?${q}` : ""}`);
+  },
+  getTemplate: (id: string) => request<InspectionTemplate>(`/inspections/templates/${id}`),
+  createTemplate: (data: { name: string; description?: string; propertyId?: string | null; sections: { name: string; points: { label: string; hint?: string | null; category?: string | null }[] }[] }) =>
+    request<InspectionTemplate>("/inspections/templates", { method: "POST", body: JSON.stringify(data) }),
+  updateTemplate: (id: string, data: Record<string, unknown>) =>
+    request<InspectionTemplate>(`/inspections/templates/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteTemplate: (id: string) => request<void>(`/inspections/templates/${id}`, { method: "DELETE" }),
+
+  listInspections: (params: { propertyId?: string; status?: string } = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
+    return request<InspectionSummary[]>(`/inspections${q.toString() ? `?${q}` : ""}`);
+  },
+  getInspection: (id: string) => request<Inspection>(`/inspections/${id}`),
+  startInspection: (data: { propertyId: string; roomName: string; templateId?: string | null }) =>
+    request<Inspection>("/inspections", { method: "POST", body: JSON.stringify(data) }),
+  updateInspection: (id: string, data: { roomName?: string; notes?: string | null; status?: InspectionStatus }) =>
+    request<Inspection>(`/inspections/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteInspection: (id: string) => request<void>(`/inspections/${id}`, { method: "DELETE" }),
+
+  updateCheck: (checkId: string, data: { outcome?: Outcome; severity?: Severity | null; note?: string | null; label?: string; category?: string | null }) =>
+    request<InspectionCheck>(`/inspections/checks/${checkId}`, { method: "PUT", body: JSON.stringify(data) }),
+  addFinding: (inspectionId: string, data: { label: string; section?: string; severity?: Severity; note?: string; category?: string | null }) =>
+    request<InspectionCheck>(`/inspections/${inspectionId}/checks`, { method: "POST", body: JSON.stringify(data) }),
+  deleteCheck: (checkId: string) => request<void>(`/inspections/checks/${checkId}`, { method: "DELETE" }),
+  uploadCheckPhoto: (checkId: string, file: File) => {
+    const form = new FormData();
+    form.append("photo", file);
+    return request<Photo>(`/inspections/checks/${checkId}/photos`, { method: "POST", body: form });
+  },
+  raiseFindings: (inspectionId: string, data: { checkIds: string[]; projectId?: string; projectName?: string; projectDescription?: string }) =>
+    request<{ created: { checkId: string; issueId: string; title: string }[]; projectId: string | null; projectName: string | null; inspection: Inspection }>(
+      `/inspections/${inspectionId}/raise`,
+      { method: "POST", body: JSON.stringify(data) }
+    ),
+
+  listProjects: (params: { status?: string; propertyId?: string } = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
+    return request<Project[]>(`/projects${q.toString() ? `?${q}` : ""}`);
+  },
+  getProject: (id: string) => request<Project>(`/projects/${id}`),
+  createProject: (data: { name: string; description?: string; propertyId?: string | null }) =>
+    request<Project>("/projects", { method: "POST", body: JSON.stringify(data) }),
+  updateProject: (id: string, data: { name?: string; description?: string | null; status?: ProjectStatus; force?: boolean }) =>
+    request<Project>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  changeProjectIssues: (id: string, data: { add?: string[]; remove?: string[] }) =>
+    request<Project>(`/projects/${id}/issues`, { method: "POST", body: JSON.stringify(data) }),
+  deleteProject: (id: string) => request<void>(`/projects/${id}`, { method: "DELETE" }),
 
   setPropertyIntake: (id: string, data: { enabled?: boolean; rotate?: boolean }) =>
     request<{ id: string; intakeEnabled: boolean; intakeToken: string | null }>(`/properties/${id}/intake`, {
