@@ -44,7 +44,6 @@ ENV DATABASE_URL=file:/data/maintenancemap.db \
     BACKUP_DIR=/data/backups \
     CLIENT_DIST=/app/public \
     PORT=4000
-VOLUME ["/data"]
 EXPOSE 4000
 
 COPY docker-entrypoint.sh /usr/local/bin/
