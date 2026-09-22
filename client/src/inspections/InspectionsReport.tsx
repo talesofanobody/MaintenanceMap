@@ -120,7 +120,7 @@ export default function InspectionsReport() {
     return [...seen.values()];
   }, [rooms]);
 
-  const inspectors = useMemo(() => [...new Set(rooms.map((r) => r.inspection.inspector))], [rooms]);
+  const inspectors = useMemo(() => [...new Set(rooms.map((r) => r.inspection.technician?.name ?? r.inspection.inspector))], [rooms]);
 
   useEffect(() => {
     if (!projectName && rooms.length) {
@@ -283,7 +283,7 @@ export default function InspectionsReport() {
                   <td className="num">{room.minor || "—"}</td>
                   <td className="num">{room.raised || "—"}</td>
                   <td>
-                    {room.inspection.inspector}
+                    {room.inspection.technician?.name ?? room.inspection.inspector}
                     <span className="muted small"> · {formatDate(room.inspection.startedAt)}</span>
                   </td>
                 </tr>
@@ -372,7 +372,7 @@ export default function InspectionsReport() {
                 </span>
               </h2>
               <p className="muted small">
-                {room.inspection.inspector} · {formatDateTime(room.inspection.startedAt)} · {room.checked} checked · {room.findings.length} flagged
+                {room.inspection.technician?.name ?? room.inspection.inspector} · {formatDateTime(room.inspection.startedAt)} · {room.checked} checked · {room.findings.length} flagged
               </p>
             </div>
             {room.inspection.notes && <p className="insp-finding-note">{room.inspection.notes}</p>}

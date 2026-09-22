@@ -5,6 +5,7 @@ import Checklist from "./Checklist";
 import CostPanel from "./CostPanel";
 import MessageThread from "./MessageThread";
 import { offlineSupported, queueIssue } from "../offline/queue";
+import { describeFix, getFix, locationAllowedHere, type LocationError } from "../lib/deviceLocation";
 import { CATEGORIES, categoryLabel, MAX_ASSIGNEES, type Tag } from "../types";
 import { readPhotoGps } from "../lib/photoGps";
 import { dateInputToIso, formatDateTime, formatDuration, toDateInputValue } from "../lib/dates";
@@ -152,6 +153,7 @@ export default function IssuePanel({
   const [lat, setLat] = useState<number | null>(issue?.lat ?? draftLatLng?.lat ?? null);
   const [lng, setLng] = useState<number | null>(issue?.lng ?? draftLatLng?.lng ?? null);
   const [locationNote, setLocationNote] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
   const [existingPhotos, setExistingPhotos] = useState<Photo[]>(issue?.photos ?? intakeReport?.photos ?? []);
   const [uploading, setUploading] = useState(0);
@@ -530,9 +532,34 @@ export default function IssuePanel({
             {locationNote && <span className="hint">{locationNote}</span>}
           </div>
           {!lock && (
-            <button type="button" className="btn btn-small" onClick={onRequestReposition}>
-              {hasLocation ? "Move pin" : "Place pin"}
-            </button>
+            <div className="location-box-actions">
+              {locationAllowedHere() && (
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  disabled={locating}
+                  title="Put the pin where this device is standing"
+                  onClick={async () => {
+                    setLocating(true);
+                    try {
+                      const f = await getFix();
+                      setLat(f.lat);
+                      setLng(f.lng);
+                      setLocationNote(`Pin placed from this device — ${describeFix(f)}. You can still move it on the map.`);
+                    } catch (e) {
+                      setLocationNote((e as LocationError)?.message ?? "Could not get a location.");
+                    } finally {
+                      setLocating(false);
+                    }
+                  }}
+                >
+                  {locating ? "Finding…" : "📍 Use my location"}
+                </button>
+              )}
+              <button type="button" className="btn btn-small" onClick={onRequestReposition}>
+                {hasLocation ? "Move pin" : "Place pin"}
+              </button>
+            </div>
           )}
         </div>
 

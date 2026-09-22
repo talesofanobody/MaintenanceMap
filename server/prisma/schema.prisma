@@ -91,6 +91,7 @@ model Technician {
   schedules   Schedule[]
   user        User?
   assignments IssueAssignee[]
+  inspections Inspection[]
   timeOff     TimeOff[]
 }
 
@@ -213,6 +214,9 @@ model Photo {
   hasGps        Boolean          @default(false)
   gpsLat        Float?
   gpsLng        Float?
+  /// "exif" when the camera recorded it, "device" when the phone's own GPS was
+  /// used instead. A report should not present the two as the same thing.
+  gpsSource     String?
   takenAt       DateTime?
   createdAt     DateTime         @default(now())
 
@@ -468,8 +472,17 @@ model Inspection {
   templateName String
   roomName     String
   status       String              @default("in_progress") // in_progress | completed | abandoned
+  /// The login that typed it in.
   inspectorId  String?
+  /// Who actually walked the room. Usually the same person, but an admin can
+  /// record a walk on someone else's behalf, and the report should name them.
+  technicianId String?
+  technician   Technician?         @relation(fields: [technicianId], references: [id], onDelete: SetNull)
   inspector    String
+  /// Where the walk was, from the phone's own GPS. Used to place a finding that
+  /// has no photo, or whose photos carry no location of their own.
+  lat          Float?
+  lng          Float?
   notes        String?
   startedAt    DateTime            @default(now())
   completedAt  DateTime?
@@ -477,6 +490,7 @@ model Inspection {
 
   @@index([propertyId, startedAt])
   @@index([status])
+  @@index([technicianId])
 }
 
 /// One line of a walk: a template point that was looked at, or something spotted

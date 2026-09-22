@@ -2,6 +2,7 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { preparePhoto } from "./preparePhoto";
+import { describeFix, getFix, locationAllowedHere, locationAlreadyGranted, type Fix, type LocationError } from "../lib/deviceLocation";
 import PhotoLightbox from "../components/PhotoLightbox";
 import {
   categoryLabel,
@@ -213,6 +214,10 @@ export default function InspectionRun() {
   const [newSeverity, setNewSeverity] = useState<Severity>("minor");
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [uploading, setUploading] = useState<{ checkId: string; done: number; total: number } | null>(null);
+  // Asked for once, then reused for every photo in the room that has none of its
+  // own. Kept in memory rather than re-asked, so the walk is not interrupted.
+  const [fix, setFix] = useState<Fix | null>(null);
+  const [locating, setLocating] = useState(false);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -226,6 +231,31 @@ export default function InspectionRun() {
   useEffect(load, [load]);
 
   const editable = inspection?.status === "in_progress";
+
+  /**
+   * If location has already been allowed for this site, take a fix quietly so
+   * the walk is pinned without anyone having to think about it. Where it has
+   * not, nothing happens — an unexpected permission prompt in the middle of a
+   * room is worse than an unpinned finding, and the button is right there.
+   */
+  useEffect(() => {
+    if (!inspection || !editable || fix || inspection.lat != null) return;
+    let alive = true;
+    locationAlreadyGranted().then((granted) => {
+      if (!granted || !alive) return;
+      getFix(10000)
+        .then((got) => {
+          if (!alive) return;
+          setFix(got);
+          return api.updateInspection(inspection.id, { lat: got.lat, lng: got.lng }).then((u) => alive && setInspection(u));
+        })
+        .catch(() => {});
+    });
+    return () => {
+      alive = false;
+    };
+    // Only ever run for a live walk that has no location yet.
+  }, [inspection?.id, editable]);
 
   /** Optimistic: the line changes under the thumb, then the save catches up. */
   async function patch(check: InspectionCheck, data: Parameters<typeof api.updateCheck>[1]) {
@@ -257,7 +287,13 @@ export default function InspectionRun() {
     try {
       for (const original of files) {
         const prepared = await preparePhoto(original);
-        const photo = await api.uploadCheckPhoto(check.id, prepared.file, prepared);
+        // A photo with no location of its own borrows where we are standing —
+        // labelled as such, so nobody reads it as a camera fix later.
+        const meta =
+          prepared.gpsLat == null && fix
+            ? { ...prepared, gpsLat: fix.lat, gpsLng: fix.lng, gpsSource: "device" as const }
+            : prepared;
+        const photo = await api.uploadCheckPhoto(check.id, prepared.file, meta);
         setInspection((prev) =>
           prev ? { ...prev, checks: prev.checks.map((c) => (c.id === check.id ? { ...c, photos: [...c.photos, photo] } : c)) } : prev
         );
@@ -270,6 +306,29 @@ export default function InspectionRun() {
     } finally {
       setUploading(null);
       setSaving((n) => n - 1);
+    }
+  }
+
+  /**
+   * Stamp the walk with where the phone says it is. Most photos arrive without
+   * a location — phones strip it, and one taken indoors may never have had a
+   * fix — so this is how a finding still gets pinned somewhere useful.
+   */
+  async function useMyLocation() {
+    setLocating(true);
+    try {
+      const got = await getFix();
+      setFix(got);
+      if (inspection) {
+        const updated = await api.updateInspection(inspection.id, { lat: got.lat, lng: got.lng });
+        setInspection(updated);
+      }
+      setError(null);
+    } catch (e) {
+      const err = e as LocationError;
+      setError(err?.message ?? "Could not get a location.");
+    } finally {
+      setLocating(false);
     }
   }
 
@@ -386,6 +445,25 @@ export default function InspectionRun() {
           Only what I flagged
         </label>
       </div>
+
+      {editable && locationAllowedHere() && (
+        <div className="insp-where">
+          <button type="button" className="btn btn-secondary btn-small" onClick={useMyLocation} disabled={locating}>
+            {locating ? "Finding you…" : fix || inspection.lat != null ? "Update my location" : "📍 Use my location"}
+          </button>
+          {fix ? (
+            <span className="muted small">
+              Photos without their own GPS will be tagged here — {describeFix(fix)}
+            </span>
+          ) : inspection.lat != null ? (
+            <span className="muted small">
+              This walk is pinned at {inspection.lat.toFixed(5)}, {inspection.lng?.toFixed(5)}
+            </span>
+          ) : (
+            <span className="muted small">Most phone photos arrive without a location. Tag this walk once and findings get pinned properly.</span>
+          )}
+        </div>
+      )}
 
       {sections.map((section) => (
         <section key={section.name} className="insp-section">

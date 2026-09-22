@@ -154,8 +154,11 @@ export default function InspectionReport() {
           </div>
           <dl className="insp-meta">
             <div>
-              <dt>Inspector</dt>
-              <dd>{inspection.inspector}</dd>
+              <dt>Walked by</dt>
+              <dd>
+                {inspection.technician?.name ?? inspection.inspector}
+                {inspection.technician?.trade && <span className="muted small"> · {inspection.technician.trade}</span>}
+              </dd>
             </div>
             <div>
               <dt>Started</dt>

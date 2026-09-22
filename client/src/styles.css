@@ -6438,6 +6438,47 @@ li.unread .bell-item:hover {
 }
 
 
+
+.insp-where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: -10px 0 18px;
+  background: var(--brand-soft);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius);
+}
+
+.insp-where .btn {
+  flex-shrink: 0;
+}
+
+.insp-pin-note {
+  margin: 6px 0 0 34px;
+}
+
+.location-box-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .insp-where .btn {
+    width: 100%;
+  }
+
+  .location-box-actions {
+    flex-direction: column;
+  }
+
+  .insp-pin-note {
+    margin-left: 0;
+  }
+}
+
 /* --- Picking a round, and the report over it ----------------------- */
 .insp-round-picker {
   margin-bottom: 18px;

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import { formatDate, formatDateTime } from "../lib/dates";
-import type { InspectionSummary, InspectionTemplate, Property } from "../types";
+import type { InspectionSummary, InspectionTemplate, Property, Technician } from "../types";
 
 const TABS: { key: string; label: string }[] = [
   { key: "in_progress", label: "Under way" },
@@ -38,6 +38,10 @@ export default function Inspections() {
   const [templateId, setTemplateId] = useState("");
   const [roomName, setRoomName] = useState("");
   const [starting, setStarting] = useState(false);
+  // Who walked it. A technician login is themselves; an admin may be typing up
+  // somebody else's round, so they get to say whose it was.
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [technicianId, setTechnicianId] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -52,6 +56,14 @@ export default function Inspections() {
   }, [tab]);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    api
+      .listTechnicians()
+      .then((rows) => setTechnicians(rows.filter((t) => t.active)))
+      .catch(() => setTechnicians([]));
+  }, [isAdmin]);
 
   useEffect(() => {
     api
@@ -82,7 +94,16 @@ export default function Inspections() {
     if (!propertyId || !roomName.trim()) return;
     setStarting(true);
     try {
-      const inspection = await api.startInspection({ propertyId, roomName: roomName.trim(), templateId: templateId || null });
+      // Deliberately does not wait for a location here. Asking the phone can take
+      // several seconds on bad signal and may raise a permission prompt, and
+      // neither belongs between pressing Start and the checklist appearing. The
+      // walk picks its location up afterwards instead.
+      const inspection = await api.startInspection({
+        propertyId,
+        roomName: roomName.trim(),
+        templateId: templateId || null,
+        technicianId: technicianId || null,
+      });
       navigate(`/inspections/${inspection.id}`);
     } catch (err: any) {
       setError(err.message);
@@ -153,6 +174,20 @@ export default function Inspections() {
               ))}
             </select>
           </label>
+          {isAdmin && technicians.length > 0 && (
+            <label>
+              Walked by
+              <select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)}>
+                <option value="">Me</option>
+                {technicians.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.trade ? ` · ${t.trade}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button type="submit" className="btn btn-primary" disabled={starting || !propertyId || !roomName.trim()}>
             {starting ? "Starting…" : "Start"}
           </button>

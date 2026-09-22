@@ -234,9 +234,9 @@ export const api = {
     return request<InspectionSummary[]>(`/inspections${q.toString() ? `?${q}` : ""}`);
   },
   getInspection: (id: string) => request<Inspection>(`/inspections/${id}`),
-  startInspection: (data: { propertyId: string; roomName: string; templateId?: string | null }) =>
+  startInspection: (data: { propertyId: string; roomName: string; templateId?: string | null; technicianId?: string | null; lat?: number; lng?: number }) =>
     request<Inspection>("/inspections", { method: "POST", body: JSON.stringify(data) }),
-  updateInspection: (id: string, data: { roomName?: string; notes?: string | null; status?: InspectionStatus }) =>
+  updateInspection: (id: string, data: { roomName?: string; notes?: string | null; status?: InspectionStatus; technicianId?: string | null; lat?: number; lng?: number }) =>
     request<Inspection>(`/inspections/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteInspection: (id: string) => request<void>(`/inspections/${id}`, { method: "DELETE" }),
 
@@ -245,7 +245,11 @@ export const api = {
   addFinding: (inspectionId: string, data: { label: string; section?: string; severity?: Severity; note?: string; category?: string | null }) =>
     request<InspectionCheck>(`/inspections/${inspectionId}/checks`, { method: "POST", body: JSON.stringify(data) }),
   deleteCheck: (checkId: string) => request<void>(`/inspections/checks/${checkId}`, { method: "DELETE" }),
-  uploadCheckPhoto: (checkId: string, file: File, meta?: { gpsLat?: number | null; gpsLng?: number | null; takenAt?: string | null }) => {
+  uploadCheckPhoto: (
+    checkId: string,
+    file: File,
+    meta?: { gpsLat?: number | null; gpsLng?: number | null; takenAt?: string | null; gpsSource?: "exif" | "device" }
+  ) => {
     const form = new FormData();
     form.append("photo", file);
     // Only sent when the photo was shrunk on the device and lost its EXIF with it.
@@ -254,6 +258,7 @@ export const api = {
       form.append("gpsLng", String(meta.gpsLng));
     }
     if (meta?.takenAt) form.append("takenAt", meta.takenAt);
+    if (meta?.gpsSource) form.append("gpsSource", meta.gpsSource);
     return request<Photo>(`/inspections/checks/${checkId}/photos`, { method: "POST", body: form });
   },
   inspectionReport: (params: { ids?: string[]; propertyId?: string; from?: string; to?: string; status?: string }) => {

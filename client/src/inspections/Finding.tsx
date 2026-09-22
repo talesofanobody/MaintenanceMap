@@ -88,13 +88,20 @@ export default function Finding({
       {check.hint && !check.note && <p className="muted small insp-finding-note">Looked for: {check.hint}</p>}
 
       {photos.length > 0 && (
-        <div className="insp-finding-photos">
-          {photos.map((photo) => (
-            <button key={photo.id} type="button" className="insp-thumb" onClick={() => onView(api.photoUrl(photo.id))}>
-              <img src={api.photoThumbUrl(photo.id)} alt="" loading="lazy" />
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="insp-finding-photos">
+            {photos.map((photo) => (
+              <button key={photo.id} type="button" className="insp-thumb" onClick={() => onView(api.photoUrl(photo.id))}>
+                <img src={api.photoThumbUrl(photo.id)} alt="" loading="lazy" />
+              </button>
+            ))}
+          </div>
+          {/* Where the pin came from. A camera fix and a "the inspector was
+              standing near here" fix are not the same claim. */}
+          {photos.some((p) => p.gpsSource === "device") && !photos.some((p) => p.gpsSource === "exif") && (
+            <p className="muted small insp-pin-note">Location taken from the inspector's phone, not the photo.</p>
+          )}
+        </>
       )}
 
       {check.issue ? (

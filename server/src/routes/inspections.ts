@@ -43,8 +43,23 @@ const CHECK_INCLUDE = {
 /** One document, one round of inspections — beyond this it is a database export. */
 const MAX_REPORT_ROOMS = 200;
 
+/**
+ * A location offered by the browser, or nothing. A phone fix is a claim rather
+ * than a measurement anyone can check, so it is range-checked and otherwise
+ * taken at face value — it only ever places a map pin.
+ */
+function parseFix(body: any): { lat: number; lng: number } | null {
+  const lat = Number(body?.lat);
+  const lng = Number(body?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { lat, lng };
+}
+
 const INSPECTION_INCLUDE = {
   property: { select: { id: true, name: true } },
+  technician: { select: { id: true, name: true, trade: true, color: true } },
   checks: { orderBy: { position: "asc" as const }, include: CHECK_INCLUDE },
 } as const;
 
@@ -309,11 +324,19 @@ inspectionsRouter.post("/", CAN_EDIT, async (req, res) => {
     }
   }
 
-  // The report names whoever walked the room, so a technician login shows their own
-  // name rather than the login they happened to use.
-  const who = req.user!.technicianId
-    ? (await prisma.technician.findUnique({ where: { id: req.user!.technicianId }, select: { name: true } }))?.name
-    : null;
+  // Who walked it. A technician login is taken to be walking it themselves; an
+  // admin may say it was somebody else, which is how a paper round gets typed up.
+  let technicianId = req.user!.technicianId ?? null;
+  if (typeof req.body.technicianId === "string" && req.body.technicianId && req.user!.role === "admin") {
+    technicianId = req.body.technicianId;
+  }
+  let who: string | null = null;
+  if (technicianId) {
+    const t = await prisma.technician.findUnique({ where: { id: technicianId }, select: { name: true } });
+    if (!t) return res.status(404).json({ error: "technician not found" });
+    who = t.name;
+  }
+  const where = parseFix(req.body);
 
   const inspection = await prisma.inspection.create({
     data: {
@@ -322,7 +345,10 @@ inspectionsRouter.post("/", CAN_EDIT, async (req, res) => {
       templateName,
       roomName,
       inspectorId: req.user!.id,
+      technicianId,
       inspector: who ?? req.user!.username,
+      lat: where?.lat ?? null,
+      lng: where?.lng ?? null,
       checks: { create: lines },
     },
     include: INSPECTION_INCLUDE,
@@ -349,6 +375,22 @@ inspectionsRouter.put("/:id", CAN_EDIT, async (req, res) => {
       data.roomName = roomName;
     }
     if (req.body.notes !== undefined) data.notes = parseOptionalString(req.body.notes, "notes", 2000) ?? null;
+    const fix = parseFix(req.body);
+    if (fix) {
+      data.lat = fix.lat;
+      data.lng = fix.lng;
+    }
+    if (req.body.technicianId !== undefined && req.user!.role === "admin") {
+      const id = typeof req.body.technicianId === "string" && req.body.technicianId ? req.body.technicianId : null;
+      if (id) {
+        const t = await prisma.technician.findUnique({ where: { id }, select: { name: true } });
+        if (!t) return res.status(404).json({ error: "technician not found" });
+        data.technicianId = id;
+        data.inspector = t.name;
+      } else {
+        data.technicianId = null;
+      }
+    }
     if (req.body.status !== undefined) {
       const status = String(req.body.status);
       if (!["in_progress", "completed", "abandoned"].includes(status)) return res.status(400).json({ error: "invalid status" });
@@ -500,9 +542,14 @@ inspectionsRouter.post("/checks/:checkId/photos", CAN_EDIT, acceptPhoto, async (
   const hasClaimedGps =
     Number.isFinite(claimedLat) && Number.isFinite(claimedLng) && Math.abs(claimedLat) <= 90 && Math.abs(claimedLng) <= 180;
 
+  // Order of preference: what the camera recorded, then what the client read off
+  // the original before shrinking it, then where the phone says it is standing.
+  // The last of those is a different kind of fact, so it is labelled as such.
+  const deviceFix = req.body?.gpsSource === "device" ? { lat: claimedLat, lng: claimedLng } : null;
   const hasGps = exif.hasGps || hasClaimedGps;
   const gpsLat = exif.hasGps ? exif.gpsLat : hasClaimedGps ? claimedLat : null;
   const gpsLng = exif.hasGps ? exif.gpsLng : hasClaimedGps ? claimedLng : null;
+  const gpsSource = exif.hasGps ? "exif" : hasClaimedGps ? (deviceFix ? "device" : "exif") : null;
   const takenAt = exif.takenAt ?? (claimedTaken && !isNaN(claimedTaken.getTime()) ? claimedTaken : null);
 
   let stored;
@@ -520,6 +567,7 @@ inspectionsRouter.post("/checks/:checkId/photos", CAN_EDIT, acceptPhoto, async (
       hasGps,
       gpsLat,
       gpsLng,
+      gpsSource,
       takenAt,
     },
   });
@@ -552,13 +600,21 @@ async function raiseChecks(req: Request, chosen: ChosenCheck[], body: any) {
   });
   const byId = new Map(inspections.map((i) => [i.id, i]));
 
-  // A room's pin is the property centre unless a photo says otherwise — an inspector
-  // is standing in the room, so the photo's own GPS is the better guess when present.
+  // Where to put the pin, best evidence first: a photo the camera geotagged, then
+  // a photo tagged from the phone's own position, then where the walk itself was,
+  // then the middle of the property. An inspector is standing in the room, so any
+  // of the first three beats the last.
   const located = await prisma.photo.findMany({
     where: { checkId: { in: chosen.map((c) => c.id) }, hasGps: true },
-    select: { checkId: true, gpsLat: true, gpsLng: true },
+    select: { checkId: true, gpsLat: true, gpsLng: true, gpsSource: true },
+    orderBy: { gpsSource: "asc" }, // "device" before "exif"; reversed below
   });
-  const pinByCheck = new Map(located.map((p) => [p.checkId!, p]));
+  const pinByCheck = new Map<string, { gpsLat: number | null; gpsLng: number | null }>();
+  for (const photo of located) {
+    const existing = pinByCheck.get(photo.checkId!);
+    // A camera fix replaces a device one; otherwise first in wins.
+    if (!existing || photo.gpsSource === "exif") pinByCheck.set(photo.checkId!, photo);
+  }
 
   let projectId: string | null = null;
   let projectName: string | null = null;
@@ -606,8 +662,8 @@ async function raiseChecks(req: Request, chosen: ChosenCheck[], body: any) {
         priority,
         category: check.category,
         roomName: inspection.roomName,
-        lat: pin?.gpsLat ?? inspection.property.centerLat ?? 0,
-        lng: pin?.gpsLng ?? inspection.property.centerLng ?? 0,
+        lat: pin?.gpsLat ?? inspection.lat ?? inspection.property.centerLat ?? 0,
+        lng: pin?.gpsLng ?? inspection.lng ?? inspection.property.centerLng ?? 0,
         projectId,
         dueDate: deadline.dueDate,
         dueAt: deadline.dueAt,

@@ -444,7 +444,10 @@ completed with steps still unticked asks you to confirm first.
 **Inspections** is the detailed walk: go into a room with a checklist, look at every item on it, and
 record what is not right.
 
-Start one from **Inspections** — pick the property, type the room and choose a checklist. Two come
+Start one from **Inspections** — pick the property, type the room and choose a checklist. A
+technician's walk is recorded against them automatically; an admin is also asked **who walked it**,
+so a round done on paper can be typed up and still credited to the person who did it. The report
+names them rather than the login that entered it. Two come
 with the app and can be edited or replaced:
 
 - **Guest room** — 55 points across door and entry, bathroom, beds and soft furnishings, furniture
@@ -473,11 +476,40 @@ Anything larger than 2048px is shrunk on the phone before it is sent. A modern c
 standing in the room watching a spinner — a typical photo goes up about four times smaller. The
 GPS is read off the original first and sent with it, because resizing a photo in a browser throws
 its EXIF away, and that GPS is what pins the issue to the right spot when the finding becomes work.
-A HEIC the browser cannot open — anything outside Safari — is sent untouched and converted on the
-server as before.
+Where the metadata cannot be read at all, the original is sent untouched rather than shrunk: the
+server's reader is the reference one, and spending the bandwidth beats destroying a location nobody
+can then recover. A HEIC the browser cannot open — anything outside Safari — goes up whole for the
+same reason.
 
 Photos upload one at a time so a batch interrupted by a lift or a thick wall still keeps the ones
 that made it, and the header says which one is going up.
+
+#### Where a finding ends up on the map
+
+Most phone photos arrive with no location at all. Phones strip it from anything shared or
+screenshotted, some browsers strip it from library picks, and a photo taken in an interior corridor
+may never have had a fix to begin with. So the photo's own GPS is used where it exists, and the
+phone's own position stands in where it does not.
+
+**Use my location** on the walk asks the phone where it is and pins the walk there. Every photo
+added afterwards that carries no location of its own is tagged with it. Where location has already
+been allowed for the site, the walk does this by itself on opening and the button just confirms it —
+but it is never demanded, and pressing **Start** never waits on a GPS fix, because a permission
+prompt or a slow satellite lock has no business standing between an inspector and the checklist.
+
+When a finding becomes work, its pin is taken from the best thing available, in order:
+
+1. a photo the camera geotagged,
+2. a photo tagged from the phone's position,
+3. where the walk itself was,
+4. the middle of the property.
+
+A report says which of the first two a pin came from, because "the camera was here" and "the
+inspector was standing near here" are not the same claim and a contractor navigating to it should
+know the difference.
+
+The same **Use my location** button is on the issue form, for logging something on the spot without
+a photo.
 
 When the checklist was written it did not know about your building, so a line that does not apply is
 marked N/A rather than deleted — the report then shows it was considered.
@@ -980,7 +1012,8 @@ for a file. Tip: give the map a second to finish loading imagery before printing
   the time, the text, when it was posted and when it was last edited
 - `GuestReport`: what someone without a login sent in — room, issue type, description, any location
   the photos carried, whether it's pending/accepted/declined, who reviewed it and the issue it became
-- `Photo`: filename, GPS presence/lat/lng, taken-at timestamp (from EXIF); belongs to an issue, or
+- `Photo`: filename, GPS presence/lat/lng and whether that came from the camera or the phone,
+  taken-at timestamp (from EXIF); belongs to an issue, or
   to a guest report until that report is accepted and the photos move across, or to an inspection
   finding until that finding is raised as work
 - `ChecklistItem`: a tick-box step on an issue, with who ticked it and when
@@ -992,7 +1025,8 @@ for a file. Tip: give the map a second to finish loading imagery before printing
 - `InspectionTemplate` / `InspectionSection` / `InspectionPoint`: a checklist — its sections, and the
   points in each, with the line saying what "right" looks like and the issue category it maps to
 - `Inspection`: one walk of one room — the property, the checklist used and its name as it stood at
-  the time, the room, who walked it, status, when it started and finished
+  the time, the room, the login that entered it and the technician who walked it, where the phone
+  said it was, status, when it started and finished
 - `InspectionCheck`: one line of that walk — the point it came from (or nothing, if it was found on
   the walk), the section and label copied at the time, the outcome, severity, note, and the issue it
   became

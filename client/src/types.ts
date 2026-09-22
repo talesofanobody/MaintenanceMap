@@ -12,6 +12,8 @@ export interface Photo {
   hasGps: boolean;
   gpsLat: number | null;
   gpsLng: number | null;
+  /** "exif" when the camera recorded it, "device" when the phone's GPS stood in. */
+  gpsSource: "exif" | "device" | null;
   takenAt: string | null;
   createdAt: string;
 }
@@ -737,8 +739,15 @@ export interface Inspection {
   templateName: string;
   roomName: string;
   status: InspectionStatus;
+  /** The login that typed it in. */
   inspectorId: string | null;
+  /** Who actually walked the room. */
+  technicianId: string | null;
+  technician: TechnicianRef | null;
   inspector: string;
+  /** Where the walk was, from the phone, when a photo could not say. */
+  lat: number | null;
+  lng: number | null;
   notes: string | null;
   startedAt: string;
   completedAt: string | null;

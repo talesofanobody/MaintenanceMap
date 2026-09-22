@@ -1,4 +1,4 @@
-import exifr from "exifr";
+import { readPhotoMeta } from "./photoMeta";
 
 /**
  * Getting a phone photo onto the server quickly.
@@ -13,7 +13,10 @@ import exifr from "exifr";
  * alongside the smaller file.
  *
  * Anything the browser cannot decode — HEIC outside Safari, mostly — is sent
- * untouched and the server handles it exactly as before.
+ * untouched and the server handles it exactly as before. So is anything whose
+ * metadata could not be read: the server's reader is the reference one, and it
+ * is better to spend the bandwidth than to shrink a photo's location away and
+ * leave nobody able to recover it.
  */
 export interface PreparedPhoto {
   file: File;
@@ -28,19 +31,6 @@ export interface PreparedPhoto {
 const MAX_EDGE = 2048;
 /** Below this there is nothing worth saving, so don't spend the time or the quality. */
 const WORTH_SHRINKING = 900 * 1024;
-
-async function readMeta(file: File): Promise<{ gpsLat: number | null; gpsLng: number | null; takenAt: string | null }> {
-  const [gps, meta] = await Promise.all([
-    exifr.gps(file).catch(() => null),
-    exifr.parse(file, { pick: ["DateTimeOriginal", "CreateDate"] }).catch(() => null),
-  ]);
-  const taken = meta?.DateTimeOriginal ?? meta?.CreateDate ?? null;
-  return {
-    gpsLat: typeof gps?.latitude === "number" ? gps.latitude : null,
-    gpsLng: typeof gps?.longitude === "number" ? gps.longitude : null,
-    takenAt: taken instanceof Date && !isNaN(taken.getTime()) ? taken.toISOString() : null,
-  };
-}
 
 function canvasToFile(canvas: HTMLCanvasElement, name: string): Promise<File | null> {
   return new Promise((resolve) => {
@@ -70,7 +60,13 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
     return untouched;
   }
 
-  const meta = await readMeta(file);
+  const meta = await readPhotoMeta(file);
+  // Could not read it, so do not destroy it. The server tries harder than we can.
+  if (!meta.read) {
+    bitmap.close();
+    return untouched;
+  }
+
   const scale = Math.min(1, MAX_EDGE / longest);
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * scale);
@@ -86,5 +82,5 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
   const shrunk = await canvasToFile(canvas, file.name || "photo.jpg");
   // A small original re-encoded can come out larger; keep whichever is smaller.
   if (!shrunk || shrunk.size >= file.size) return untouched;
-  return { file: shrunk, ...meta, shrunk: true };
+  return { file: shrunk, gpsLat: meta.gpsLat, gpsLng: meta.gpsLng, takenAt: meta.takenAt, shrunk: true };
 }
