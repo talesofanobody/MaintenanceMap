@@ -1,6 +1,7 @@
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
+import { preparePhoto } from "./preparePhoto";
 import PhotoLightbox from "../components/PhotoLightbox";
 import {
   categoryLabel,
@@ -33,6 +34,7 @@ function CheckRow({
   check,
   propertyId,
   editable,
+  busy,
   onChange,
   onPhoto,
   onRemove,
@@ -41,12 +43,17 @@ function CheckRow({
   check: InspectionCheck;
   propertyId: string;
   editable: boolean;
+  busy: boolean;
   onChange: (patch: Parameters<typeof api.updateCheck>[1]) => void;
-  onPhoto: (file: File) => void;
+  onPhoto: (files: File[]) => void;
   onRemove?: () => void;
   onView: (src: string) => void;
 }) {
-  const fileInput = useRef<HTMLInputElement>(null);
+  // Two separate inputs: one that opens the camera, one that opens the library.
+  // A single input has to pick, and on a phone that means the other way round is
+  // two or three extra taps — which is the whole job, repeated 55 times.
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const libraryInput = useRef<HTMLInputElement>(null);
   const flagged = check.outcome === "flagged";
 
   return (
@@ -123,18 +130,49 @@ function CheckRow({
             ))}
             {editable && (
               <>
-                <button type="button" className="insp-add-photo" onClick={() => fileInput.current?.click()}>
-                  📷
+                <button
+                  type="button"
+                  className="insp-add-photo"
+                  disabled={busy}
+                  onClick={() => cameraInput.current?.click()}
+                  title="Take a photo now"
+                >
+                  <span aria-hidden="true">📷</span>
+                  <span className="insp-add-photo-label">Take</span>
+                </button>
+                <button
+                  type="button"
+                  className="insp-add-photo"
+                  disabled={busy}
+                  onClick={() => libraryInput.current?.click()}
+                  title="Add photos already on this device"
+                >
+                  <span aria-hidden="true">🖼️</span>
+                  <span className="insp-add-photo-label">Upload</span>
                 </button>
                 <input
-                  ref={fileInput}
+                  ref={cameraInput}
                   type="file"
                   accept="image/*"
                   capture="environment"
                   hidden
+                  aria-label={`Take a photo for ${check.label}`}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                    const file = e.target.files?.[0];
-                    if (file) onPhoto(file);
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length) onPhoto(files);
+                    e.target.value = "";
+                  }}
+                />
+                <input
+                  ref={libraryInput}
+                  type="file"
+                  accept="image/*,.heic,.heif"
+                  multiple
+                  hidden
+                  aria-label={`Add photos for ${check.label}`}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length) onPhoto(files);
                     e.target.value = "";
                   }}
                 />
@@ -174,6 +212,7 @@ export default function InspectionRun() {
   const [newLabel, setNewLabel] = useState("");
   const [newSeverity, setNewSeverity] = useState<Severity>("minor");
   const [onlyOpen, setOnlyOpen] = useState(false);
+  const [uploading, setUploading] = useState<{ checkId: string; done: number; total: number } | null>(null);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -206,16 +245,30 @@ export default function InspectionRun() {
     }
   }
 
-  async function addPhoto(check: InspectionCheck, file: File) {
+  /**
+   * Photos go up one at a time so a half-finished batch still leaves the ones
+   * that made it, and so the count on screen means something on a slow
+   * connection. Each is shrunk on the device first.
+   */
+  async function addPhotos(check: InspectionCheck, files: File[]) {
+    setUploading({ checkId: check.id, done: 0, total: files.length });
     setSaving((n) => n + 1);
+    let done = 0;
     try {
-      const photo = await api.uploadCheckPhoto(check.id, file);
-      setInspection((prev) =>
-        prev ? { ...prev, checks: prev.checks.map((c) => (c.id === check.id ? { ...c, photos: [...c.photos, photo] } : c)) } : prev
-      );
+      for (const original of files) {
+        const prepared = await preparePhoto(original);
+        const photo = await api.uploadCheckPhoto(check.id, prepared.file, prepared);
+        setInspection((prev) =>
+          prev ? { ...prev, checks: prev.checks.map((c) => (c.id === check.id ? { ...c, photos: [...c.photos, photo] } : c)) } : prev
+        );
+        done += 1;
+        setUploading({ checkId: check.id, done, total: files.length });
+      }
+      setError(null);
     } catch (e: any) {
-      setError(e.message);
+      setError(files.length > 1 ? `${done} of ${files.length} photos went up. ${e.message}` : e.message);
     } finally {
+      setUploading(null);
       setSaving((n) => n - 1);
     }
   }
@@ -295,7 +348,13 @@ export default function InspectionRun() {
           </p>
         </div>
         <div className="insp-head-actions">
-          {saving > 0 && <span className="muted small">Saving…</span>}
+          {uploading ? (
+            <span className="muted small">
+              {uploading.total > 1 ? `Sending photo ${uploading.done + 1} of ${uploading.total}…` : "Sending photo…"}
+            </span>
+          ) : (
+            saving > 0 && <span className="muted small">Saving…</span>
+          )}
           <Link to={`/inspections/${inspection.id}/report`} className="btn btn-secondary btn-small">
             Report
           </Link>
@@ -339,7 +398,8 @@ export default function InspectionRun() {
                 propertyId={inspection.propertyId}
                 editable={!!editable}
                 onChange={(data) => patch(check, data)}
-                onPhoto={(file) => addPhoto(check, file)}
+                busy={uploading?.checkId === check.id}
+                onPhoto={(files) => addPhotos(check, files)}
                 onRemove={() => removeFinding(check)}
                 onView={setLightbox}
               />

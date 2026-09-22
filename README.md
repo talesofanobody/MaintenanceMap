@@ -431,9 +431,27 @@ after 60 seconds"), because the point of the exercise is the eye for detail, not
 
 The walk itself is built for a phone held in one hand. Each line has three targets — **Fine**,
 **Flag it**, **N/A** — sized for a thumb. Flagging a line opens **Minor / Moderate / Major**, a note
-box and a camera button that goes straight to the phone's camera. Everything saves as you touch it;
-there is no save button to forget. **Only what I flagged** hides the rest when you want to review
-what you have found, and **+ Found something else** records anything the checklist never thought of.
+box and two photo buttons. Everything saves as you touch it; there is no save button to forget.
+**Only what I flagged** hides the rest when you want to review what you have found, and
+**+ Found something else** records anything the checklist never thought of.
+
+#### Photos
+
+**Take** opens the camera there and then. **Upload** opens the camera roll and takes several at
+once, for when the photos were shot before anyone opened the app. Both are on every flagged line;
+neither is buried behind the other, because on a phone the wrong one costs three extra taps and the
+walk repeats it fifty-five times.
+
+Anything larger than 2048px is shrunk on the phone before it is sent. A modern camera produces a
+4 MB file and the server only keeps 2048px anyway, so this is time the inspector would spend
+standing in the room watching a spinner — a typical photo goes up about four times smaller. The
+GPS is read off the original first and sent with it, because resizing a photo in a browser throws
+its EXIF away, and that GPS is what pins the issue to the right spot when the finding becomes work.
+A HEIC the browser cannot open — anything outside Safari — is sent untouched and converted on the
+server as before.
+
+Photos upload one at a time so a batch interrupted by a lift or a thick wall still keeps the ones
+that made it, and the header says which one is going up.
 
 When the checklist was written it did not know about your building, so a line that does not apply is
 marked N/A rather than deleted — the report then shows it was considered.
@@ -460,6 +478,29 @@ issue on that property, in that room, with:
 
 A finding can only be raised once, and only if it was flagged. The link back to the issue stays on
 the sheet, with its live status, so the report doubles as a record of what was done about it.
+
+#### Every room in one report
+
+A single room's sheet is the right thing to hand a contractor. A round of forty is the thing a
+general manager wants, and **Inspections** will produce it in one go.
+
+Either tick the rooms on the list and press **Report on the ticked rooms**, or pick a property and
+two dates and press **Report on this property** — everything walked there in that span goes in.
+
+The document opens with the totals, then **room by room**: one line per room with what was checked,
+how many major, moderate and minor faults were found, how many have already been raised as work,
+and who walked it. Rooms are ordered worst first, so a forty-room round is triaged before turning a
+page, and rooms with a major fault are shaded. The rooms themselves follow, each starting on a fresh
+sheet so a page can be handed to whoever owns it, and rooms where nothing was found are named once
+at the end instead of taking a page each.
+
+Findings can be raised from here across rooms at once — **Select all**, or **Major only** when the
+round turned up more than one afternoon's work. Each issue still lands in the room it was found in,
+on that room's property, at that room's pin; only the project they are grouped under is shared.
+
+Nothing about the report is stored. The findings have been on the server since the moment they were
+typed into a phone; the report is assembled when it is asked for and exists only until it is printed
+or closed. Printing the same range next week picks up whatever has changed since.
 
 #### Projects
 
@@ -942,13 +983,14 @@ Everything it owns lives in one place on each side:
 |---|---|
 | Tables | `InspectionTemplate`, `InspectionSection`, `InspectionPoint`, `Inspection`, `InspectionCheck`, `Project` |
 | Server | `server/src/lib/inspections.ts` (vocabulary, default checklists), `server/src/routes/inspections.ts`, `server/src/routes/projects.ts` |
-| Client | `client/src/inspections/` (four pages), the inspections block at the end of `client/src/types.ts`, the inspection methods grouped at the end of `client/src/api.ts`, and the inspections block at the end of `client/src/styles.css` |
+| Client | `client/src/inspections/` (the pages, the shared `Finding` and the on-device `preparePhoto`), the inspections block at the end of `client/src/types.ts`, the inspection methods grouped at the end of `client/src/api.ts`, and the inspections block at the end of `client/src/styles.css` |
 
 There are exactly four places it touches the rest of the app, and they are all deliberate:
 
 1. **`Photo.checkId`** — a finding's photos, until it is raised as work and they move to the issue.
 2. **`Issue.fromCheck` / `Issue.projectId`** — where an issue came from and what it is grouped with.
-3. **`POST /api/inspections/:id/raise`** — the one handler that creates issues. Everything else in
+3. **`POST /api/inspections/:id/raise` and `POST /api/inspections/raise`** — the two routes into the
+   one handler that creates issues, for a single room and for several. Everything else in
    `routes/inspections.ts` stays inside its own tables.
 4. **Property and user** — an inspection names a property and whoever walked the room.
 

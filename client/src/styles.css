@@ -6175,14 +6175,34 @@ li.unread .bell-item:hover {
   display: block;
 }
 
+/* Camera and library side by side: on a phone the wrong one costs three taps. */
 .insp-add-photo {
   width: 68px;
   height: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
-  font-size: 22px;
+  font-size: 20px;
+  line-height: 1;
   cursor: pointer;
+}
+
+.insp-add-photo:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.insp-add-photo-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .insp-raised {
@@ -6415,6 +6435,207 @@ li.unread .bell-item:hover {
 
 .insp-raised-count {
   margin-top: 16px;
+}
+
+
+/* --- Picking a round, and the report over it ----------------------- */
+.insp-round-picker {
+  margin-bottom: 18px;
+}
+
+.insp-round-picker h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.insp-round-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.insp-round-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.insp-round-controls input[type="date"] {
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+/* A link cannot be disabled, so it is made to look and behave as though it were. */
+.btn.is-disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.insp-cards-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.insp-card-pick {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding-right: 4px;
+  cursor: pointer;
+}
+
+.insp-card-pick input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--brand);
+}
+
+.insp-card.is-picked {
+  background: var(--brand-soft);
+  border-color: #bfdbfe;
+}
+
+.insp-round-table-wrap {
+  margin-bottom: 26px;
+}
+
+.insp-round-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.insp-round-table th,
+.insp-round-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.insp-round-table thead th {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  border-bottom: 2px solid var(--text);
+}
+
+.insp-round-table .num {
+  text-align: right;
+  width: 62px;
+  font-variant-numeric: tabular-nums;
+}
+
+.insp-round-table tbody th {
+  font-weight: 600;
+}
+
+.insp-round-table tbody th a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.insp-round-table tbody th a:hover {
+  color: var(--brand-text);
+  text-decoration: underline;
+}
+
+/* The two things a manager scans the table for. */
+.insp-round-table tr.has-major th,
+.insp-round-table tr.has-major td {
+  background: var(--p-urgent-soft);
+}
+
+.insp-round-table tr.is-clean th,
+.insp-round-table tr.is-clean td {
+  color: var(--text-2);
+}
+
+.insp-round-table tfoot th,
+.insp-round-table tfoot td {
+  border-top: 2px solid var(--text);
+  border-bottom: none;
+  font-weight: 700;
+}
+
+.insp-round-room {
+  margin-bottom: 28px;
+}
+
+.insp-round-room-head {
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.insp-round-room-head h2 {
+  margin: 0;
+  font-size: 18px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+
+.insp-round-room-head p {
+  margin: 3px 0 0;
+}
+
+.insp-round-clean {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.insp-round-clean p {
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+@media (max-width: 720px) {
+  .insp-round-controls .btn {
+    width: 100%;
+  }
+
+  .insp-round-table {
+    font-size: 12px;
+  }
+
+  .insp-round-table .num {
+    width: 40px;
+  }
+}
+
+@media print {
+  /* Each room starts its own sheet, so a page can be handed to whoever owns it. */
+  .insp-round-room {
+    break-before: page;
+    break-inside: auto;
+  }
+
+  .insp-round-room-head {
+    break-after: avoid;
+  }
+
+  .insp-round-table {
+    break-inside: auto;
+  }
+
+  .insp-round-table tr {
+    break-inside: avoid;
+  }
+
+  .insp-round-table thead {
+    display: table-header-group;
+  }
 }
 
 /* ------------------------------------------------------------------ */

@@ -4,34 +4,8 @@ import { api } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import PhotoLightbox from "../components/PhotoLightbox";
 import { formatDateTime } from "../lib/dates";
-import {
-  categoryLabel,
-  PRIORITY_LABELS,
-  SEVERITY_LABELS,
-  SEVERITY_PRIORITY,
-  STATUS_LABELS,
-  type Inspection,
-  type InspectionCheck,
-  type Project,
-  type Severity,
-} from "../types";
-
-const SEVERITY_ORDER: Record<Severity, number> = { major: 0, moderate: 1, minor: 2 };
-
-/**
- * What the inspector photographed. Raising a finding hands its photos to the issue
- * so the person doing the job has them, so the sheet looks there once it has.
- */
-function evidence(check: InspectionCheck) {
-  return check.photos.length ? check.photos : check.issue?.photos ?? [];
-}
-
-/** Findings worst-first, then in walk order — the order somebody would fix them in. */
-function rank(checks: InspectionCheck[]): InspectionCheck[] {
-  return [...checks].sort(
-    (a, b) => SEVERITY_ORDER[(a.severity ?? "minor") as Severity] - SEVERITY_ORDER[(b.severity ?? "minor") as Severity] || a.position - b.position
-  );
-}
+import Finding, { evidence, flaggedIn } from "./Finding";
+import type { Inspection, Project } from "../types";
 
 /**
  * The findings from one room, on one sheet, printable as it stands — and, for an
@@ -79,7 +53,7 @@ export default function InspectionReport() {
       .catch(() => setProjects([]));
   }, [isAdmin]);
 
-  const flagged = useMemo(() => rank((inspection?.checks ?? []).filter((c) => c.outcome === "flagged")), [inspection]);
+  const flagged = useMemo(() => flaggedIn(inspection?.checks ?? []), [inspection]);
   const raisable = useMemo(() => flagged.filter((c) => !c.issueId), [flagged]);
   const alreadyRaised = useMemo(() => flagged.filter((c) => c.issueId), [flagged]);
 
@@ -235,54 +209,16 @@ export default function InspectionReport() {
           ) : (
             <ol className="insp-findings">
               {flagged.map((check, idx) => (
-                <li key={check.id} className={`insp-finding sev-${check.severity ?? "minor"} ${check.issueId ? "is-raised" : ""}`}>
-                  <div className="insp-finding-head">
-                    {isAdmin && !check.issueId && (
-                      <input
-                        type="checkbox"
-                        className="no-print insp-pick"
-                        checked={picked.has(check.id)}
-                        onChange={() => toggle(check.id)}
-                        aria-label={`Raise "${check.label}" as an issue`}
-                      />
-                    )}
-                    <span className="insp-finding-no">{idx + 1}</span>
-                    <div className="insp-finding-text">
-                      <p className="insp-finding-label">{check.label}</p>
-                      <p className="muted small">
-                        {check.section}
-                        {check.category ? ` · ${categoryLabel(check.category)}` : ""}
-                        {!check.pointId ? " · found on the walk" : ""}
-                      </p>
-                    </div>
-                    <span className={`insp-sev-tag s-${check.severity ?? "minor"}`}>{SEVERITY_LABELS[(check.severity ?? "minor") as Severity]}</span>
-                  </div>
-
-                  {check.note && <p className="insp-finding-note">{check.note}</p>}
-                  {check.hint && !check.note && <p className="muted small insp-finding-note">Looked for: {check.hint}</p>}
-
-                  {evidence(check).length > 0 && (
-                    <div className="insp-finding-photos">
-                      {evidence(check).map((photo) => (
-                        <button key={photo.id} type="button" className="insp-thumb" onClick={() => setLightbox(api.photoUrl(photo.id))}>
-                          <img src={api.photoThumbUrl(photo.id)} alt="" loading="lazy" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {check.issue ? (
-                    <p className="insp-raised">
-                      Raised as{" "}
-                      <Link to={`/properties/${inspection.propertyId}?issue=${check.issue.id}`}>{check.issue.title}</Link> ·{" "}
-                      {STATUS_LABELS[check.issue.status]} · {PRIORITY_LABELS[check.issue.priority]}
-                    </p>
-                  ) : (
-                    <p className="muted small insp-would-be">
-                      Would be raised as {PRIORITY_LABELS[SEVERITY_PRIORITY[(check.severity ?? "minor") as Severity]]} priority.
-                    </p>
-                  )}
-                </li>
+                <Finding
+                  key={check.id}
+                  check={check}
+                  number={idx + 1}
+                  propertyId={inspection.propertyId}
+                  pickable={isAdmin}
+                  picked={picked.has(check.id)}
+                  onPick={() => toggle(check.id)}
+                  onView={setLightbox}
+                />
               ))}
             </ol>
           )}

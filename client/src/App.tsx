@@ -33,6 +33,7 @@ import CrewMap from "./pages/CrewMap";
 import Inspections from "./inspections/Inspections";
 import InspectionRun from "./inspections/InspectionRun";
 import InspectionReport from "./inspections/InspectionReport";
+import InspectionsReport from "./inspections/InspectionsReport";
 import Projects from "./inspections/Projects";
 import { useEffect, useState } from "react";
 
@@ -177,6 +178,7 @@ function AppRoutes() {
           <Route path="/properties/:id" element={<PropertyWorkspace />} />
           <Route path="/properties/:id/report" element={<Report />} />
           <Route path="/inspections" element={<Inspections />} />
+          <Route path="/inspections/report" element={<InspectionsReport />} />
           <Route path="/inspections/:id" element={<InspectionRun />} />
           <Route path="/inspections/:id/report" element={<InspectionReport />} />
           {isAdmin && <Route path="/projects" element={<Projects />} />}

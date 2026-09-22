@@ -1,4 +1,4 @@
-import type { Inspection, InspectionCheck, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -245,11 +245,32 @@ export const api = {
   addFinding: (inspectionId: string, data: { label: string; section?: string; severity?: Severity; note?: string; category?: string | null }) =>
     request<InspectionCheck>(`/inspections/${inspectionId}/checks`, { method: "POST", body: JSON.stringify(data) }),
   deleteCheck: (checkId: string) => request<void>(`/inspections/checks/${checkId}`, { method: "DELETE" }),
-  uploadCheckPhoto: (checkId: string, file: File) => {
+  uploadCheckPhoto: (checkId: string, file: File, meta?: { gpsLat?: number | null; gpsLng?: number | null; takenAt?: string | null }) => {
     const form = new FormData();
     form.append("photo", file);
+    // Only sent when the photo was shrunk on the device and lost its EXIF with it.
+    if (meta?.gpsLat != null && meta?.gpsLng != null) {
+      form.append("gpsLat", String(meta.gpsLat));
+      form.append("gpsLng", String(meta.gpsLng));
+    }
+    if (meta?.takenAt) form.append("takenAt", meta.takenAt);
     return request<Photo>(`/inspections/checks/${checkId}/photos`, { method: "POST", body: form });
   },
+  inspectionReport: (params: { ids?: string[]; propertyId?: string; from?: string; to?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params.ids?.length) q.set("ids", params.ids.join(","));
+    for (const key of ["propertyId", "from", "to", "status"] as const) {
+      const v = params[key];
+      if (v) q.set(key, v);
+    }
+    return request<InspectionReport>(`/inspections/report?${q}`);
+  },
+  /** Findings from several rooms at once, from the combined report. */
+  raiseAcrossRooms: (data: { checkIds: string[]; projectId?: string; projectName?: string; projectDescription?: string }) =>
+    request<{ created: { checkId: string; issueId: string; title: string }[]; projectId: string | null; projectName: string | null; inspections: Inspection[] }>(
+      "/inspections/raise",
+      { method: "POST", body: JSON.stringify(data) }
+    ),
   raiseFindings: (inspectionId: string, data: { checkIds: string[]; projectId?: string; projectName?: string; projectDescription?: string }) =>
     request<{ created: { checkId: string; issueId: string; title: string }[]; projectId: string | null; projectName: string | null; inspection: Inspection }>(
       `/inspections/${inspectionId}/raise`,

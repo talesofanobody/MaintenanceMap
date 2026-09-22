@@ -751,6 +751,24 @@ export interface InspectionSummary extends Omit<Inspection, "checks"> {
   counts: { total: number; ok: number; flagged: number; na: number; raised: number };
 }
 
+/** Many rooms on one sheet. Nothing is stored — this is assembled for printing. */
+export interface InspectionReport {
+  inspections: Inspection[];
+  totals: {
+    rooms: number;
+    roomsWithFindings: number;
+    points: number;
+    ok: number;
+    na: number;
+    flagged: number;
+    major: number;
+    moderate: number;
+    minor: number;
+    raised: number;
+    photos: number;
+  };
+}
+
 export interface ProjectIssue {
   id: string;
   propertyId: string;

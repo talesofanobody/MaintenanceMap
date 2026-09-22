@@ -4,7 +4,7 @@ import path from "path";
 import { prisma } from "../db";
 import { ADMIN_ONLY, CAN_EDIT } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
-import { parseOptionalString, ValidationError } from "../lib/validation";
+import { DATE_ONLY, parseOptionalString, ValidationError } from "../lib/validation";
 import { parseCategory } from "../lib/taxonomy";
 import { upload, UPLOADS_DIR } from "../lib/upload";
 import { readExif } from "../lib/exif";
@@ -39,6 +39,9 @@ const CHECK_INCLUDE = {
     },
   },
 } as const;
+
+/** One document, one round of inspections — beyond this it is a database export. */
+const MAX_REPORT_ROOMS = 200;
 
 const INSPECTION_INCLUDE = {
   property: { select: { id: true, name: true } },
@@ -207,6 +210,69 @@ inspectionsRouter.get("/", async (req, res) => {
       },
     }))
   );
+});
+
+/**
+ * Every room in one document.
+ *
+ * Either a list of inspection ids, or a property and a span of days. It returns
+ * the inspections in full because the sheet shows each room's findings; the
+ * client asks once rather than once per room, since a floor's worth of rooms is
+ * forty round trips otherwise.
+ *
+ * Nothing is stored — the findings have been on the server since they were
+ * typed, and this only assembles them for printing.
+ */
+inspectionsRouter.get("/report", async (req, res) => {
+  const ids = typeof req.query.ids === "string" ? req.query.ids.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const propertyId = typeof req.query.propertyId === "string" ? req.query.propertyId : undefined;
+  const from = typeof req.query.from === "string" && DATE_ONLY.test(req.query.from) ? req.query.from : undefined;
+  const to = typeof req.query.to === "string" && DATE_ONLY.test(req.query.to) ? req.query.to : undefined;
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+
+  if (!ids.length && !propertyId) {
+    return res.status(400).json({ error: "Pick the rooms, or a property and a span of days." });
+  }
+  if (ids.length > MAX_REPORT_ROOMS) {
+    return res.status(400).json({ error: `That is more than ${MAX_REPORT_ROOMS} rooms at once.` });
+  }
+
+  // A day range is inclusive at both ends, which is what someone picking
+  // "the 3rd to the 5th" means.
+  const startedAt =
+    from || to
+      ? { ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}), ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}) }
+      : undefined;
+
+  const inspections = await prisma.inspection.findMany({
+    where: ids.length
+      ? { id: { in: ids } }
+      : { propertyId, ...(status ? { status } : {}), ...(startedAt ? { startedAt } : {}) },
+    include: INSPECTION_INCLUDE,
+    orderBy: [{ roomName: "asc" }, { startedAt: "asc" }],
+    take: MAX_REPORT_ROOMS,
+  });
+
+  if (!inspections.length) return res.status(404).json({ error: "No inspections match that." });
+
+  const checks = inspections.flatMap((i) => i.checks);
+  const flagged = checks.filter((c) => c.outcome === "flagged");
+  res.json({
+    inspections,
+    totals: {
+      rooms: inspections.length,
+      roomsWithFindings: inspections.filter((i) => i.checks.some((c) => c.outcome === "flagged")).length,
+      points: checks.length,
+      ok: checks.filter((c) => c.outcome === "ok").length,
+      na: checks.filter((c) => c.outcome === "na").length,
+      flagged: flagged.length,
+      major: flagged.filter((c) => c.severity === "major").length,
+      moderate: flagged.filter((c) => c.severity === "moderate").length,
+      minor: flagged.filter((c) => c.severity !== "major" && c.severity !== "moderate").length,
+      raised: flagged.filter((c) => c.issueId).length,
+      photos: checks.reduce((n, c) => n + c.photos.length + (c.issue?.photos.length ?? 0), 0),
+    },
+  });
 });
 
 inspectionsRouter.get("/:id", async (req, res) => {
@@ -424,7 +490,21 @@ inspectionsRouter.post("/checks/:checkId/photos", CAN_EDIT, acceptPhoto, async (
   if (!check) return res.status(404).json({ error: "not found" });
   if (!req.file) return res.status(400).json({ error: "photo file is required" });
 
+  // A phone-shrunk photo has had its EXIF stripped by the canvas, so the client
+  // sends what it read off the original. The file's own EXIF still wins when it
+  // has any — what is actually in the image beats what the sender claims.
   const exif = await readExif(req.file.buffer);
+  const claimedLat = Number(req.body?.gpsLat);
+  const claimedLng = Number(req.body?.gpsLng);
+  const claimedTaken = typeof req.body?.takenAt === "string" ? new Date(req.body.takenAt) : null;
+  const hasClaimedGps =
+    Number.isFinite(claimedLat) && Number.isFinite(claimedLng) && Math.abs(claimedLat) <= 90 && Math.abs(claimedLng) <= 180;
+
+  const hasGps = exif.hasGps || hasClaimedGps;
+  const gpsLat = exif.hasGps ? exif.gpsLat : hasClaimedGps ? claimedLat : null;
+  const gpsLng = exif.hasGps ? exif.gpsLng : hasClaimedGps ? claimedLng : null;
+  const takenAt = exif.takenAt ?? (claimedTaken && !isNaN(claimedTaken.getTime()) ? claimedTaken : null);
+
   let stored;
   try {
     stored = await storeImage(req.file.buffer, req.file.originalname);
@@ -437,10 +517,10 @@ inspectionsRouter.post("/checks/:checkId/photos", CAN_EDIT, acceptPhoto, async (
       checkId: check.id,
       filename: stored.filename,
       thumbFilename: stored.thumbFilename,
-      hasGps: exif.hasGps,
-      gpsLat: exif.gpsLat,
-      gpsLng: exif.gpsLng,
-      takenAt: exif.takenAt,
+      hasGps,
+      gpsLat,
+      gpsLng,
+      takenAt,
     },
   });
   res.status(201).json(photo);
@@ -450,54 +530,57 @@ inspectionsRouter.post("/checks/:checkId/photos", CAN_EDIT, acceptPhoto, async (
 // Turning findings into work
 // ---------------------------------------------------------------------------
 
+type ChosenCheck = Awaited<ReturnType<typeof prisma.inspectionCheck.findMany>>[number];
+
 /**
  * Raises issues from a set of findings, optionally grouping them into a project.
  *
  * This is the one place the inspection domain touches the rest of the app. A
  * finding's photos move onto the issue it became, so the person doing the job
  * sees what the inspector saw.
+ *
+ * Findings from different rooms — different properties, even — can come in one
+ * call, because a snagging list for a whole floor is one piece of work to the
+ * person who has to schedule it. Each issue still lands on its own room's
+ * property, at its own room's pin.
  */
-inspectionsRouter.post("/:id/raise", ADMIN_ONLY, async (req, res) => {
-  const inspection = await prisma.inspection.findUnique({
-    where: { id: req.params.id },
-    include: { property: { select: { id: true, name: true, centerLat: true, centerLng: true } }, checks: true },
+async function raiseChecks(req: Request, chosen: ChosenCheck[], body: any) {
+  const inspectionIds = [...new Set(chosen.map((c) => c.inspectionId))];
+  const inspections = await prisma.inspection.findMany({
+    where: { id: { in: inspectionIds } },
+    include: { property: { select: { id: true, name: true, centerLat: true, centerLng: true } } },
   });
-  if (!inspection) return res.status(404).json({ error: "not found" });
-
-  const wanted: string[] = Array.isArray(req.body.checkIds) ? req.body.checkIds.map(String) : [];
-  if (wanted.length === 0) return res.status(400).json({ error: "Pick at least one finding." });
-
-  const chosen = inspection.checks.filter((c) => wanted.includes(c.id));
-  if (chosen.length !== wanted.length) return res.status(400).json({ error: "One or more of those findings is not on this inspection." });
-  const already = chosen.filter((c) => c.issueId);
-  if (already.length) return res.status(400).json({ error: `${already.length} of those already became issues.` });
-  const notFlagged = chosen.filter((c) => c.outcome !== "flagged");
-  if (notFlagged.length) return res.status(400).json({ error: "Only flagged findings can be raised as work." });
+  const byId = new Map(inspections.map((i) => [i.id, i]));
 
   // A room's pin is the property centre unless a photo says otherwise — an inspector
   // is standing in the room, so the photo's own GPS is the better guess when present.
-  const located = await prisma.photo.findFirst({
+  const located = await prisma.photo.findMany({
     where: { checkId: { in: chosen.map((c) => c.id) }, hasGps: true },
-    select: { gpsLat: true, gpsLng: true },
+    select: { checkId: true, gpsLat: true, gpsLng: true },
   });
-  const lat = located?.gpsLat ?? inspection.property.centerLat ?? 0;
-  const lng = located?.gpsLng ?? inspection.property.centerLng ?? 0;
+  const pinByCheck = new Map(located.map((p) => [p.checkId!, p]));
 
   let projectId: string | null = null;
   let projectName: string | null = null;
-  if (req.body.projectId) {
-    const project = await prisma.project.findUnique({ where: { id: String(req.body.projectId) }, select: { id: true, name: true } });
-    if (!project) return res.status(404).json({ error: "project not found" });
+  if (body.projectId) {
+    const project = await prisma.project.findUnique({ where: { id: String(body.projectId) }, select: { id: true, name: true } });
+    if (!project) return { ok: false, error: { status: 404, message: "project not found" } } as const;
     projectId = project.id;
     projectName = project.name;
-  } else if (req.body.projectName) {
-    const name = String(req.body.projectName).trim().slice(0, 120);
-    if (!name) return res.status(400).json({ error: "A project needs a name." });
+  } else if (body.projectName) {
+    const name = String(body.projectName).trim().slice(0, 120);
+    if (!name) return { ok: false, error: { status: 400, message: "A project needs a name." } } as const;
+    const rooms = [...new Set(inspections.map((i) => i.roomName))];
+    const where = rooms.length === 1 ? `the inspection of ${rooms[0]}` : `${rooms.length} room inspections`;
+    // A project spanning properties belongs to none of them in particular.
+    const propertyIds = [...new Set(inspections.map((i) => i.propertyId))];
     const project = await prisma.project.create({
       data: {
         name,
-        description: parseOptionalString(req.body.projectDescription, "description", 1000) ?? `Raised from the inspection of ${inspection.roomName} on ${inspection.startedAt.toISOString().slice(0, 10)}.`,
-        propertyId: inspection.propertyId,
+        description:
+          parseOptionalString(body.projectDescription, "description", 1000) ??
+          `Raised from ${where} on ${new Date().toISOString().slice(0, 10)}.`,
+        propertyId: propertyIds.length === 1 ? propertyIds[0] : null,
         createdBy: req.user!.username,
       },
     });
@@ -511,6 +594,8 @@ inspectionsRouter.post("/:id/raise", ADMIN_ONLY, async (req, res) => {
 
   const created: { checkId: string; issueId: string; title: string }[] = [];
   for (const check of chosen) {
+    const inspection = byId.get(check.inspectionId)!;
+    const pin = pinByCheck.get(check.id);
     const priority = SEVERITY_PRIORITY[(check.severity ?? "minor") as Severity] ?? "low";
     const deadline = computeDeadline(priority, responseHours);
     const issue = await prisma.issue.create({
@@ -521,8 +606,8 @@ inspectionsRouter.post("/:id/raise", ADMIN_ONLY, async (req, res) => {
         priority,
         category: check.category,
         roomName: inspection.roomName,
-        lat,
-        lng,
+        lat: pin?.gpsLat ?? inspection.property.centerLat ?? 0,
+        lng: pin?.gpsLng ?? inspection.property.centerLng ?? 0,
         projectId,
         dueDate: deadline.dueDate,
         dueAt: deadline.dueAt,
@@ -534,16 +619,62 @@ inspectionsRouter.post("/:id/raise", ADMIN_ONLY, async (req, res) => {
     created.push({ checkId: check.id, issueId: issue.id, title: issue.title });
   }
 
+  const rooms = [...new Set(inspections.map((i) => i.roomName))];
+  const from = rooms.length === 1 ? rooms[0] : `${rooms.length} rooms`;
   await logActivity(req, {
     action: "inspection.raised",
     entityType: "inspection",
-    entityId: inspection.id,
-    propertyId: inspection.propertyId,
+    entityId: inspectionIds[0],
+    propertyId: inspections[0]?.propertyId,
     summary: projectName
-      ? `Raised ${created.length} issue${created.length === 1 ? "" : "s"} from ${inspection.roomName} into the project "${projectName}"`
-      : `Raised ${created.length} issue${created.length === 1 ? "" : "s"} from the inspection of ${inspection.roomName}`,
+      ? `Raised ${created.length} issue${created.length === 1 ? "" : "s"} from ${from} into the project "${projectName}"`
+      : `Raised ${created.length} issue${created.length === 1 ? "" : "s"} from ${from}`,
   });
 
+  return { ok: true, created, projectId, projectName, inspectionIds } as const;
+}
+
+/** Checks that are allowed to become work, or the reason they are not. */
+async function pickRaisable(ids: string[], onlyInspectionId?: string) {
+  if (ids.length === 0) return { ok: false, error: { status: 400, message: "Pick at least one finding." } } as const;
+  if (ids.length > 200) return { ok: false, error: { status: 400, message: "That is more than 200 findings at once." } } as const;
+
+  const chosen = await prisma.inspectionCheck.findMany({ where: { id: { in: ids } } });
+  if (chosen.length !== ids.length) return { ok: false, error: { status: 400, message: "One or more of those findings no longer exists." } } as const;
+  if (onlyInspectionId && chosen.some((c) => c.inspectionId !== onlyInspectionId)) {
+    return { ok: false, error: { status: 400, message: "One or more of those findings is not on this inspection." } } as const;
+  }
+  const already = chosen.filter((c) => c.issueId);
+  if (already.length) return { ok: false, error: { status: 400, message: `${already.length} of those already became issues.` } } as const;
+  const notFlagged = chosen.filter((c) => c.outcome !== "flagged");
+  if (notFlagged.length) return { ok: false, error: { status: 400, message: "Only flagged findings can be raised as work." } } as const;
+  return { ok: true, chosen } as const;
+}
+
+inspectionsRouter.post("/:id/raise", ADMIN_ONLY, async (req, res) => {
+  const inspection = await prisma.inspection.findUnique({ where: { id: req.params.id }, select: { id: true } });
+  if (!inspection) return res.status(404).json({ error: "not found" });
+
+  const wanted: string[] = Array.isArray(req.body.checkIds) ? req.body.checkIds.map(String) : [];
+  const picked = await pickRaisable(wanted, inspection.id);
+  if (!picked.ok) return res.status(picked.error.status).json({ error: picked.error.message });
+
+  const result = await raiseChecks(req, picked.chosen, req.body);
+  if (!result.ok) return res.status(result.error.status).json({ error: result.error.message });
+
   const fresh = await prisma.inspection.findUnique({ where: { id: inspection.id }, include: INSPECTION_INCLUDE });
-  res.status(201).json({ created, projectId, projectName, inspection: fresh });
+  res.status(201).json({ created: result.created, projectId: result.projectId, projectName: result.projectName, inspection: fresh });
+});
+
+/** The same thing, for findings picked across several rooms on the combined report. */
+inspectionsRouter.post("/raise", ADMIN_ONLY, async (req, res) => {
+  const wanted: string[] = Array.isArray(req.body.checkIds) ? req.body.checkIds.map(String) : [];
+  const picked = await pickRaisable(wanted);
+  if (!picked.ok) return res.status(picked.error.status).json({ error: picked.error.message });
+
+  const result = await raiseChecks(req, picked.chosen, req.body);
+  if (!result.ok) return res.status(result.error.status).json({ error: result.error.message });
+
+  const inspections = await prisma.inspection.findMany({ where: { id: { in: result.inspectionIds } }, include: INSPECTION_INCLUDE });
+  res.status(201).json({ created: result.created, projectId: result.projectId, projectName: result.projectName, inspections });
 });
