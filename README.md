@@ -120,6 +120,32 @@ are on you as the deployer:
 - **Keep the backups folder off the public web root**, and copy the archives somewhere else — they
   contain the whole database and every photo.
 
+### On a container host (Railway, Fly, Render)
+
+The `Dockerfile` deploys as-is. Whatever you use has to give you two things: a **persistent volume
+mounted at `/data`**, and a process that **stays running** — there is an hourly backup tick, a
+six-hourly session purge and the reminder scheduler, none of which fire on a platform that sleeps
+the container or runs it per-request. For the same reason, keep it to **one instance**: SQLite has
+a single writer, so a second replica will corrupt the database rather than share it.
+
+On **Railway** specifically:
+
+1. Create the service from the repo. It picks up the `Dockerfile` at the root on its own.
+2. **Attach a Volume with the mount path `/data`.** Do this before the first deploy — without it the
+   database and the photos are written into the container's writable layer and vanish on the next
+   one. (Railway rejects a Dockerfile containing a `VOLUME` instruction, which is why this one has
+   none; the mount is configured on their side instead.)
+3. Set the variables: `SESSION_SECRET` (generate one — the server refuses to start in production
+   without it), `NODE_ENV=production`, `TRUST_PROXY=1`, and `BACKUP_KEEP=3`.
+4. Point the healthcheck at `/api/health`.
+5. `PORT` is injected by the platform and the server reads it, so leave it alone.
+
+`BACKUP_KEEP` matters more here than at home. Every nightly archive contains the database **and
+every photo**, so the default of 14 means the disk has to hold roughly fifteen copies of your
+photos — on a metered volume that is most of the bill. Keep two or three and pull the archives
+somewhere else, or rely on the platform's own volume snapshots and turn the built-in ones down
+further.
+
 ## Self-hosting on a box at home
 
 This is the setup the app is built for: one machine you own, one container, one folder holding

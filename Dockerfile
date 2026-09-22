@@ -44,7 +44,14 @@ ENV DATABASE_URL=file:/data/maintenancemap.db \
     BACKUP_DIR=/data/backups \
     CLIENT_DIST=/app/public \
     PORT=4000
-VOLUME ["/data"]
+
+# No VOLUME instruction on purpose. It only declares an intent — it does not
+# create storage — and some hosts (Railway among them) reject a Dockerfile that
+# has one, because their own volumes are attached outside the image. Whatever
+# runs this must mount persistent storage at /data itself: docker-compose.yml in
+# this repo does, and on a PaaS you attach the platform's volume there. Without
+# that mount the database and the photos live in the container's writable layer
+# and die with it.
 EXPOSE 4000
 
 COPY docker-entrypoint.sh /usr/local/bin/
