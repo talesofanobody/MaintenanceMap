@@ -71,7 +71,9 @@ at 2048px) plus a thumbnail — the original HEIC/PNG is not kept. The SQLite da
 machine — copy the archives somewhere else if the data matters.
 
 Optional environment variables (`server/.env`): `BACKUP_DIR` and `BACKUP_KEEP` change where backups
-are written and how many are kept (default `server/backups`, 14).
+are written and how many nightly ones are kept (default `server/backups`, 14). `BACKUP_KEEP_MARKED`
+(default 3) is the separate allowance for the copies taken automatically before an update or a
+restore.
 
 If you already have a database from an earlier version, run `npm run prisma:migrate` again in
 `server/` to apply new migrations.
@@ -895,6 +897,54 @@ in `server/.env` to change where they go and how many are kept.
 
 A backup sitting on the same machine won't survive losing that machine: copy them somewhere else as
 well.
+
+#### One is taken before every update that changes the database
+
+A nightly copy is not good enough for the riskiest moment. Deploy at three in the afternoon and the
+most recent backup could be fifteen hours old — a whole day of inspections between the last safe
+point and a migration that rebuilds tables.
+
+So when a deploy starts, the container checks whether there are migrations it has not applied yet.
+If there are, it takes a backup first, names it `…-before-update.tar.gz`, and only then migrates.
+Most deploys carry no migration and nothing happens. These are rotated on their own allowance
+(`BACKUP_KEEP_MARKED`, three by default) so a quiet fortnight of nightly backups can never push the
+one you need off the end.
+
+If that backup fails, **the deploy stops** rather than migrating without it. The database is
+untouched and the previous version is still running. The usual cause is a full volume. To go ahead
+anyway, set `SKIP_PREMIGRATE_BACKUP=1` and deploy again. A backup that hangs is treated as a
+failure after five minutes (`PREMIGRATE_TIMEOUT_MS`), because a container that never finishes
+starting is harder to diagnose than one that fails loudly.
+
+#### Restoring
+
+**Settings → Backups → Restore**, on any archive in the list, or **Restore from a file…** for one
+you have kept somewhere else.
+
+It replaces the whole database and every photo with what is in the archive, so it asks twice: the
+first press says what the archive holds, the second does it. Before anything is overwritten it
+takes a copy of the current state as `…-before-restore.tar.gz`, which means restoring the wrong
+archive is itself recoverable — and that is the mistake people actually make.
+
+The app stays up. The database is swapped, SQLite's `-wal` and `-shm` files go with it, and the
+app reconnects and proves the restored database answers before reporting success. You may need to
+sign in again afterwards, because the logins came from the backup too.
+
+An archive that is truncated, not one of ours, or missing its database is refused before a single
+live file is touched.
+
+#### Rehearse it
+
+A backup nobody has ever restored is a backup you only think you have. Do this once, on something
+that is not the live system — a local copy is fine:
+
+1. **Back up now**, and note the filename.
+2. Delete an issue, and log a new one.
+3. **Restore** that backup.
+4. The deleted issue is back; the new one is gone; its photos open.
+
+That is four minutes, and it is the difference between having backups and believing you do. Do it
+again after any change to where the app stores its data.
 
 ### Guest reporting
 

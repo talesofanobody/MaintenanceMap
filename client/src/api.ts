@@ -1,4 +1,4 @@
-import type { Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -120,6 +120,17 @@ export const api = {
   runBackup: () => request<BackupFile>("/backups/run", { method: "POST" }),
   deleteBackup: (name: string) => request<void>(`/backups/${encodeURIComponent(name)}`, { method: "DELETE" }),
   backupUrl: (name: string) => `${BASE}/backups/${encodeURIComponent(name)}`,
+  /** What is inside an archive, without touching anything. */
+  inspectBackup: (name: string) =>
+    request<{ name: string; hasDatabase: boolean; photoCount: number; bytes: number }>(`/backups/${encodeURIComponent(name)}/inspect`, { method: "POST" }),
+  restoreBackup: (name: string) =>
+    request<RestoreResult>(`/backups/${encodeURIComponent(name)}/restore`, { method: "POST", body: JSON.stringify({ confirm: "restore" }) }),
+  restoreUpload: (file: File) => {
+    const form = new FormData();
+    form.append("confirm", "restore");
+    form.append("archive", file);
+    return request<RestoreResult>("/backups/restore", { method: "POST", body: form });
+  },
 
   listTags: () => request<{ tags: Tag[]; categories: Category[] }>("/tags"),
   createTag: (data: { name: string; color?: string }) => request<Tag>("/tags", { method: "POST", body: JSON.stringify(data) }),

@@ -1,8 +1,12 @@
 import { Router } from "express";
 import fs from "fs";
+import multer from "multer";
+import os from "os";
+import path from "path";
 import { ADMIN_ONLY } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { backupPath, createBackup, deleteBackup, listBackups, BACKUP_DIR } from "../lib/backup";
+import { applyRestore, prepareRestore, resolveExisting, RestoreError } from "../lib/restore";
 
 export const backupsRouter = Router();
 
@@ -34,4 +38,105 @@ backupsRouter.delete("/:name", async (req, res) => {
   if (!removed) return res.status(404).json({ error: "not found" });
   await logActivity(req, { action: "backup.deleted", entityType: "system", entityId: req.params.name, summary: `Deleted backup ${req.params.name}` });
   res.status(204).end();
+});
+
+// ---------------------------------------------------------------------------
+// Restore
+// ---------------------------------------------------------------------------
+
+/**
+ * Putting a backup back is the one action in this app that can destroy
+ * everything, so it is deliberately awkward: it names what it found, it insists
+ * on being told again, it copies the current state aside first, and it stops the
+ * process afterwards so nothing carries on against a half-swapped database.
+ */
+const CONFIRM = "restore";
+
+const acceptArchive = multer({
+  storage: multer.diskStorage({ destination: os.tmpdir() }),
+  limits: { fileSize: 2 * 1024 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (/\.(tar\.gz|tgz|db)$/i.test(file.originalname)) return cb(null, true);
+    cb(new Error("Upload a .tar.gz or .db backup taken by this app."));
+  },
+}).single("archive");
+
+/** Says what is inside an archive without touching anything. */
+backupsRouter.post("/:name/inspect", async (req, res) => {
+  try {
+    const plan = await prepareRestore(resolveExisting(req.params.name));
+    await fs.promises.rm(plan.staging, { recursive: true, force: true });
+    res.json({ name: req.params.name, hasDatabase: plan.hasDatabase, photoCount: plan.photoCount, bytes: plan.bytes });
+  } catch (err) {
+    if (err instanceof RestoreError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+});
+
+async function doRestore(req: any, res: any, archivePath: string, label: string) {
+  if (req.body?.confirm !== CONFIRM) {
+    return res.status(400).json({ error: `This replaces the whole database and every photo. Send confirm: "${CONFIRM}" to go ahead.` });
+  }
+  let plan;
+  try {
+    plan = await prepareRestore(archivePath);
+  } catch (err) {
+    if (err instanceof RestoreError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+
+  // Written before the swap, because afterwards this log is whatever the backup
+  // said it was — the record of the restore has to live in the restored data.
+  await logActivity(req, {
+    action: "backup.restored",
+    entityType: "system",
+    entityId: label,
+    summary: `Restored from ${label} (${plan.photoCount} photo${plan.photoCount === 1 ? "" : "s"})`,
+  });
+
+  try {
+    const { safetyCopy, issues } = await applyRestore(plan);
+    res.json({
+      restored: label,
+      photoCount: plan.photoCount,
+      issues,
+      safetyCopy,
+      message:
+        `Restored from ${label} — ${issues} issue${issues === 1 ? "" : "s"} and ${plan.photoCount} photo${plan.photoCount === 1 ? "" : "s"}. ` +
+        `What was here was saved as ${safetyCopy} first. Sessions came from the backup too, so you may need to sign in again.`,
+    });
+  } catch (err) {
+    console.error("restore failed", err);
+    // The database on disk is whatever the swap left. Stopping is the honest
+    // thing: a restart re-reads it cleanly, and the safety copy is right there.
+    res.status(500).json({
+      error: "The restore failed part-way through. The app is stopping so it comes back on a clean read — check the log, and the safety copy in the backups folder.",
+    });
+    setTimeout(() => process.exit(1), 750);
+  }
+}
+
+/** Restore from a backup already on the volume. */
+backupsRouter.post("/:name/restore", async (req, res) => {
+  try {
+    await doRestore(req, res, resolveExisting(req.params.name), req.params.name);
+  } catch (err) {
+    if (err instanceof RestoreError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+});
+
+/** Restore from an archive uploaded from somewhere else — the off-site copy. */
+backupsRouter.post("/restore", (req, res, next) => {
+  acceptArchive(req, res, async (err: unknown) => {
+    if (err) return res.status(400).json({ error: err instanceof Error ? err.message : "Upload failed" });
+    if (!req.file) return res.status(400).json({ error: "No archive was uploaded." });
+    try {
+      await doRestore(req, res, req.file.path, req.file.originalname);
+    } catch (e) {
+      next(e);
+    } finally {
+      await fs.promises.rm(req.file.path, { force: true }).catch(() => {});
+    }
+  });
 });

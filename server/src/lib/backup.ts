@@ -9,8 +9,29 @@ import { UPLOADS_DIR } from "./upload";
 const run = promisify(execFile);
 
 export const BACKUP_DIR = process.env.BACKUP_DIR ? path.resolve(process.env.BACKUP_DIR) : path.resolve(process.cwd(), "backups");
-/** How many backups to keep; older ones are deleted after each successful run. */
+/** How many nightly backups to keep; older ones are deleted after each successful run. */
 const KEEP = Number(process.env.BACKUP_KEEP) > 0 ? Number(process.env.BACKUP_KEEP) : 14;
+/**
+ * Backups taken because something was about to change the database are rotated
+ * separately and far more shallowly. They are the ones you actually want after a
+ * bad update, so a week of quiet nights must never push them off the end.
+ */
+const KEEP_MARKED = Number(process.env.BACKUP_KEEP_MARKED) > 0 ? Number(process.env.BACKUP_KEEP_MARKED) : 3;
+
+/** Why a backup was taken. It ends up in the filename, and in what gets pruned. */
+export type BackupKind = "daily" | "before-update" | "before-restore";
+
+const MARKS: Record<BackupKind, string> = {
+  daily: "",
+  "before-update": "-before-update",
+  "before-restore": "-before-restore",
+};
+
+export function kindOf(name: string): BackupKind {
+  if (name.includes("-before-update")) return "before-update";
+  if (name.includes("-before-restore")) return "before-restore";
+  return "daily";
+}
 
 export interface BackupFile {
   name: string;
@@ -18,11 +39,12 @@ export interface BackupFile {
   createdAt: string;
   /** True when the archive holds the photos as well as the database. */
   includesPhotos: boolean;
+  kind: BackupKind;
 }
 
 /** Only ever touch files this module created: no path traversal, no other extensions. */
 export function isBackupName(name: string): boolean {
-  return /^maintenancemap-\d{4}-\d{2}-\d{2}T\d{6}Z\.(tar\.gz|db)$/.test(name);
+  return /^maintenancemap-\d{4}-\d{2}-\d{2}T\d{6}Z(-before-update|-before-restore)?\.(tar\.gz|db)$/.test(name);
 }
 
 export function backupPath(name: string): string | null {
@@ -37,7 +59,7 @@ export async function listBackups(): Promise<BackupFile[]> {
   for (const name of names) {
     if (!isBackupName(name)) continue;
     const stat = await fs.promises.stat(path.join(BACKUP_DIR, name));
-    files.push({ name, bytes: stat.size, createdAt: stat.mtime.toISOString(), includesPhotos: name.endsWith(".tar.gz") });
+    files.push({ name, bytes: stat.size, createdAt: stat.mtime.toISOString(), includesPhotos: name.endsWith(".tar.gz"), kind: kindOf(name) });
   }
   return files.sort((a, b) => b.name.localeCompare(a.name));
 }
@@ -50,9 +72,9 @@ function timestamp(now = new Date()): string {
  * Takes a consistent copy of the database (SQLite's VACUUM INTO, safe while the app is
  * running) and, when tar is available, wraps it with the photo uploads in one archive.
  */
-export async function createBackup(now = new Date()): Promise<BackupFile> {
+export async function createBackup(now = new Date(), kind: BackupKind = "daily"): Promise<BackupFile> {
   await fs.promises.mkdir(BACKUP_DIR, { recursive: true });
-  const stamp = timestamp(now);
+  const stamp = timestamp(now) + MARKS[kind];
   const work = await fs.promises.mkdtemp(path.join(os.tmpdir(), "mm-backup-"));
   const snapshot = path.join(work, "maintenancemap.db");
 
@@ -80,7 +102,7 @@ export async function createBackup(now = new Date()): Promise<BackupFile> {
       await moveInto(staging, target);
       const stat = await fs.promises.stat(target);
       await prune();
-      return { name, bytes: stat.size, createdAt: stat.mtime.toISOString(), includesPhotos: hasUploads };
+      return { name, bytes: stat.size, createdAt: stat.mtime.toISOString(), includesPhotos: hasUploads, kind };
     } catch {
       // No tar on this machine: keep the database copy on its own rather than nothing.
       const dbName = `maintenancemap-${stamp}.db`;
@@ -89,7 +111,7 @@ export async function createBackup(now = new Date()): Promise<BackupFile> {
       await fs.promises.rm(target, { force: true });
       const stat = await fs.promises.stat(dbTarget);
       await prune();
-      return { name: dbName, bytes: stat.size, createdAt: stat.mtime.toISOString(), includesPhotos: false };
+      return { name: dbName, bytes: stat.size, createdAt: stat.mtime.toISOString(), includesPhotos: false, kind };
     }
   } finally {
     await fs.promises.rm(work, { recursive: true, force: true });
@@ -108,10 +130,15 @@ async function moveInto(from: string, to: string): Promise<void> {
   }
 }
 
+/** Each kind is rotated against its own allowance, so they cannot crowd each other out. */
 async function prune(): Promise<void> {
   const files = await listBackups();
-  for (const file of files.slice(KEEP)) {
-    await fs.promises.rm(path.join(BACKUP_DIR, file.name), { force: true });
+  const allowance: Record<BackupKind, number> = { daily: KEEP, "before-update": KEEP_MARKED, "before-restore": KEEP_MARKED };
+  for (const kind of Object.keys(allowance) as BackupKind[]) {
+    const ofKind = files.filter((f) => f.kind === kind);
+    for (const file of ofKind.slice(allowance[kind])) {
+      await fs.promises.rm(path.join(BACKUP_DIR, file.name), { force: true });
+    }
   }
 }
 
@@ -127,7 +154,7 @@ export async function maybeRunDaily(now = new Date()): Promise<BackupFile | null
   if (now.getHours() < 2) return null;
   const files = await listBackups();
   const today = now.toISOString().slice(0, 10);
-  if (files.some((f) => f.name.includes(today))) return null;
+  if (files.some((f) => f.kind === "daily" && f.name.includes(today))) return null;
   return createBackup(now);
 }
 

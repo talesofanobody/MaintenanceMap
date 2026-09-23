@@ -6479,6 +6479,37 @@ li.unread .bell-item:hover {
   }
 }
 
+
+/* --- Restoring, which replaces everything ------------------------- */
+.restore-confirm {
+  margin: 14px 0;
+  padding: 16px 18px;
+  border: 2px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+}
+
+.restore-confirm h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #7f1d1d;
+}
+
+.restore-confirm p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
 /* --- Picking a round, and the report over it ----------------------- */
 .insp-round-picker {
   margin-bottom: 18px;

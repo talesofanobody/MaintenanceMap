@@ -232,11 +232,29 @@ export interface CalendarFeed {
   path: string;
 }
 
+export interface RestoreResult {
+  restored: string;
+  photoCount: number;
+  issues: number;
+  safetyCopy: string;
+  message: string;
+}
+
+export interface RestoreResult {
+  restored: string;
+  photoCount: number;
+  issues: number;
+  safetyCopy: string;
+  message: string;
+}
+
 export interface BackupFile {
   name: string;
   bytes: number;
   createdAt: string;
   includesPhotos: boolean;
+  /** Why it was taken: nightly, or because something was about to change. */
+  kind: "daily" | "before-update" | "before-restore";
 }
 
 export interface Category {
