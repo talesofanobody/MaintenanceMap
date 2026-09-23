@@ -2,7 +2,7 @@ import { Router } from "express";
 import fs from "fs/promises";
 import path from "path";
 import { prisma } from "../db";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { parseOptionalString, ValidationError } from "../lib/validation";
 import { UPLOADS_DIR } from "../lib/upload";
@@ -50,7 +50,7 @@ guestReportsRouter.get("/:id", async (req, res) => {
 
 // Turning a report down keeps it, with the reason, so the same complaint arriving
 // three times reads as three declines rather than disappearing.
-guestReportsRouter.post("/:id/decline", ADMIN_ONLY, async (req, res) => {
+guestReportsRouter.post("/:id/decline", requires("request.review"), async (req, res) => {
   let note: string | null | undefined;
   try {
     note = parseOptionalString(req.body.note, "note", 500);
@@ -78,7 +78,7 @@ guestReportsRouter.post("/:id/decline", ADMIN_ONLY, async (req, res) => {
 });
 
 /** Undo a decline made in haste; an accepted report can't be reopened because it has an issue. */
-guestReportsRouter.post("/:id/reopen", ADMIN_ONLY, async (req, res) => {
+guestReportsRouter.post("/:id/reopen", requires("request.review"), async (req, res) => {
   const existing = await prisma.guestReport.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "not found" });
   if (existing.status !== "declined") return res.status(400).json({ error: "Only a declined report can be put back in the queue." });
@@ -99,7 +99,7 @@ guestReportsRouter.post("/:id/reopen", ADMIN_ONLY, async (req, res) => {
 
 // Deleting is for junk and for clearing out old declines. An accepted report is kept:
 // it is the audit trail explaining where its issue came from.
-guestReportsRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
+guestReportsRouter.delete("/:id", requires("request.delete"), async (req, res) => {
   const report = await prisma.guestReport.findUnique({ where: { id: req.params.id }, include: { photos: true } });
   if (!report) return res.status(404).json({ error: "not found" });
   if (report.status === "accepted") {

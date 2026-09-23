@@ -1,6 +1,7 @@
 import "express";
 
-export type Role = "admin" | "technician" | "display";
+// The single definition lives with the capability matrix.
+export type { Role } from "../lib/permissions";
 
 export interface SessionUser {
   id: string;

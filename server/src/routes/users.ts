@@ -3,10 +3,18 @@ import { prisma } from "../db";
 import { hashPassword } from "../lib/passwords";
 import { logActivity } from "../lib/activity";
 import { isValidPassword, isValidUsername } from "./auth";
+import { canActOnUser, canManageRole, isRole, ROLE_LABELS, ROLES as ALL_ROLES } from "../lib/permissions";
+import { requires } from "../middleware/requireAuth";
 
 export const usersRouter = Router();
 
-const ROLES = new Set(["admin", "technician", "display"]);
+const ROLES = new Set<string>(ALL_ROLES);
+
+/** The roles this person is allowed to hand out, named for an error message. */
+function grantable(actor: string): string {
+  const list = ALL_ROLES.filter((r) => canManageRole(actor, r)).map((r) => ROLE_LABELS[r]);
+  return list.length ? list.join(", ") : "none";
+}
 
 const USER_SELECT = {
   id: true,
@@ -33,7 +41,12 @@ usersRouter.post("/", async (req, res) => {
   const { username, password, role, technicianId } = req.body;
   if (!isValidUsername(username)) return res.status(400).json({ error: "Username must be 3-60 characters." });
   if (!isValidPassword(password)) return res.status(400).json({ error: "Password must be at least 8 characters." });
-  if (!ROLES.has(role)) return res.status(400).json({ error: "Role must be admin, technician or display." });
+  if (!isRole(role) || !ROLES.has(role)) return res.status(400).json({ error: `Role must be one of: ${ALL_ROLES.map((r) => ROLE_LABELS[r]).join(", ")}.` });
+  // A manager may make a technician login but not an admin one. Without this,
+  // "one step below admin" is only one login away from being admin.
+  if (!canManageRole(req.user!.role, role)) {
+    return res.status(403).json({ error: `You can create logins for: ${grantable(req.user!.role)}.` });
+  }
 
   let linkedTechnicianId: string | null = null;
   if (role === "technician") {
@@ -72,7 +85,16 @@ usersRouter.put("/:id", async (req, res) => {
   if (!existing) return res.status(404).json({ error: "not found" });
   const isSelf = existing.id === req.user!.id;
 
-  if (role !== undefined && !ROLES.has(role)) return res.status(400).json({ error: "invalid role" });
+  if (role !== undefined && (!isRole(role) || !ROLES.has(role))) return res.status(400).json({ error: "invalid role" });
+  // Two separate questions: may you touch this account as it stands, and may you
+  // move it to the role asked for. Checking only the second would let a manager
+  // reset an admin's password and sign in as them.
+  if (!isSelf && !canActOnUser(req.user!.role, existing.role)) {
+    return res.status(403).json({ error: `You can only change logins for: ${grantable(req.user!.role)}.` });
+  }
+  if (role !== undefined && !canManageRole(req.user!.role, role)) {
+    return res.status(403).json({ error: `You can set a login to: ${grantable(req.user!.role)}.` });
+  }
   if (isSelf && ((active !== undefined && !active) || (role !== undefined && role !== "admin"))) {
     return res.status(400).json({ error: "You can't deactivate or demote your own login." });
   }
@@ -117,10 +139,16 @@ usersRouter.put("/:id", async (req, res) => {
   res.json(user);
 });
 
-usersRouter.delete("/:id", async (req, res) => {
+// Deleting a login is the irreversible option and orphans its activity trail, so
+// it stays with admins. Everyone who can manage logins can deactivate instead,
+// which is what you almost always want anyway.
+usersRouter.delete("/:id", requires("user.delete"), async (req, res) => {
   const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "not found" });
   if (existing.id === req.user!.id) return res.status(400).json({ error: "You can't delete your own login." });
+  if (!canActOnUser(req.user!.role, existing.role)) {
+    return res.status(403).json({ error: `You can only delete logins for: ${grantable(req.user!.role)}.` });
+  }
   if (existing.role === "admin" && existing.active && (await activeAdminCount(existing.id)) === 0) {
     return res.status(400).json({ error: "There must be at least one active admin." });
   }

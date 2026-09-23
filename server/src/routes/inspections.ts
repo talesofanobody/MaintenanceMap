@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import fs from "fs/promises";
 import path from "path";
 import { prisma } from "../db";
-import { ADMIN_ONLY, CAN_EDIT } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { DATE_ONLY, parseOptionalString, ValidationError } from "../lib/validation";
 import { parseCategory } from "../lib/taxonomy";
@@ -112,7 +112,7 @@ function parseSections(value: unknown): SectionInput[] {
   });
 }
 
-inspectionsRouter.post("/templates", ADMIN_ONLY, async (req, res) => {
+inspectionsRouter.post("/templates", requires("template.write"), async (req, res) => {
   try {
     const name = typeof req.body.name === "string" ? req.body.name.trim().slice(0, 120) : "";
     if (!name) return res.status(400).json({ error: "A template needs a name." });
@@ -147,7 +147,7 @@ inspectionsRouter.post("/templates", ADMIN_ONLY, async (req, res) => {
  * Replaces a template's contents wholesale. Inspections already run keep their own
  * snapshot of the wording, so editing a template never rewrites past reports.
  */
-inspectionsRouter.put("/templates/:id", ADMIN_ONLY, async (req, res) => {
+inspectionsRouter.put("/templates/:id", requires("template.write"), async (req, res) => {
   const existing = await prisma.inspectionTemplate.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "not found" });
   try {
@@ -182,7 +182,7 @@ inspectionsRouter.put("/templates/:id", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-inspectionsRouter.delete("/templates/:id", ADMIN_ONLY, async (req, res) => {
+inspectionsRouter.delete("/templates/:id", requires("template.write"), async (req, res) => {
   const used = await prisma.inspection.count({ where: { templateId: req.params.id } });
   if (used > 0) {
     return res.status(400).json({ error: `That template has been used on ${used} inspection${used === 1 ? "" : "s"}. Turn it off instead so the reports keep their history.` });
@@ -300,7 +300,7 @@ inspectionsRouter.get("/:id", async (req, res) => {
  * Starts a walk. The template's points are copied onto the inspection as lines so
  * the report can show what was asked, even after the template changes.
  */
-inspectionsRouter.post("/", CAN_EDIT, async (req, res) => {
+inspectionsRouter.post("/", requires("inspection.run"), async (req, res) => {
   const propertyId = typeof req.body.propertyId === "string" ? req.body.propertyId : "";
   const roomName = typeof req.body.roomName === "string" ? req.body.roomName.trim().slice(0, 120) : "";
   const templateId = typeof req.body.templateId === "string" && req.body.templateId ? req.body.templateId : null;
@@ -364,7 +364,7 @@ inspectionsRouter.post("/", CAN_EDIT, async (req, res) => {
   res.status(201).json(inspection);
 });
 
-inspectionsRouter.put("/:id", CAN_EDIT, async (req, res) => {
+inspectionsRouter.put("/:id", requires("inspection.run"), async (req, res) => {
   const existing = await prisma.inspection.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "not found" });
   try {
@@ -416,7 +416,7 @@ inspectionsRouter.put("/:id", CAN_EDIT, async (req, res) => {
   }
 });
 
-inspectionsRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
+inspectionsRouter.delete("/:id", requires("inspection.delete"), async (req, res) => {
   const inspection = await prisma.inspection.findUnique({ where: { id: req.params.id }, include: { checks: { include: { photos: true } } } });
   if (!inspection) return res.status(404).json({ error: "not found" });
   const raised = inspection.checks.filter((c) => c.issueId).length;
@@ -443,7 +443,7 @@ inspectionsRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
 // Checks — the individual lines of a walk
 // ---------------------------------------------------------------------------
 
-inspectionsRouter.put("/checks/:checkId", CAN_EDIT, async (req, res) => {
+inspectionsRouter.put("/checks/:checkId", requires("inspection.run"), async (req, res) => {
   const existing = await prisma.inspectionCheck.findUnique({ where: { id: req.params.checkId }, include: { inspection: { select: { status: true } } } });
   if (!existing) return res.status(404).json({ error: "not found" });
   if (existing.inspection.status !== "in_progress") {
@@ -475,7 +475,7 @@ inspectionsRouter.put("/checks/:checkId", CAN_EDIT, async (req, res) => {
 });
 
 /** Something spotted that the template never asked about. */
-inspectionsRouter.post("/:id/checks", CAN_EDIT, async (req, res) => {
+inspectionsRouter.post("/:id/checks", requires("inspection.run"), async (req, res) => {
   const inspection = await prisma.inspection.findUnique({ where: { id: req.params.id }, select: { id: true, status: true } });
   if (!inspection) return res.status(404).json({ error: "not found" });
   if (inspection.status !== "in_progress") return res.status(400).json({ error: "That inspection is finished. Reopen it to add a finding." });
@@ -505,7 +505,7 @@ inspectionsRouter.post("/:id/checks", CAN_EDIT, async (req, res) => {
   }
 });
 
-inspectionsRouter.delete("/checks/:checkId", CAN_EDIT, async (req, res) => {
+inspectionsRouter.delete("/checks/:checkId", requires("inspection.run"), async (req, res) => {
   const check = await prisma.inspectionCheck.findUnique({ where: { id: req.params.checkId }, include: { photos: true } });
   if (!check) return res.status(404).json({ error: "not found" });
   // Template lines belong to the report even when nothing was wrong; only extras go.
@@ -534,7 +534,7 @@ function acceptPhoto(req: Request, res: Response, next: NextFunction) {
  * is how a checklist stops being used, so this does it once — and it only ever
  * touches lines nobody has already answered, so it cannot wipe a finding.
  */
-inspectionsRouter.post("/:id/sections/:section/na", CAN_EDIT, async (req, res) => {
+inspectionsRouter.post("/:id/sections/:section/na", requires("inspection.run"), async (req, res) => {
   const inspection = await prisma.inspection.findUnique({ where: { id: req.params.id }, select: { id: true, status: true } });
   if (!inspection) return res.status(404).json({ error: "not found" });
   if (inspection.status !== "in_progress") return res.status(400).json({ error: "That inspection is finished. Reopen it to change a line." });
@@ -558,7 +558,7 @@ inspectionsRouter.post("/:id/sections/:section/na", CAN_EDIT, async (req, res) =
 });
 
 /** A photo against one line. This is the evidence the report is built from. */
-inspectionsRouter.post("/checks/:checkId/photos", CAN_EDIT, acceptPhoto, async (req, res) => {
+inspectionsRouter.post("/checks/:checkId/photos", requires("inspection.run"), acceptPhoto, async (req, res) => {
   const check = await prisma.inspectionCheck.findUnique({ where: { id: req.params.checkId } });
   if (!check) return res.status(404).json({ error: "not found" });
   if (!req.file) return res.status(400).json({ error: "photo file is required" });
@@ -738,7 +738,7 @@ async function pickRaisable(ids: string[], onlyInspectionId?: string) {
   return { ok: true, chosen } as const;
 }
 
-inspectionsRouter.post("/:id/raise", ADMIN_ONLY, async (req, res) => {
+inspectionsRouter.post("/:id/raise", requires("inspection.raise"), async (req, res) => {
   const inspection = await prisma.inspection.findUnique({ where: { id: req.params.id }, select: { id: true } });
   if (!inspection) return res.status(404).json({ error: "not found" });
 
@@ -754,7 +754,7 @@ inspectionsRouter.post("/:id/raise", ADMIN_ONLY, async (req, res) => {
 });
 
 /** The same thing, for findings picked across several rooms on the combined report. */
-inspectionsRouter.post("/raise", ADMIN_ONLY, async (req, res) => {
+inspectionsRouter.post("/raise", requires("inspection.raise"), async (req, res) => {
   const wanted: string[] = Array.isArray(req.body.checkIds) ? req.body.checkIds.map(String) : [];
   const picked = await pickRaisable(wanted);
   if (!picked.ok) return res.status(picked.error.status).json({ error: picked.error.message });

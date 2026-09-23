@@ -293,24 +293,33 @@ up again.
 
 ### Roles and logins
 
-**Access** (admin only) is where logins are managed. Everyone signs in with their own username, and
-what they can do depends on their role:
+Five roles. What each may do is one table — `server/src/lib/permissions.ts` — and every route names
+a capability rather than a role, so the answer to "what can a dispatcher actually do?" is read
+rather than inferred.
 
-- **Admin** — everything: properties, borders, technicians, contractors, schedules, settings,
-  reports, exports, backups and the activity log.
-- **Technician** — sees every property and issue, but can only change the issues assigned to them,
-  and only the fields that matter on site: status, notes, actual hours, photos, checklist, costs and
-  their own clock in/out. They can log new issues (for themselves or unassigned) but can't edit
-  borders, reassign work, change priorities or delete anything. A technician login is linked to a
-  technician record, which is what ties their work to the boards and their day sheet.
-- **Display** — read-only, and only the dashboards. Use one on the office TV so nobody can change
-  anything from it.
+| | |
+|---|---|
+| **Admin** | Everything, including logins, restoring a backup, and deleting anything |
+| **Manager** | Runs the operation. Everything except deleting records and restoring over the database |
+| **Dispatcher** | Logs issues, assigns and schedules them, triages what guests send in |
+| **Technician** | Their own work, and walking inspections |
+| **Display** | A screen on a wall. Dashboards only |
 
-Creating a login shows a **temporary password once** — pass it on there and then, because it isn't
-shown again. The person is forced to choose their own password when they first sign in. Admins can
-reset a password, deactivate a login (keeping all their history) or delete it. The rails stop you
-locking yourself out: you can't deactivate, demote or delete your own login, and the last active
-admin can't be removed.
+A manager is defined by what they cannot undo: no deleting a property, an issue, an inspection, a
+schedule or a login, and no restoring a backup over the live database. Deactivating a login is the
+reversible equivalent and they can do that freely.
+
+Managers can create logins, but only for the roles below them — technician, dispatcher and display.
+Not admin, and not another manager. The rule is about seniority rather than about user management
+in general, and it applies to existing accounts too: a manager cannot reset an admin's password or
+promote anybody to admin. Without that second half the first would be decoration, since resetting
+an admin's password is a way to become one.
+
+The app hides what a login cannot do, but that is only so nobody is shown a page that will tell them
+no. Every route checks the same table for itself.
+
+Adding a role means adding a row to the matrix. Changing what a role may do is one line, and it
+shows up in a diff.
 
 ### Create a property
 

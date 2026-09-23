@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { parseOptionalString, ValidationError } from "../lib/validation";
 import { isClosed, OPEN_STATUSES } from "../lib/workflow";
@@ -57,7 +57,7 @@ projectsRouter.get("/:id", async (req, res) => {
   res.json(summarise(project));
 });
 
-projectsRouter.post("/", ADMIN_ONLY, async (req, res) => {
+projectsRouter.post("/", requires("project.write"), async (req, res) => {
   try {
     const name = typeof req.body.name === "string" ? req.body.name.trim().slice(0, 120) : "";
     if (!name) return res.status(400).json({ error: "A project needs a name." });
@@ -78,7 +78,7 @@ projectsRouter.post("/", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-projectsRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
+projectsRouter.put("/:id", requires("project.write"), async (req, res) => {
   const existing = await prisma.project.findUnique({ where: { id: req.params.id }, include: { issues: { select: { status: true } } } });
   if (!existing) return res.status(404).json({ error: "not found" });
   try {
@@ -111,7 +111,7 @@ projectsRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
 });
 
 /** Adds existing issues to a project, or takes them out of one. */
-projectsRouter.post("/:id/issues", ADMIN_ONLY, async (req, res) => {
+projectsRouter.post("/:id/issues", requires("project.write"), async (req, res) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, propertyId: true } });
   if (!project) return res.status(404).json({ error: "not found" });
   const add: string[] = Array.isArray(req.body.add) ? req.body.add.map(String) : [];
@@ -133,7 +133,7 @@ projectsRouter.post("/:id/issues", ADMIN_ONLY, async (req, res) => {
 });
 
 /** Deleting a project releases its issues rather than taking them with it. */
-projectsRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
+projectsRouter.delete("/:id", requires("project.delete"), async (req, res) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, propertyId: true } });
   if (!project) return res.status(404).json({ error: "not found" });
   const released = await prisma.issue.count({ where: { projectId: project.id } });

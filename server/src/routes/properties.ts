@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { newIntakeToken } from "./intake";
 import type { Request } from "express";
@@ -31,7 +31,7 @@ propertiesRouter.get("/", async (req, res) => {
   res.json(properties.map((p) => hideTokenFromNonAdmins(req, withParsedBoundary(p))));
 });
 
-propertiesRouter.post("/", ADMIN_ONLY, async (req, res) => {
+propertiesRouter.post("/", requires("property.write"), async (req, res) => {
   const { name, address, notes } = req.body;
   if (!name || typeof name !== "string") {
     return res.status(400).json({ error: "name is required" });
@@ -52,7 +52,7 @@ propertiesRouter.get("/:id", async (req, res) => {
   res.json(hideTokenFromNonAdmins(req, withParsedBoundary(property)));
 });
 
-propertiesRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
+propertiesRouter.put("/:id", requires("property.write"), async (req, res) => {
   const { name, address, notes, boundary, centerLat, centerLng } = req.body;
   try {
     const property = await prisma.property.update({
@@ -79,7 +79,7 @@ propertiesRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
  * the public link. Rotating invalidates every QR code already printed and stuck to a
  * wall, so the client asks before doing it.
  */
-propertiesRouter.post("/:id/intake", ADMIN_ONLY, async (req, res) => {
+propertiesRouter.post("/:id/intake", requires("property.write"), async (req, res) => {
   const property = await prisma.property.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, intakeToken: true, intakeEnabled: true } });
   if (!property) return res.status(404).json({ error: "not found" });
 
@@ -99,7 +99,7 @@ propertiesRouter.post("/:id/intake", ADMIN_ONLY, async (req, res) => {
   res.json(updated);
 });
 
-propertiesRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
+propertiesRouter.delete("/:id", requires("property.delete"), async (req, res) => {
   try {
     const property = await prisma.property.delete({ where: { id: req.params.id } });
     await logActivity(req, { action: "property.deleted", entityType: "property", entityId: property.id, summary: `Deleted property ${property.name}` });

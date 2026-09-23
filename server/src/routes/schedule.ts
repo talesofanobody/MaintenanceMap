@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { DATE_ONLY, dayFrom, ValidationError } from "../lib/validation";
 import { OPEN_STATUSES } from "../lib/workflow";
@@ -94,7 +94,7 @@ scheduleRouter.get("/", async (req, res) => {
  * Drops an issue onto a technician's day at a position — the write behind every drag.
  * Passing no day sends it back to the unassigned column.
  */
-scheduleRouter.put("/assign", ADMIN_ONLY, async (req, res) => {
+scheduleRouter.put("/assign", requires("issue.assign"), async (req, res) => {
   const issueId = typeof req.body.issueId === "string" ? req.body.issueId : "";
   if (!issueId) return res.status(400).json({ error: "issueId is required" });
   const technicianId = req.body.technicianId ? String(req.body.technicianId) : null;
@@ -160,7 +160,7 @@ scheduleRouter.put("/assign", ADMIN_ONLY, async (req, res) => {
  * Slots an emergency into a technician's day. Everything behind it moves one place
  * later and remembers where it was, so closing the emergency puts the day back.
  */
-scheduleRouter.post("/emergency", ADMIN_ONLY, async (req, res) => {
+scheduleRouter.post("/emergency", requires("issue.assign"), async (req, res) => {
   const issueId = typeof req.body.issueId === "string" ? req.body.issueId : "";
   const technicianId = typeof req.body.technicianId === "string" ? req.body.technicianId : "";
   if (!issueId || !technicianId) return res.status(400).json({ error: "issueId and technicianId are required" });

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { parseOptionalDay, parseOptionalHours, parseOptionalString, ValidationError } from "../lib/validation";
 import { cadenceText, createOccurrence, serializeSchedule, UNITS } from "../lib/schedules";
@@ -93,7 +93,7 @@ schedulesRouter.get("/", async (req, res) => {
   res.json(schedules.map(serializeSchedule));
 });
 
-schedulesRouter.post("/", ADMIN_ONLY, async (req, res) => {
+schedulesRouter.post("/", requires("schedule.write"), async (req, res) => {
   try {
     const { propertyId } = req.body;
     if (!propertyId || typeof propertyId !== "string") return res.status(400).json({ error: "propertyId is required" });
@@ -120,7 +120,7 @@ schedulesRouter.post("/", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-schedulesRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
+schedulesRouter.put("/:id", requires("schedule.write"), async (req, res) => {
   try {
     const data = await parseBody(req.body, true);
     const schedule = await prisma.schedule.update({ where: { id: req.params.id }, data: data as any, include: SCHEDULE_INCLUDE });
@@ -139,7 +139,7 @@ schedulesRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-schedulesRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
+schedulesRouter.delete("/:id", requires("schedule.delete"), async (req, res) => {
   try {
     const schedule = await prisma.schedule.delete({ where: { id: req.params.id } });
     await logActivity(req, { action: "schedule.deleted", entityType: "property", entityId: schedule.propertyId, propertyId: schedule.propertyId, summary: `Removed recurring task "${schedule.title}"` });
@@ -150,7 +150,7 @@ schedulesRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
 });
 
 // Create the next occurrence now, regardless of lead time.
-schedulesRouter.post("/:id/run-now", ADMIN_ONLY, async (req, res) => {
+schedulesRouter.post("/:id/run-now", requires("schedule.write"), async (req, res) => {
   const issue = await createOccurrence(req.params.id, { force: true, actor: req.user!.id });
   if (!issue) return res.status(409).json({ error: "An open issue for the next due date already exists." });
   const schedule = await prisma.schedule.findUnique({ where: { id: req.params.id }, include: SCHEDULE_INCLUDE });

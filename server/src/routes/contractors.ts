@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { parseOptionalString, ValidationError } from "../lib/validation";
 
@@ -36,7 +36,7 @@ function parseBody(body: any, partial: boolean) {
   return data;
 }
 
-contractorsRouter.post("/", ADMIN_ONLY, async (req, res) => {
+contractorsRouter.post("/", requires("contractor.write"), async (req, res) => {
   try {
     const contractor = await prisma.contractor.create({ data: parseBody(req.body, false) as any });
     await logActivity(req, { action: "contractor.created", entityType: "technician", entityId: contractor.id, summary: `Added contractor ${contractor.name}` });
@@ -47,7 +47,7 @@ contractorsRouter.post("/", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-contractorsRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
+contractorsRouter.put("/:id", requires("contractor.write"), async (req, res) => {
   try {
     const contractor = await prisma.contractor.update({ where: { id: req.params.id }, data: parseBody(req.body, true) as any });
     await logActivity(req, { action: "contractor.updated", entityType: "technician", entityId: contractor.id, summary: `Updated contractor ${contractor.name}` });
@@ -59,7 +59,7 @@ contractorsRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-contractorsRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
+contractorsRouter.delete("/:id", requires("contractor.delete"), async (req, res) => {
   const used = await prisma.cost.count({ where: { contractorId: req.params.id } });
   if (used > 0) return res.status(400).json({ error: `This contractor is on ${used} cost line${used === 1 ? "" : "s"}. Deactivate them instead so the history is kept.` });
   try {

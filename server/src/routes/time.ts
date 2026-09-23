@@ -1,6 +1,6 @@
 import { Router, type Request } from "express";
 import { prisma } from "../db";
-import { ADMIN_ONLY, CAN_EDIT } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { isClosed, STATUS_WORDS } from "../lib/workflow";
 import { isOnCrew } from "../lib/crew";
@@ -66,7 +66,7 @@ timeRouter.get("/open", async (req, res) => {
   res.json(await openEntryFor(technicianId));
 });
 
-timeRouter.post("/clock-in", CAN_EDIT, async (req, res) => {
+timeRouter.post("/clock-in", requires("issue.write"), async (req, res) => {
   const { issueId } = req.body;
   const technicianId = resolveTechnicianId(req, req.body.technicianId);
   if (!technicianId) return res.status(400).json({ error: "This login isn't linked to a technician, so it can't clock in." });
@@ -124,7 +124,7 @@ timeRouter.post("/clock-in", CAN_EDIT, async (req, res) => {
   res.status(201).json(entry);
 });
 
-timeRouter.post("/clock-out", CAN_EDIT, async (req, res) => {
+timeRouter.post("/clock-out", requires("issue.write"), async (req, res) => {
   const technicianId = resolveTechnicianId(req, req.body.technicianId);
   if (!technicianId) return res.status(400).json({ error: "This login isn't linked to a technician." });
   const running = await openEntryFor(technicianId);
@@ -145,7 +145,7 @@ timeRouter.post("/clock-out", CAN_EDIT, async (req, res) => {
 });
 
 // Admins can correct a mistaken entry.
-timeRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
+timeRouter.put("/:id", requires("time.adjust"), async (req, res) => {
   const existing = await prisma.timeEntry.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "not found" });
   const { startedAt, endedAt, note } = req.body;
@@ -163,7 +163,7 @@ timeRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
   res.json(entry);
 });
 
-timeRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
+timeRouter.delete("/:id", requires("time.adjust"), async (req, res) => {
   const existing = await prisma.timeEntry.findUnique({ where: { id: req.params.id }, include: ENTRY_INCLUDE });
   if (!existing) return res.status(404).json({ error: "not found" });
   await prisma.timeEntry.delete({ where: { id: existing.id } });

@@ -5,7 +5,7 @@ import { prisma } from "../db";
 import { upload, UPLOADS_DIR } from "../lib/upload";
 import { readExif } from "../lib/exif";
 import { storeImage } from "../lib/images";
-import { CAN_EDIT } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { isOnCrew } from "../lib/crew";
 import { logActivity } from "../lib/activity";
 
@@ -29,7 +29,7 @@ function acceptPhoto(req: Request, res: Response, next: NextFunction) {
   });
 }
 
-photosRouter.post("/", CAN_EDIT, acceptPhoto, async (req, res) => {
+photosRouter.post("/", requires("issue.write"), acceptPhoto, async (req, res) => {
   const { issueId } = req.body;
   const file = req.file;
 
@@ -82,7 +82,7 @@ photosRouter.get("/:id/thumb", async (req, res) => {
   res.sendFile(path.join(UPLOADS_DIR, photo.thumbFilename ?? photo.filename));
 });
 
-photosRouter.delete("/:id", CAN_EDIT, async (req, res) => {
+photosRouter.delete("/:id", requires("issue.write"), async (req, res) => {
   const photo = await prisma.photo.findUnique({ where: { id: req.params.id }, include: { issue: true } });
   if (!photo) return res.status(404).json({ error: "not found" });
   // A photo still attached to a guest report goes when the report is declined or deleted,

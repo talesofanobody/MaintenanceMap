@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { getSettings, saveSettings, DEFAULT_SETTINGS } from "../lib/settings";
 import { ValidationError } from "../lib/validation";
 import { describeWindow, PRIORITY_ORDER } from "../lib/workflow";
@@ -13,7 +13,7 @@ settingsRouter.get("/", async (_req, res) => {
   res.json({ settings: await getSettings(), defaults: DEFAULT_SETTINGS });
 });
 
-settingsRouter.put("/", ADMIN_ONLY, async (req, res) => {
+settingsRouter.put("/", requires("settings.write"), async (req, res) => {
   try {
     const before = await getSettings();
     const settings = await saveSettings(req.body);

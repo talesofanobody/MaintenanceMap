@@ -24,7 +24,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   admin: "Everything, including logins, restoring a backup and deleting anything.",
-  manager: "Runs the operation day to day. Cannot delete records, manage logins, or restore a backup.",
+  manager: "Runs the operation day to day. Makes logins for the roles below them. Cannot delete records or restore a backup.",
   dispatcher: "Gets work to the right person: logs issues, assigns and schedules them, triages what guests send in.",
   technician: "Their own work, and walking inspections.",
   display: "A screen on a wall. Dashboards only, no access to anything else.",
@@ -59,6 +59,7 @@ export const CAPABILITIES = [
   "timeoff.write",
   "timeoff.delete",
   "user.manage",
+  "user.delete",
   // What guests send in
   "request.review",
   "request.delete",
@@ -87,10 +88,10 @@ const DISPATCHER: Capability[] = [...TECHNICIAN, "issue.assign", "request.review
  * A manager runs the operation. Everything except the things you cannot take
  * back: no deleting records, no restoring over the database.
  *
- * They also cannot manage logins — not because creating a user is dangerous in
- * itself, but because anyone who can create an admin can make themselves one,
- * and a role defined as "one step below admin" that can promote itself is not a
- * step below anything.
+ * They can make logins, but only for the roles below them — see `canManageRole`.
+ * The line that matters is not "may a manager create a user" but "may a manager
+ * create an admin", because anyone who can do the second can make themselves one
+ * and the distinction between the roles stops meaning anything.
  */
 const MANAGER: Capability[] = [
   ...DISPATCHER,
@@ -108,6 +109,7 @@ const MANAGER: Capability[] = [
   "activity.view",
   "settings.write",
   "backup.manage",
+  "user.manage",
 ];
 
 const MATRIX: Record<Role, Capability[] | "everything"> = {
@@ -136,4 +138,38 @@ export function capabilitiesOf(role: Role | string | undefined): Capability[] {
 
 export function isRole(value: unknown): value is Role {
   return typeof value === "string" && (ROLES as readonly string[]).includes(value);
+}
+
+/**
+ * Seniority, only ever used to stop somebody reaching sideways or upwards.
+ *
+ * A manager making a technician login is ordinary admin work. A manager making
+ * an *admin* login, or resetting an existing admin's password, is a way to
+ * become one — so the rule is about which accounts you may touch, not whether
+ * you may touch accounts at all.
+ */
+const RANK: Record<Role, number> = { admin: 4, manager: 3, dispatcher: 2, technician: 1, display: 0 };
+
+/**
+ * Whether `actor` may create a login with role `target`, or change an existing
+ * login to it. Admins may grant anything, including another admin. Everyone else
+ * may only grant strictly below themselves — never their own level, so a role
+ * cannot multiply itself either.
+ */
+export function canManageRole(actor: Role | string | undefined, target: Role | string | undefined): boolean {
+  if (!isRole(actor) || !isRole(target)) return false;
+  if (!can(actor, "user.manage")) return false;
+  if (actor === "admin") return true;
+  return RANK[target] < RANK[actor];
+}
+
+/**
+ * Whether `actor` may act on an existing login that currently holds `target`.
+ *
+ * Same rule, applied to the account as it stands. Without this a manager could
+ * reset an admin's password and sign in as them, which is the escalation the
+ * role split exists to prevent — the grant check alone would not catch it.
+ */
+export function canActOnUser(actor: Role | string | undefined, target: Role | string | undefined): boolean {
+  return canManageRole(actor, target);
 }

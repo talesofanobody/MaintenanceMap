@@ -3,7 +3,7 @@ import { prisma } from "../db";
 import { parseColor, parseOptionalHours, parseOptionalString, ValidationError } from "../lib/validation";
 import { DEFAULT_WEEK, parseWeek, parseWeekInput, weekToHours } from "../lib/shifts";
 import { parseCategoryList, parseStoredList } from "../lib/taxonomy";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { OPEN_STATUSES } from "../lib/workflow";
 
@@ -37,7 +37,7 @@ techniciansRouter.get("/", async (_req, res) => {
   res.json(technicians.map(({ issues, ...t }) => ({ ...serializeTechnician(t), assignments: issues })));
 });
 
-techniciansRouter.post("/", ADMIN_ONLY, async (req, res) => {
+techniciansRouter.post("/", requires("technician.write"), async (req, res) => {
   const { name, trade, phone, color, weeklyHours, shifts, notes, active, hourlyRate, categories } = req.body;
   if (!name || typeof name !== "string" || !name.trim()) {
     return res.status(400).json({ error: "name is required" });
@@ -64,7 +64,7 @@ techniciansRouter.post("/", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-techniciansRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
+techniciansRouter.put("/:id", requires("technician.write"), async (req, res) => {
   const { name, trade, phone, color, weeklyHours, shifts, notes, active, hourlyRate, categories } = req.body;
   if (name !== undefined && (typeof name !== "string" || !name.trim())) {
     return res.status(400).json({ error: "name cannot be empty" });
@@ -101,7 +101,7 @@ techniciansRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-techniciansRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
+techniciansRouter.delete("/:id", requires("technician.delete"), async (req, res) => {
   try {
     const technician = await prisma.technician.delete({ where: { id: req.params.id } });
     await logActivity(req, { action: "technician.deleted", entityType: "technician", entityId: technician.id, summary: `Removed technician ${technician.name}` });

@@ -25,7 +25,7 @@ import { rotaRouter } from "./routes/rota";
 import { seedTags } from "./lib/taxonomy";
 import { seedTemplates, topUpTemplates } from "./lib/inspections";
 import { startBackupSchedule } from "./lib/backup";
-import { ADMIN_ONLY, attachUser, requireAuth } from "./middleware/requireAuth";
+import { attachUser, requireAuth, requires } from "./middleware/requireAuth";
 import { usersRouter } from "./routes/users";
 import { activityRouter } from "./routes/activity";
 import { PrismaSessionStore, purgeExpiredSessions } from "./lib/sessionStore";
@@ -82,7 +82,7 @@ app.use(attachUser);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRouter);
-app.use("/api/users", requireAuth, ADMIN_ONLY, usersRouter);
+app.use("/api/users", requireAuth, requires("user.manage"), usersRouter);
 app.use("/api/activity", requireAuth, activityRouter);
 app.use("/api/notifications", requireAuth, notificationsRouter);
 app.use("/api/time", requireAuth, timeRouter);
@@ -110,8 +110,8 @@ app.use("/api/issues", requireAuth, issuesRouter);
 app.use("/api/photos", requireAuth, photosRouter);
 app.use("/api/technicians", requireAuth, techniciansRouter);
 app.use("/api/dashboard", requireAuth, dashboardRouter);
-app.use("/api/export", requireAuth, ADMIN_ONLY, exportRouter);
-app.use("/api/guest-reports", requireAuth, ADMIN_ONLY, guestReportsRouter);
+app.use("/api/export", requireAuth, requires("export.view"), exportRouter);
+app.use("/api/guest-reports", requireAuth, requires("request.review"), guestReportsRouter);
 
 /**
  * Serve the built client from this same process when CLIENT_DIST points at it. That

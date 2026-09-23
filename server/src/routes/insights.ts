@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { costsByIssue } from "../lib/costs";
 import { dayFrom } from "../lib/validation";
 import { OPEN_STATUSES } from "../lib/workflow";
@@ -23,7 +23,7 @@ function monthsBack(count: number, from = new Date()): string[] {
 }
 
 /** Month-by-month workload, resolution speed and spend, plus per-property and per-technician totals. */
-insightsRouter.get("/trends", ADMIN_ONLY, async (req, res) => {
+insightsRouter.get("/trends", requires("insights.view"), async (req, res) => {
   const months = Math.min(36, Math.max(3, Number(req.query.months) || 12));
   const keys = monthsBack(months);
   const since = new Date(`${keys[0]}-01T00:00:00Z`);
@@ -131,7 +131,7 @@ insightsRouter.get("/trends", ADMIN_ONLY, async (req, res) => {
 });
 
 /** One row per property for the portfolio report: workload, spend and what's next. */
-insightsRouter.get("/portfolio", ADMIN_ONLY, async (_req, res) => {
+insightsRouter.get("/portfolio", requires("insights.view"), async (_req, res) => {
   const today = dayFrom(new Date(), 0);
   const [properties, issues, schedules] = await Promise.all([
     prisma.property.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, address: true } }),

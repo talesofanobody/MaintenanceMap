@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { CAN_EDIT } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { DATE_ONLY, dayFrom } from "../lib/validation";
 import { planDay } from "../lib/planner";
@@ -28,7 +28,7 @@ plannerRouter.get("/", async (req, res) => {
 });
 
 // Pins the chosen jobs to the day and assigns them to the technician.
-plannerRouter.post("/apply", CAN_EDIT, async (req, res) => {
+plannerRouter.post("/apply", requires("issue.assign"), async (req, res) => {
   const technicianId = resolveTechnicianId(req, req.body.technicianId);
   if (!technicianId) return res.status(400).json({ error: "Pick a technician to plan for." });
   const { day, issueIds } = req.body;

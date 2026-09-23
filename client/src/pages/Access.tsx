@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { api } from "../api";
 import { useCurrentUser } from "../auth/AuthContext";
 import type { AppUser, Role, Technician } from "../types";
-import { ROLE_LABELS } from "../types";
+import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from "../types";
 import { formatDateTime } from "../lib/dates";
 import { initials } from "../lib/capacity";
 
@@ -32,6 +32,14 @@ export default function Access() {
   const [reveal, setReveal] = useState<Reveal | null>(null);
   const [techForm, setTechForm] = useState<{ technicianId: string; username: string } | null>(null);
   const [otherForm, setOtherForm] = useState<{ role: Role; username: string } | null>(null);
+
+  // The same seniority rule the server enforces: admins may grant anything,
+  // anybody else only strictly below themselves. Shown here so a manager is
+  // never offered a choice that would come back as a 403.
+  const RANK: Record<Role, number> = { admin: 4, manager: 3, dispatcher: 2, technician: 1, display: 0 };
+  const myRole = (me?.role ?? "display") as Role;
+  const grantable = ROLES.filter((r) => (myRole === "admin" ? true : RANK[r] < RANK[myRole]));
+  const canGrant = (r: Role) => grantable.includes(r);
   const [busy, setBusy] = useState(false);
 
   function load() {
@@ -79,7 +87,7 @@ export default function Access() {
     const password = tempPassword();
     await run("Create login", async () => {
       await api.createUser({ username: otherForm.username.trim(), password, role: otherForm.role });
-      setReveal({ username: otherForm.username.trim(), password, label: otherForm.role === "display" ? "the TV / display" : "the new admin" });
+      setReveal({ username: otherForm.username.trim(), password, label: otherForm.role === "display" ? "the TV / display" : `the new ${ROLE_LABELS[otherForm.role].toLowerCase()}` });
       setOtherForm(null);
     });
   }
@@ -252,15 +260,29 @@ export default function Access() {
 
           <section className="access-section">
             <div className="access-section-head">
-              <h2>Admin and display logins</h2>
+              <h2>Other logins</h2>
               {!otherForm && (
                 <div className="card-actions">
-                  <button type="button" className="btn btn-secondary btn-small" onClick={() => setOtherForm({ role: "display", username: "office-tv" })}>
-                    + Display login
-                  </button>
-                  <button type="button" className="btn btn-secondary btn-small" onClick={() => setOtherForm({ role: "admin", username: "" })}>
-                    + Admin login
-                  </button>
+                  {canGrant("display") && (
+                    <button type="button" className="btn btn-secondary btn-small" onClick={() => setOtherForm({ role: "display", username: "office-tv" })}>
+                      + Display login
+                    </button>
+                  )}
+                  {canGrant("dispatcher") && (
+                    <button type="button" className="btn btn-secondary btn-small" onClick={() => setOtherForm({ role: "dispatcher", username: "" })}>
+                      + Dispatcher
+                    </button>
+                  )}
+                  {canGrant("manager") && (
+                    <button type="button" className="btn btn-secondary btn-small" onClick={() => setOtherForm({ role: "manager", username: "" })}>
+                      + Manager
+                    </button>
+                  )}
+                  {canGrant("admin") && (
+                    <button type="button" className="btn btn-secondary btn-small" onClick={() => setOtherForm({ role: "admin", username: "" })}>
+                      + Admin login
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -270,9 +292,15 @@ export default function Access() {
                 <label>
                   Role
                   <select value={otherForm.role} onChange={(e) => setOtherForm({ ...otherForm, role: e.target.value as Role })}>
-                    <option value="display">Display — dashboards only (for a TV)</option>
-                    <option value="admin">Admin — full access</option>
+                    {grantable
+                      .filter((r) => r !== "technician")
+                      .map((r) => (
+                        <option key={r} value={r}>
+                          {ROLE_LABELS[r]} — {ROLE_DESCRIPTIONS[r]}
+                        </option>
+                      ))}
                   </select>
+                  <span className="hint">{ROLE_DESCRIPTIONS[otherForm.role]}</span>
                 </label>
                 <label>
                   Username

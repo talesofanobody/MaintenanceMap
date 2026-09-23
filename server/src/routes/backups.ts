@@ -3,14 +3,16 @@ import fs from "fs";
 import multer from "multer";
 import os from "os";
 import path from "path";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { backupPath, createBackup, deleteBackup, listBackups, BACKUP_DIR } from "../lib/backup";
 import { applyRestore, prepareRestore, resolveExisting, RestoreError } from "../lib/restore";
 
 export const backupsRouter = Router();
 
-backupsRouter.use(ADMIN_ONLY);
+// Reading, running and downloading a backup is ordinary operational work. Only
+// deleting one, or restoring over the live database, is admin-only.
+backupsRouter.use(requires("backup.manage"));
 
 backupsRouter.get("/", async (_req, res) => {
   res.json({ directory: BACKUP_DIR, backups: await listBackups() });
@@ -33,7 +35,7 @@ backupsRouter.get("/:name", async (req, res) => {
   res.download(target, req.params.name);
 });
 
-backupsRouter.delete("/:name", async (req, res) => {
+backupsRouter.delete("/:name", requires("backup.delete"), async (req, res) => {
   const removed = await deleteBackup(req.params.name);
   if (!removed) return res.status(404).json({ error: "not found" });
   await logActivity(req, { action: "backup.deleted", entityType: "system", entityId: req.params.name, summary: `Deleted backup ${req.params.name}` });
@@ -117,7 +119,7 @@ async function doRestore(req: any, res: any, archivePath: string, label: string)
 }
 
 /** Restore from a backup already on the volume. */
-backupsRouter.post("/:name/restore", async (req, res) => {
+backupsRouter.post("/:name/restore", requires("backup.restore"), async (req, res) => {
   try {
     await doRestore(req, res, resolveExisting(req.params.name), req.params.name);
   } catch (err) {
@@ -127,7 +129,7 @@ backupsRouter.post("/:name/restore", async (req, res) => {
 });
 
 /** Restore from an archive uploaded from somewhere else — the off-site copy. */
-backupsRouter.post("/restore", (req, res, next) => {
+backupsRouter.post("/restore", requires("backup.restore"), (req, res, next) => {
   acceptArchive(req, res, async (err: unknown) => {
     if (err) return res.status(400).json({ error: err instanceof Error ? err.message : "Upload failed" });
     if (!req.file) return res.status(400).json({ error: "No archive was uploaded." });

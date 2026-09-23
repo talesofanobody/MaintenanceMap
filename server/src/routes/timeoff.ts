@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { DATE_ONLY, parseOptionalString, ValidationError } from "../lib/validation";
 import { parseKind, parseRange, TIME_OFF_WORDS, timeOffBetween, type TimeOffKind } from "../lib/timeoff";
@@ -29,7 +29,7 @@ timeOffRouter.get("/", async (req, res) => {
   res.json(entries);
 });
 
-timeOffRouter.post("/", ADMIN_ONLY, async (req, res) => {
+timeOffRouter.post("/", requires("timeoff.write"), async (req, res) => {
   try {
     const technicianId = typeof req.body.technicianId === "string" ? req.body.technicianId : "";
     if (!technicianId) return res.status(400).json({ error: "Which technician is away?" });
@@ -70,7 +70,7 @@ timeOffRouter.post("/", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-timeOffRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
+timeOffRouter.put("/:id", requires("timeoff.write"), async (req, res) => {
   const existing = await prisma.timeOff.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "not found" });
   try {
@@ -98,7 +98,7 @@ timeOffRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-timeOffRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
+timeOffRouter.delete("/:id", requires("timeoff.delete"), async (req, res) => {
   const existing = await prisma.timeOff.findUnique({ where: { id: req.params.id }, include: INCLUDE });
   if (!existing) return res.status(404).json({ error: "not found" });
   await prisma.timeOff.delete({ where: { id: existing.id } });

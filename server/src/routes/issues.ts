@@ -4,7 +4,7 @@ import { computeDeadline, endOfDay, parseOptionalDay, parseOptionalHours, parseO
 import { isClosed, OPEN_STATUSES, PRIORITY_SET, STATUS_SET, STATUS_WORDS } from "../lib/workflow";
 import { isOnCrew, resolveAssignees, syncAssignees } from "../lib/crew";
 import { releaseEmergency } from "../lib/dayplan";
-import { ADMIN_ONLY, CAN_EDIT } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { describeChanges, logActivity } from "../lib/activity";
 import { adminUserIds, issueLine, notifyUsers, priorityWord, technicianUserId } from "../lib/notify";
 import { getSettings } from "../lib/settings";
@@ -127,7 +127,7 @@ issuesRouter.get("/", async (req, res) => {
   res.json(issues);
 });
 
-issuesRouter.post("/", CAN_EDIT, async (req, res) => {
+issuesRouter.post("/", requires("issue.write"), async (req, res) => {
   const { propertyId, title, description, actionNeeded, priority, status, workOrderCreated, workOrderNumber, lat, lng, firstMessage, guestReportId } = req.body;
 
   // Accepting a guest report is a review decision, so it stays with admins even though
@@ -292,7 +292,7 @@ issuesRouter.get("/:id", async (req, res) => {
   res.json(issue);
 });
 
-issuesRouter.put("/:id", CAN_EDIT, async (req, res) => {
+issuesRouter.put("/:id", requires("issue.write"), async (req, res) => {
   const existing = await prisma.issue.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "not found" });
 
@@ -485,7 +485,7 @@ async function notifyAboutUpdate(actorId: string, actorName: string, before: Iss
   }
 }
 
-issuesRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
+issuesRouter.delete("/:id", requires("issue.delete"), async (req, res) => {
   try {
     const issue = await prisma.issue.delete({ where: { id: req.params.id } });
     await logActivity(req, { action: "issue.deleted", entityType: "issue", entityId: issue.id, propertyId: issue.propertyId, summary: `Deleted "${issue.title}"` });
@@ -511,7 +511,7 @@ async function issueForEdit(req: Parameters<typeof issuesRouter.get>[1] extends 
   return issue;
 }
 
-issuesRouter.post("/:id/checklist", CAN_EDIT, async (req, res) => {
+issuesRouter.post("/:id/checklist", requires("issue.write"), async (req, res) => {
   const issue = await issueForEdit(req, res, req.params.id);
   if (!issue) return;
   const text = typeof req.body.text === "string" ? req.body.text.trim().slice(0, 200) : "";
@@ -522,7 +522,7 @@ issuesRouter.post("/:id/checklist", CAN_EDIT, async (req, res) => {
   res.status(201).json(item);
 });
 
-issuesRouter.put("/:id/checklist/:itemId", CAN_EDIT, async (req, res) => {
+issuesRouter.put("/:id/checklist/:itemId", requires("issue.write"), async (req, res) => {
   const issue = await issueForEdit(req, res, req.params.id);
   if (!issue) return;
   const item = await prisma.checklistItem.findFirst({ where: { id: req.params.itemId, issueId: issue.id } });
@@ -550,7 +550,7 @@ issuesRouter.put("/:id/checklist/:itemId", CAN_EDIT, async (req, res) => {
   res.json(updated);
 });
 
-issuesRouter.delete("/:id/checklist/:itemId", CAN_EDIT, async (req, res) => {
+issuesRouter.delete("/:id/checklist/:itemId", requires("issue.write"), async (req, res) => {
   const issue = await issueForEdit(req, res, req.params.id);
   if (!issue) return;
   const result = await prisma.checklistItem.deleteMany({ where: { id: req.params.itemId, issueId: issue.id } });
@@ -608,7 +608,7 @@ async function parseCost(body: any, partial: boolean) {
   return data;
 }
 
-issuesRouter.post("/:id/costs", CAN_EDIT, async (req, res) => {
+issuesRouter.post("/:id/costs", requires("issue.write"), async (req, res) => {
   const issue = await issueForEdit(req, res, req.params.id);
   if (!issue) return;
   try {
@@ -632,7 +632,7 @@ issuesRouter.post("/:id/costs", CAN_EDIT, async (req, res) => {
   }
 });
 
-issuesRouter.put("/:id/costs/:costId", CAN_EDIT, async (req, res) => {
+issuesRouter.put("/:id/costs/:costId", requires("issue.write"), async (req, res) => {
   const issue = await issueForEdit(req, res, req.params.id);
   if (!issue) return;
   const existing = await prisma.cost.findFirst({ where: { id: req.params.costId, issueId: issue.id } });
@@ -650,7 +650,7 @@ issuesRouter.put("/:id/costs/:costId", CAN_EDIT, async (req, res) => {
   }
 });
 
-issuesRouter.delete("/:id/costs/:costId", CAN_EDIT, async (req, res) => {
+issuesRouter.delete("/:id/costs/:costId", requires("issue.write"), async (req, res) => {
   const issue = await issueForEdit(req, res, req.params.id);
   if (!issue) return;
   const result = await prisma.cost.deleteMany({ where: { id: req.params.costId, issueId: issue.id } });

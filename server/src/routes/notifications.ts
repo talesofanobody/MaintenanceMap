@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { runScheduledChecks } from "../lib/scheduler";
 
 export const notificationsRouter = Router();
@@ -35,7 +35,7 @@ notificationsRouter.delete("/:id", async (req, res) => {
 });
 
 // Lets an admin run the reminder sweep on demand (it also runs every 15 minutes).
-notificationsRouter.post("/run-checks", ADMIN_ONLY, async (_req, res) => {
+notificationsRouter.post("/run-checks", requires("settings.write"), async (_req, res) => {
   const result = await runScheduledChecks();
   res.json(result);
 });

@@ -1,6 +1,6 @@
 import { RequestHandler } from "express";
 import { prisma } from "../db";
-import type { Role } from "../types/express";
+import { can, type Capability, type Role } from "../lib/permissions";
 
 // Resolves the session's user once per request; inactive accounts are treated as
 // signed out so a deactivated login stops working immediately.
@@ -35,5 +35,20 @@ export function requireRole(...roles: Role[]): RequestHandler {
   };
 }
 
+/**
+ * Guards a route by what it lets you do rather than by who you are.
+ *
+ * `requires("issue.delete")` says what the route is for; `ADMIN_ONLY` only said
+ * who happened to be allowed on the day it was written. The difference matters
+ * the moment there is more than one privileged role — the capability table can
+ * then be read and changed in one place instead of sixty.
+ */
+export function requires(capability: Capability): RequestHandler {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: "Authentication required." });
+    if (!can(req.user.role, capability)) return res.status(403).json({ error: "You don't have permission to do that." });
+    next();
+  };
+}
+
 export const ADMIN_ONLY = requireRole("admin");
-export const CAN_EDIT = requireRole("admin", "technician");

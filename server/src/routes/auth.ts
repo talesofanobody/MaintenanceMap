@@ -4,6 +4,7 @@ import { prisma } from "../db";
 import { hashPassword, verifyPassword } from "../lib/passwords";
 import { logActivity } from "../lib/activity";
 import { requireAuth } from "../middleware/requireAuth";
+import { capabilitiesOf } from "../lib/permissions";
 
 export const authRouter = Router();
 
@@ -33,6 +34,9 @@ async function presentUser(userId: string) {
     id: user.id,
     username: user.username,
     role: user.role,
+    // Sent so the client can hide what this person cannot do. It is a courtesy,
+    // not a control: every route checks the same table for itself.
+    capabilities: capabilitiesOf(user.role),
     technicianId: user.technicianId,
     technician: user.technician,
     mustChangePassword: user.mustChangePassword,

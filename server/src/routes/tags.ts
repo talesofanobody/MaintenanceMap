@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { ADMIN_ONLY } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { parseColor, ValidationError } from "../lib/validation";
 import { CATEGORIES } from "../lib/taxonomy";
@@ -16,7 +16,7 @@ tagsRouter.get("/", async (_req, res) => {
   res.json({ tags, categories: CATEGORIES });
 });
 
-tagsRouter.post("/", ADMIN_ONLY, async (req, res) => {
+tagsRouter.post("/", requires("tag.write"), async (req, res) => {
   const name = typeof req.body.name === "string" ? req.body.name.trim().slice(0, 60) : "";
   if (!name) return res.status(400).json({ error: "A tag needs a name." });
   const existing = await prisma.tag.findFirst({ where: { name: { equals: name } } });
@@ -34,7 +34,7 @@ tagsRouter.post("/", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-tagsRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
+tagsRouter.put("/:id", requires("tag.write"), async (req, res) => {
   const data: Record<string, unknown> = {};
   if (req.body.name !== undefined) {
     const name = typeof req.body.name === "string" ? req.body.name.trim().slice(0, 60) : "";
@@ -62,7 +62,7 @@ tagsRouter.put("/:id", ADMIN_ONLY, async (req, res) => {
   }
 });
 
-tagsRouter.delete("/:id", ADMIN_ONLY, async (req, res) => {
+tagsRouter.delete("/:id", requires("tag.delete"), async (req, res) => {
   const used = await prisma.issueTag.count({ where: { tagId: req.params.id } });
   if (used > 0) {
     return res.status(400).json({ error: `That tag is on ${used} issue${used === 1 ? "" : "s"}. Turn it off instead so the history keeps its labels.` });

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db";
-import { CAN_EDIT } from "../middleware/requireAuth";
+import { requires } from "../middleware/requireAuth";
 import { adminUserIds, notifyUsers, technicianUserId } from "../lib/notify";
 
 export const messagesRouter = Router({ mergeParams: true });
@@ -29,7 +29,7 @@ messagesRouter.get("/", async (req, res) => {
  * Posting is open to admins and technicians on any issue, not just their own: the thread
  * is how they tell each other about access, parts and what they found.
  */
-messagesRouter.post("/", CAN_EDIT, async (req, res) => {
+messagesRouter.post("/", requires("issue.write"), async (req, res) => {
   const body = readBody(req.body.body);
   if (!body) return res.status(400).json({ error: `A message needs some text, and at most ${MAX_LENGTH} characters.` });
 
@@ -61,7 +61,7 @@ messagesRouter.post("/", CAN_EDIT, async (req, res) => {
   res.status(201).json(message);
 });
 
-messagesRouter.put("/:messageId", CAN_EDIT, async (req, res) => {
+messagesRouter.put("/:messageId", requires("issue.write"), async (req, res) => {
   const body = readBody(req.body.body);
   if (!body) return res.status(400).json({ error: `A message needs some text, and at most ${MAX_LENGTH} characters.` });
   const { issueId, messageId } = ids(req);
@@ -73,7 +73,7 @@ messagesRouter.put("/:messageId", CAN_EDIT, async (req, res) => {
   res.json(message);
 });
 
-messagesRouter.delete("/:messageId", CAN_EDIT, async (req, res) => {
+messagesRouter.delete("/:messageId", requires("issue.write"), async (req, res) => {
   const { issueId, messageId } = ids(req);
   const existing = await prisma.message.findFirst({ where: { id: messageId, issueId } });
   if (!existing) return res.status(404).json({ error: "not found" });

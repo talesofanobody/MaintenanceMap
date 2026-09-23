@@ -18,14 +18,38 @@ export interface Photo {
   createdAt: string;
 }
 
-export type Role = "admin" | "technician" | "display";
+export type Role = "admin" | "manager" | "dispatcher" | "technician" | "display";
 
-export const ROLE_LABELS: Record<Role, string> = { admin: "Admin", technician: "Technician", display: "Display" };
+export const ROLES: Role[] = ["admin", "manager", "dispatcher", "technician", "display"];
+
+export const ROLE_LABELS: Record<Role, string> = {
+  admin: "Admin",
+  manager: "Manager",
+  dispatcher: "Dispatcher",
+  technician: "Technician",
+  display: "Display",
+};
+
+export const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  admin: "Everything, including logins, restoring a backup and deleting anything.",
+  manager: "Runs the operation day to day. Makes logins for the roles below them. Cannot delete records or restore a backup.",
+  dispatcher: "Gets work to the right person: logs issues, assigns and schedules them, triages what guests send in.",
+  technician: "Their own work, and walking inspections.",
+  display: "A screen on a wall. Dashboards only.",
+};
+
+/**
+ * What a login may do. The server sends this with the session and checks it on
+ * every route regardless — this copy only decides what is worth showing.
+ */
+export type Capability = string;
 
 export interface AuthUser {
   id: string;
   username: string;
   role: Role;
+  /** What this login may do, from the server's own table. */
+  capabilities?: Capability[];
   technicianId: string | null;
   technician: TechnicianRef | null;
   mustChangePassword: boolean;

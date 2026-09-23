@@ -1,5 +1,5 @@
 import { HashRouter, Link, Navigate, NavLink, Outlet, Route, Routes } from "react-router-dom";
-import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { AuthProvider, useAuth, useCan } from "./auth/AuthContext";
 import { api } from "./api";
 import { ROLE_LABELS, type AuthUser } from "./types";
 import Login from "./pages/Login";
@@ -75,7 +75,9 @@ function RequestsLink() {
 }
 
 function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
-  const isAdmin = user.role === "admin";
+  // Gated on what the login may do rather than on its role name, so a new role
+  // gets the right nav from the capability table without touching this file.
+  const can = useCan();
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -85,26 +87,26 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
             <span className="hide-mobile">MaintenanceMap</span>
           </Link>
           <nav className="app-nav" aria-label="Main">
-            {(user.technicianId || isAdmin) && <NavLink to="/today">Today</NavLink>}
+            {(user.technicianId || can("issue.assign")) && <NavLink to="/today">Today</NavLink>}
             <NavLink to="/properties">Properties</NavLink>
             <NavLink to="/inspections">Inspections</NavLink>
-            {isAdmin && <NavLink to="/projects">Projects</NavLink>}
-            {isAdmin && <NavLink to="/technicians">Technicians</NavLink>}
-            {isAdmin && <NavLink to="/scheduler">Scheduler</NavLink>}
-            {isAdmin && <NavLink to="/crew">Crew map</NavLink>}
-            {isAdmin && <NavLink to="/schedules">Schedules</NavLink>}
+            {can("project.write") && <NavLink to="/projects">Projects</NavLink>}
+            {can("technician.write") && <NavLink to="/technicians">Technicians</NavLink>}
+            {can("issue.assign") && <NavLink to="/scheduler">Scheduler</NavLink>}
+            {can("issue.assign") && <NavLink to="/crew">Crew map</NavLink>}
+            {can("schedule.write") && <NavLink to="/schedules">Schedules</NavLink>}
             <NavLink to="/dashboard">Dashboards</NavLink>
-            {isAdmin && <RequestsLink />}
-            {isAdmin && <NavLink to="/reports">Reports</NavLink>}
-            {isAdmin && <NavLink to="/activity">Activity</NavLink>}
-            {isAdmin && <NavLink to="/access">Access</NavLink>}
-            {isAdmin && <NavLink to="/settings">Settings</NavLink>}
+            {can("request.review") && <RequestsLink />}
+            {can("insights.view") && <NavLink to="/reports">Reports</NavLink>}
+            {can("activity.view") && <NavLink to="/activity">Activity</NavLink>}
+            {can("user.manage") && <NavLink to="/access">Access</NavLink>}
+            {can("settings.write") && <NavLink to="/settings">Settings</NavLink>}
           </nav>
         </div>
         <div className="app-header-right">
           {user.technicianId && <ActiveTimer />}
           <NotificationBell />
-          {isAdmin && (
+          {can("export.view") && (
             <a className="btn btn-ghost btn-small hide-mobile" href={api.exportIssuesUrl()} download title="Download every issue across all properties as a spreadsheet">
               Export CSV
             </a>
@@ -165,7 +167,10 @@ function AppRoutes() {
     );
   }
 
-  const isAdmin = user.role === "admin";
+  // Routes gated the same way as the nav. The server checks every call anyway;
+  // this is so nobody is shown a page that will only tell them no.
+  const caps = new Set(user.capabilities ?? []);
+  const able = (c: string) => caps.has(c);
 
   return (
     <HashRouter>
@@ -173,26 +178,26 @@ function AppRoutes() {
         <Route element={<MainLayout user={user} onLogout={() => logout()} />}>
           <Route path="/" element={<Navigate to={user.role === "technician" ? "/today" : "/properties"} replace />} />
           <Route path="/properties" element={<PropertiesList />} />
-          {(user.technicianId || isAdmin) && <Route path="/today" element={<MyDay />} />}
-          {(user.technicianId || isAdmin) && <Route path="/planner" element={<Planner />} />}
+          {(user.technicianId || able("issue.assign")) && <Route path="/today" element={<MyDay />} />}
+          {(user.technicianId || able("issue.assign")) && <Route path="/planner" element={<Planner />} />}
           <Route path="/properties/:id" element={<PropertyWorkspace />} />
           <Route path="/properties/:id/report" element={<Report />} />
           <Route path="/inspections" element={<Inspections />} />
           <Route path="/inspections/report" element={<InspectionsReport />} />
           <Route path="/inspections/:id" element={<InspectionRun />} />
           <Route path="/inspections/:id/report" element={<InspectionReport />} />
-          {isAdmin && <Route path="/projects" element={<Projects />} />}
+          {able("project.write") && <Route path="/projects" element={<Projects />} />}
           <Route path="/account" element={<Account />} />
-          {isAdmin && <Route path="/technicians" element={<Technicians />} />}
-          {isAdmin && <Route path="/technicians/rota" element={<Rota />} />}
-          {isAdmin && <Route path="/scheduler" element={<Scheduler />} />}
-          {isAdmin && <Route path="/crew" element={<CrewMap />} />}
-          {isAdmin && <Route path="/schedules" element={<Schedules />} />}
-          {isAdmin && <Route path="/requests" element={<Requests />} />}
-          {isAdmin && <Route path="/reports" element={<Reports />} />}
-          {isAdmin && <Route path="/activity" element={<Activity />} />}
-          {isAdmin && <Route path="/access" element={<Access />} />}
-          {isAdmin && <Route path="/settings" element={<Settings />} />}
+          {able("technician.write") && <Route path="/technicians" element={<Technicians />} />}
+          {able("technician.write") && <Route path="/technicians/rota" element={<Rota />} />}
+          {able("issue.assign") && <Route path="/scheduler" element={<Scheduler />} />}
+          {able("issue.assign") && <Route path="/crew" element={<CrewMap />} />}
+          {able("schedule.write") && <Route path="/schedules" element={<Schedules />} />}
+          {able("request.review") && <Route path="/requests" element={<Requests />} />}
+          {able("insights.view") && <Route path="/reports" element={<Reports />} />}
+          {able("activity.view") && <Route path="/activity" element={<Activity />} />}
+          {able("user.manage") && <Route path="/access" element={<Access />} />}
+          {able("settings.write") && <Route path="/settings" element={<Settings />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
         {DashboardRoutes()}

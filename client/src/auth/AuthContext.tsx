@@ -75,6 +75,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={{ state, refresh, login, setup, logout }}>{children}</AuthContext.Provider>;
 }
 
+/**
+ * Whether the signed-in login may do something. Pages ask this rather than
+ * comparing role names, so adding a role does not mean hunting for every
+ * `role === "admin"` in the client.
+ */
+export function useCan(): (capability: string) => boolean {
+  const { state } = useAuth();
+  const caps = state.status === "authenticated" ? state.user.capabilities : undefined;
+  return (capability: string) => !!caps?.includes(capability);
+}
+
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
