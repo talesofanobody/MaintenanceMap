@@ -452,13 +452,20 @@ so a round done on paper can be typed up and still credited to the person who di
 names them rather than the login that entered it. Two come
 with the app and can be edited or replaced:
 
-- **Guest room** — 55 points across door and entry, bathroom, beds and soft furnishings, furniture
-  and fittings, electrical and technology, climate and air, and the balcony or window
+- **Guest room** — 67 points across door and entry, bathroom, bedroom, air conditioning, windows and
+  balcony, finishes and safety
 - **Public area** — 19 points across approach and entrance, floors and walls, lighting and signage,
   seating and fittings, and washrooms
 
 Every point carries a line saying what "right" looks like ("Full flush, refills quietly, no running
 after 60 seconds"), because the point of the exercise is the eye for detail, not the tick.
+
+The checklists get revised from what real walks turn up. Anything an inspector had to add by hand is
+a question the list should have asked, so those become points; anything that keeps appearing in a
+snag list gets a line of its own. When a release improves a checklist, the new points are added to
+the templates already on your install on the next restart — additions only, to sections that still
+exist under their original name. A point somebody deliberately removed stays removed, and a renamed
+or reordered checklist is left alone entirely.
 
 The walk itself is built for a phone held in one hand. Each line has three targets — **Fine**,
 **Flag it**, **N/A** — sized for a thumb. Flagging a line opens **Minor / Moderate / Major**, a note

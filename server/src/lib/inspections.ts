@@ -83,7 +83,17 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
           { label: "Lock and card reader", hint: "Reads first time, no grinding, battery light", category: "doors_locks" },
           { label: "Door closer", hint: "Closes fully and latches on its own without slamming", category: "doors_locks" },
           { label: "Privacy latch and peephole", hint: "Latch throws cleanly, peephole clear and not loose", category: "doors_locks" },
-          { label: "Door seals and threshold", hint: "Light or draught under the door, worn brush strip", category: "doors_locks" },
+          {
+        label: "Door hinges",
+        hint: "No paint on them, screws tight, swings without squeaking or dropping",
+        category: "doors_locks",
+      },
+      {
+        label: "Door frame trim and caulking",
+        hint: "Filled, painted, sealed where it meets the wall — no open joints",
+        category: "carpentry",
+      },
+      { label: "Door seals and threshold", hint: "Light or draught under the door, worn brush strip", category: "doors_locks" },
           { label: "Room number and signage", hint: "Straight, clean, fully attached", category: "general" },
           { label: "Entry light and switch", hint: "Works, switch plate straight and unmarked", category: "lighting" },
         ],
@@ -101,10 +111,40 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
           { label: "Grout and silicone", hint: "Mould in corners, missing or lifting sealant", category: "general" },
           { label: "Tiles", hint: "Cracks, chips, hollow-sounding or loose tiles", category: "flooring" },
           { label: "Extractor fan", hint: "Pulls tissue against the grille, no rattle, grille clean", category: "hvac" },
-          { label: "Mirror and lighting", hint: "De-silvering at the edges, even light, no flicker", category: "lighting" },
-          { label: "Towel rails and hooks", hint: "Firm to a pull, no rust, fixings covered", category: "furniture" },
+          { label: "Mirror and lighting", hint: "De-silvering at the edges, even light, no flicker, fitting flush and matching its neighbours", category: "lighting" },
+          {
+        label: "Bathroom door",
+        hint: "Closes and latches, clears the tile without scraping, strike lines up",
+        category: "doors_locks",
+      },
+      {
+        label: "Vanity counter and joints",
+        hint: "Level, joints tight and even, no gaps where it meets the wall or basin",
+        category: "carpentry",
+      },
+      {
+        label: "Vanity unit, doors and drawers",
+        hint: "Open and close cleanly, fronts aligned, no scuffs or residue",
+        category: "furniture",
+      },
+      {
+        label: "Sealant at junctions",
+        hint: "WC base, counter to wall, bath and shower edges — continuous, clean, not mouldy",
+        category: "general",
+      },
+      {
+        label: "Mirror fixings",
+        hint: "Solid to the wall, no movement or squeak, edges undamaged",
+        category: "general",
+      },
+      { label: "Towel rails and hooks", hint: "Firm to a pull, no rust, fixings covered", category: "furniture" },
           { label: "Bath or shower screen", hint: "Seals, runners, glass clarity, no chips", category: "general" },
-          { label: "Sockets and shaver point", hint: "Correct distance from water, plate unmarked, works", category: "electrical" },
+          {
+        label: "Switch and socket plates",
+        hint: "Flush to the wall, covers present, not cracked or painted over",
+        category: "electrical",
+      },
+      { label: "Sockets and shaver point", hint: "Correct distance from water, plate unmarked, works", category: "electrical" },
         ],
       },
       {
@@ -116,13 +156,23 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
           { label: "Bedside lights and switches", hint: "Both sides, shade straight, bulb colour matches", category: "lighting" },
           { label: "Bedside sockets and USB", hint: "All live, plates flush, USB charges", category: "electrical" },
           { label: "Curtains and blackout", hint: "Runs the full track, no light gap when closed, hooks intact", category: "furniture" },
-          { label: "Wardrobe and hangers", hint: "Doors aligned, rail firm, hanger count", category: "furniture" },
+          { label: "Wardrobe and hangers", hint: "Doors aligned and closing, hinges clean, rail firm, hanger count, skirting inside sealed", category: "furniture" },
           { label: "Safe", hint: "Opens, closes, resets, battery and instructions present", category: "general" },
           { label: "Minibar or fridge", hint: "Cold, door seal, no smell, not iced up, quiet", category: "appliance" },
           { label: "Kettle and tray", hint: "Boils and cuts out, flex undamaged, tray complete", category: "appliance" },
           { label: "Television and remote", hint: "Powers on, channels tune, remote batteries, cables tidy", category: "av_it" },
           { label: "Desk, chair and mirror", hint: "Wobble, scuffs, chair gas lift holds height", category: "furniture" },
-          { label: "Luggage rack", hint: "Straps intact, folds and locks open", category: "furniture" },
+          {
+        label: "Chest, nightstands and drawers",
+        hint: "Every drawer opens and closes, runners sound, tops and sides unscuffed",
+        category: "furniture",
+      },
+      {
+        label: "Cabinet or entertainment unit",
+        hint: "Doors aligned and closing, no scuffs, residue or lifting veneer",
+        category: "furniture",
+      },
+      { label: "Luggage rack", hint: "Straps intact, folds and locks open", category: "furniture" },
         ],
       },
       {
@@ -132,7 +182,12 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
           { label: "Filter", hint: "Dust visible at the grille, filter clean and refitted", category: "hvac" },
           { label: "Noise and vibration", hint: "Rattles or hums audible from the bed", category: "hvac" },
           { label: "Condensate and staining", hint: "Marks below the unit, damp on the wall", category: "hvac" },
-          { label: "Thermostat or control panel", hint: "Display legible, buttons respond, mounted straight", category: "hvac" },
+          {
+        label: "Vents and grilles",
+        hint: "Secure, undented, clean — including any vent in a door or on the outside",
+        category: "hvac",
+      },
+      { label: "Thermostat or control panel", hint: "Display legible, buttons respond, mounted straight", category: "hvac" },
         ],
       },
       {
@@ -143,7 +198,12 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
           { label: "Glazing", hint: "Chips, cracks, blown double glazing, seals", category: "general" },
           { label: "Balcony railing", hint: "No movement at all under firm pressure, fixings sound", category: "fire_safety" },
           { label: "Balcony floor and drainage", hint: "Standing water, lifting tiles, blocked outlet", category: "general" },
-          { label: "Balcony furniture", hint: "Stable, clean, no rust at the joints", category: "furniture" },
+          {
+        label: "Door and window sensors",
+        hint: "Fixed down, aligned with their magnet, reading correctly when the door shuts",
+        category: "av_it",
+      },
+      { label: "Balcony furniture", hint: "Stable, clean, no rust at the joints", category: "furniture" },
         ],
       },
       {
@@ -151,9 +211,9 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
         points: [
           { label: "Walls", hint: "Scuffs, knocks behind doors and at luggage height, filler showing", category: "painting" },
           { label: "Ceiling", hint: "Water marks, cracks, cobwebs in corners", category: "painting" },
-          { label: "Skirting and architrave", hint: "Gaps, knocks, paint lifting at the floor", category: "carpentry" },
+          { label: "Skirting and architrave", hint: "Skirting, architrave and crown moulding — gaps, knocks, mismatched runs, unsealed joints", category: "carpentry" },
           { label: "Flooring", hint: "Lifting edges, stains, squeaks, transition strips", category: "flooring" },
-          { label: "Paintwork touch-ups", hint: "Patches that do not match the surrounding sheen", category: "painting" },
+          { label: "Paintwork touch-ups", hint: "Patches that do not match the surrounding sheen or colour, overspray on hinges and hardware", category: "painting" },
         ],
       },
       {
@@ -221,6 +281,60 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
 ];
 
 /** Creates the starting templates on an empty install. Never overwrites. */
+/**
+ * Bumped whenever the built-in checklists gain points. An install that is behind
+ * gets the new ones added on the next boot; one that is level is left alone.
+ */
+export const SEED_VERSION = 2;
+
+/**
+ * Adds points that a later release decided were missing, to templates that were
+ * created by an earlier one.
+ *
+ * Only ever adds, and only to a section that still exists under its original
+ * name. Anything renamed, reordered or removed by hand is somebody's deliberate
+ * decision and is left exactly as it is — the version marker means a point that
+ * was taken out does not come back on every restart.
+ */
+export async function topUpTemplates(): Promise<number> {
+  const behind = await prisma.inspectionTemplate.findMany({
+    where: { seedVersion: { lt: SEED_VERSION } },
+    include: { sections: { include: { points: true } } },
+  });
+
+  let added = 0;
+  for (const template of behind) {
+    const source = DEFAULT_TEMPLATES.find((t) => t.name === template.name);
+    if (!source) {
+      // Not one of ours any more; just mark it so we stop looking at it.
+      await prisma.inspectionTemplate.update({ where: { id: template.id }, data: { seedVersion: SEED_VERSION } });
+      continue;
+    }
+
+    for (const wantedSection of source.sections) {
+      const section = template.sections.find((s) => s.name === wantedSection.name);
+      if (!section) continue;
+      const have = new Set(section.points.map((p) => p.label));
+      let position = section.points.reduce((max, p) => Math.max(max, p.position), -1);
+      for (const point of wantedSection.points) {
+        if (have.has(point.label)) continue;
+        await prisma.inspectionPoint.create({
+          data: {
+            sectionId: section.id,
+            label: point.label,
+            hint: point.hint ?? null,
+            category: point.category ?? null,
+            position: ++position,
+          },
+        });
+        added += 1;
+      }
+    }
+    await prisma.inspectionTemplate.update({ where: { id: template.id }, data: { seedVersion: SEED_VERSION } });
+  }
+  return added;
+}
+
 export async function seedTemplates(): Promise<number> {
   const existing = await prisma.inspectionTemplate.count();
   if (existing > 0) return 0;
@@ -231,6 +345,7 @@ export async function seedTemplates(): Promise<number> {
         name: template.name,
         description: template.description,
         sortOrder: index,
+        seedVersion: SEED_VERSION,
         sections: {
           create: template.sections.map((section, sectionIndex) => ({
             name: section.name,

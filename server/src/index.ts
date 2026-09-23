@@ -23,7 +23,7 @@ import { backupsRouter } from "./routes/backups";
 import { tagsRouter } from "./routes/tags";
 import { rotaRouter } from "./routes/rota";
 import { seedTags } from "./lib/taxonomy";
-import { seedTemplates } from "./lib/inspections";
+import { seedTemplates, topUpTemplates } from "./lib/inspections";
 import { startBackupSchedule } from "./lib/backup";
 import { ADMIN_ONLY, attachUser, requireAuth } from "./middleware/requireAuth";
 import { usersRouter } from "./routes/users";
@@ -163,6 +163,9 @@ backfillDueDates().catch((err) => console.error("due date backfill failed", err)
 // The starting inspection templates, created once on an empty install.
 seedTemplates()
   .then((n) => n && console.log(`Seeded ${n} inspection template(s).`))
+  // An install made before a checklist improvement gets the new points added.
+  .then(() => topUpTemplates())
+  .then((n) => n && console.log(`Added ${n} new checklist point(s) to the existing templates.`))
   .catch((err) => console.error("template seed failed", err));
 
 // The hotel/tourism tag set, created once on an empty install.
