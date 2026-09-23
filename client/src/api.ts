@@ -253,6 +253,12 @@ export const api = {
 
   updateCheck: (checkId: string, data: { outcome?: Outcome; severity?: Severity | null; note?: string | null; label?: string; category?: string | null }) =>
     request<InspectionCheck>(`/inspections/checks/${checkId}`, { method: "PUT", body: JSON.stringify(data) }),
+  /** Marks every untouched line in a section n/a — a room with no pool, say. */
+  markSectionNa: (inspectionId: string, section: string, outcome: "na" | "ok" = "na") =>
+    request<{ changed: number; inspection: Inspection }>(
+      `/inspections/${inspectionId}/sections/${encodeURIComponent(section)}/na`,
+      { method: "POST", body: JSON.stringify({ outcome }) }
+    ),
   addFinding: (inspectionId: string, data: { label: string; section?: string; severity?: Severity; note?: string; category?: string | null }) =>
     request<InspectionCheck>(`/inspections/${inspectionId}/checks`, { method: "POST", body: JSON.stringify(data) }),
   deleteCheck: (checkId: string) => request<void>(`/inspections/checks/${checkId}`, { method: "DELETE" }),

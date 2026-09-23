@@ -452,8 +452,8 @@ so a round done on paper can be typed up and still credited to the person who di
 names them rather than the login that entered it. Two come
 with the app and can be edited or replaced:
 
-- **Guest room** — 67 points across door and entry, bathroom, bedroom, air conditioning, windows and
-  balcony, finishes and safety
+- **Guest room** — 82 points across door and entry, bathroom, bedroom, air conditioning, windows and
+  balcony, finishes, private pool or hot tub, and safety
 - **Public area** — 19 points across approach and entrance, floors and walls, lighting and signage,
   seating and fittings, and washrooms
 
@@ -522,6 +522,10 @@ a photo.
 
 When the checklist was written it did not know about your building, so a line that does not apply is
 marked N/A rather than deleted — the report then shows it was considered.
+
+Whole sections often do not apply: most rooms have no private pool. **Not in this room** on a section
+heading marks everything in it N/A in one tap. It only touches lines nobody has answered yet, so a
+finding already recorded in that section stays exactly as it is.
 
 Starting an inspection copies the checklist's points onto it, so a report from six months ago still
 shows the questions that were actually asked, even if the checklist has since changed.

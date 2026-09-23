@@ -526,6 +526,37 @@ function acceptPhoto(req: Request, res: Response, next: NextFunction) {
   });
 }
 
+/**
+ * Marks a whole section not applicable in one go.
+ *
+ * A checklist has to cover the room with a private pool, which means most rooms
+ * get a section that does not apply to them. Twelve deliberate N/A taps per room
+ * is how a checklist stops being used, so this does it once — and it only ever
+ * touches lines nobody has already answered, so it cannot wipe a finding.
+ */
+inspectionsRouter.post("/:id/sections/:section/na", CAN_EDIT, async (req, res) => {
+  const inspection = await prisma.inspection.findUnique({ where: { id: req.params.id }, select: { id: true, status: true } });
+  if (!inspection) return res.status(404).json({ error: "not found" });
+  if (inspection.status !== "in_progress") return res.status(400).json({ error: "That inspection is finished. Reopen it to change a line." });
+
+  const section = decodeURIComponent(req.params.section);
+  const outcome = req.body?.outcome === "ok" ? "ok" : "na";
+  const { count } = await prisma.inspectionCheck.updateMany({
+    // Only untouched lines. A flagged finding in this section is somebody's work.
+    where: { inspectionId: inspection.id, section, outcome: "ok", note: null, issueId: null },
+    data: { outcome },
+  });
+
+  const fresh = await prisma.inspection.findUnique({ where: { id: inspection.id }, include: INSPECTION_INCLUDE });
+  await logActivity(req, {
+    action: "inspection.section_na",
+    entityType: "inspection",
+    entityId: inspection.id,
+    summary: `Marked "${section}" not applicable (${count} line${count === 1 ? "" : "s"})`,
+  });
+  res.json({ changed: count, inspection: fresh });
+});
+
 /** A photo against one line. This is the evidence the report is built from. */
 inspectionsRouter.post("/checks/:checkId/photos", CAN_EDIT, acceptPhoto, async (req, res) => {
   const check = await prisma.inspectionCheck.findUnique({ where: { id: req.params.checkId } });

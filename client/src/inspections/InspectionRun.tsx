@@ -332,6 +332,24 @@ export default function InspectionRun() {
     }
   }
 
+  /**
+   * A room with no pool should not cost twelve deliberate N/A taps. Only lines
+   * nobody has answered are touched, so a finding already recorded here stays.
+   */
+  async function skipSection(name: string) {
+    if (!inspection) return;
+    setSaving((n) => n + 1);
+    try {
+      const { changed, inspection: fresh } = await api.markSectionNa(inspection.id, name);
+      setInspection(fresh);
+      setError(changed === 0 ? `Nothing left untouched in "${name}".` : null);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSaving((n) => n - 1);
+    }
+  }
+
   async function addFinding() {
     if (!id || !newLabel.trim()) return;
     setSaving((n) => n + 1);
@@ -467,7 +485,14 @@ export default function InspectionRun() {
 
       {sections.map((section) => (
         <section key={section.name} className="insp-section">
-          <h2>{section.name}</h2>
+          <div className="insp-section-head">
+            <h2>{section.name}</h2>
+            {editable && (
+              <button type="button" className="btn btn-ghost btn-small" onClick={() => skipSection(section.name)}>
+                Not in this room
+              </button>
+            )}
+          </div>
           <ul className="insp-rows">
             {section.checks.map((check) => (
               <CheckRow

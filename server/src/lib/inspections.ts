@@ -106,7 +106,12 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
           { label: "Basin taps", hint: "Both temperatures, no drip, aerator not furred", category: "plumbing" },
           { label: "Basin drainage", hint: "Drains within seconds, plug seals, no smell", category: "plumbing" },
           { label: "Shower pressure and temperature", hint: "Reaches temperature within a minute and holds it", category: "plumbing" },
-          { label: "Shower head and hose", hint: "Limescale on the jets, kinks, drips at the joint", category: "plumbing" },
+          {
+        label: "Shower controls and handle",
+        hint: "Handle straight, turns without friction, trim plate flush and sealed",
+        category: "plumbing",
+      },
+      { label: "Shower head and hose", hint: "Secured to its bracket, no drip at the joint, no limescale or kinks", category: "plumbing" },
           { label: "Shower drainage", hint: "No pooling after two minutes of running", category: "plumbing" },
           { label: "Grout and silicone", hint: "Mould in corners, missing or lifting sealant", category: "general" },
           { label: "Tiles", hint: "Cracks, chips, hollow-sounding or loose tiles", category: "flooring" },
@@ -137,7 +142,7 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
         hint: "Solid to the wall, no movement or squeak, edges undamaged",
         category: "general",
       },
-      { label: "Towel rails and hooks", hint: "Firm to a pull, no rust, fixings covered", category: "furniture" },
+      { label: "Towel rails and hooks", hint: "Rails, hooks, paper holders and flask brackets — all present, firm to a pull, none rocking", category: "furniture" },
           { label: "Bath or shower screen", hint: "Seals, runners, glass clarity, no chips", category: "general" },
           {
         label: "Switch and socket plates",
@@ -150,7 +155,7 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
       {
         name: "Bedroom",
         points: [
-          { label: "Bed frame and legs", hint: "No creak when leant on, castors present, no snags", category: "furniture" },
+          { label: "Bed frame and legs", hint: "No creak when leant on, castors present, no scuffs to the legs, foot or frame", category: "furniture" },
           { label: "Mattress", hint: "Dips, stains, protector intact and correctly fitted", category: "furniture" },
           { label: "Headboard", hint: "Firm against the wall, fabric clean and unmarked", category: "furniture" },
           { label: "Bedside lights and switches", hint: "Both sides, shade straight, bulb colour matches", category: "lighting" },
@@ -158,7 +163,7 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
           { label: "Curtains and blackout", hint: "Runs the full track, no light gap when closed, hooks intact", category: "furniture" },
           { label: "Wardrobe and hangers", hint: "Doors aligned and closing, hinges clean, rail firm, hanger count, skirting inside sealed", category: "furniture" },
           { label: "Safe", hint: "Opens, closes, resets, battery and instructions present", category: "general" },
-          { label: "Minibar or fridge", hint: "Cold, door seal, no smell, not iced up, quiet", category: "appliance" },
+          { label: "Minibar or fridge", hint: "Cold, door seal, no smell, not iced up, quiet, interior undamaged", category: "appliance" },
           { label: "Kettle and tray", hint: "Boils and cuts out, flex undamaged, tray complete", category: "appliance" },
           { label: "Television and remote", hint: "Powers on, channels tune, remote batteries, cables tidy", category: "av_it" },
           { label: "Desk, chair and mirror", hint: "Wobble, scuffs, chair gas lift holds height", category: "furniture" },
@@ -187,7 +192,7 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
         hint: "Secure, undented, clean — including any vent in a door or on the outside",
         category: "hvac",
       },
-      { label: "Thermostat or control panel", hint: "Display legible, buttons respond, mounted straight", category: "hvac" },
+      { label: "Thermostat or control panel", hint: "Present, display legible, buttons respond, mounted straight", category: "hvac" },
         ],
       },
       {
@@ -197,29 +202,56 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
           { label: "Window restrictor", hint: "Fitted, engaged and not defeated", category: "fire_safety" },
           { label: "Glazing", hint: "Chips, cracks, blown double glazing, seals", category: "general" },
           { label: "Balcony railing", hint: "No movement at all under firm pressure, fixings sound", category: "fire_safety" },
-          { label: "Balcony floor and drainage", hint: "Standing water, lifting tiles, blocked outlet", category: "general" },
+          {
+        label: "Blinds, rods and blocking",
+        hint: "Rod present and firm, blind runs true, wall behind it properly blocked out",
+        category: "furniture",
+      },
+      {
+        label: "External walls, soffit and drainage",
+        hint: "Render and paint intact, nothing chipping, downpipes and drains connected",
+        category: "general",
+      },
+      { label: "Balcony floor and drainage", hint: "Standing water, lifting tiles, blocked outlet", category: "general" },
           {
         label: "Door and window sensors",
         hint: "Fixed down, aligned with their magnet, reading correctly when the door shuts",
         category: "av_it",
       },
-      { label: "Balcony furniture", hint: "Stable, clean, no rust at the joints", category: "furniture" },
+      { label: "Balcony furniture", hint: "Stable, clean, cushions unstained, no rust at the joints", category: "furniture" },
         ],
       },
       {
         name: "Finishes",
         points: [
           { label: "Walls", hint: "Scuffs, knocks behind doors and at luggage height, filler showing", category: "painting" },
-          { label: "Ceiling", hint: "Water marks, cracks, cobwebs in corners", category: "painting" },
+          { label: "Ceiling", hint: "Water marks, cracks, cobwebs — and no tape or filler showing through, including over the shower", category: "painting" },
           { label: "Skirting and architrave", hint: "Skirting, architrave and crown moulding — gaps, knocks, mismatched runs, unsealed joints", category: "carpentry" },
           { label: "Flooring", hint: "Lifting edges, stains, squeaks, transition strips", category: "flooring" },
           { label: "Paintwork touch-ups", hint: "Patches that do not match the surrounding sheen or colour, overspray on hinges and hardware", category: "painting" },
         ],
       },
       {
+        name: "Private pool or hot tub",
+        points: [
+          { label: "Water clarity and level", hint: "Clear, no film or debris, level up to the skimmer", category: "plumbing" },
+          { label: "Pump and filtration", hint: "Runs without grinding or cavitating, no leaks at the unions", category: "plumbing" },
+          { label: "Heater and thermostat", hint: "Reaches the set temperature, controls readable and responding", category: "hvac" },
+          { label: "Jets, blower and controls", hint: "Every jet flows, controls respond, nothing airlocked", category: "plumbing" },
+          { label: "Waterline tiles and grout", hint: "No loose or missing tiles, grout sound, no scale line", category: "general" },
+          { label: "Coping, surround and decking", hint: "Level, no lifting or cracking, nothing sharp underfoot", category: "general" },
+          { label: "Steps, handrail and grab bar", hint: "Firm, no movement, non-slip surface still doing its job", category: "fire_safety" },
+          { label: "Skimmer, drain and overflow", hint: "Covers present and secured, overflow running clear", category: "plumbing" },
+          { label: "Underwater and surround lighting", hint: "All lamps working, lenses sealed, no water in the fitting", category: "electrical" },
+          { label: "Cover, lid and lifter", hint: "Sits properly, clips work, no tears or waterlogging", category: "general" },
+          { label: "Depth marking and safety signage", hint: "Present, legible, correct for the depth", category: "fire_safety" },
+          { label: "Chemical smell and skin feel", hint: "No sting or heavy chlorine smell — the first sign the balance is off", category: "general" },
+        ],
+      },
+      {
         name: "Safety",
         points: [
-          { label: "Smoke detector", hint: "In place, indicator light, not painted over, test date", category: "fire_safety" },
+          { label: "Smoke detector", hint: "In place, indicator light, not painted over, test date, base matching the unit", category: "fire_safety" },
           { label: "Emergency lighting", hint: "Present and working where fitted", category: "fire_safety" },
           { label: "Fire notice and escape plan", hint: "On the door, current, legible", category: "fire_safety" },
           { label: "Sprinkler head", hint: "Unobstructed, clean, nothing hanging from it", category: "fire_safety" },
@@ -285,7 +317,7 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
  * Bumped whenever the built-in checklists gain points. An install that is behind
  * gets the new ones added on the next boot; one that is level is left alone.
  */
-export const SEED_VERSION = 2;
+export const SEED_VERSION = 3;
 
 /**
  * Adds points that a later release decided were missing, to templates that were

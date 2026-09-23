@@ -5924,6 +5924,21 @@ li.unread .bell-item:hover {
   margin-bottom: 22px;
 }
 
+.insp-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.insp-section-head h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
 .insp-section > h2 {
   margin: 0 0 8px;
   font-size: 13px;
