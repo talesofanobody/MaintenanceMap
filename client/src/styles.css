@@ -6191,6 +6191,42 @@ li.unread .bell-item:hover {
 }
 
 /* Camera and library side by side: on a phone the wrong one costs three taps. */
+.print-opt {
+  margin-left: auto;
+  font-size: 13px;
+}
+
+.insp-thumb-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Sized for a thumb, offset so it does not sit over the picture itself. */
+.insp-thumb-x {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--surface);
+  background: var(--danger);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.insp-amended {
+  margin: 0 auto 14px;
+  max-width: 703px;
+  padding: 8px 14px;
+  border-left: 4px solid var(--p-high);
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  font-size: 13px;
+}
+
 .insp-add-photo {
   width: 68px;
   height: 68px;
@@ -6920,5 +6956,187 @@ li.unread .bell-item:hover {
   .insp-thumb {
     width: 110px;
     height: 110px;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Printing a report on a real sheet of paper                          */
+/*                                                                     */
+/* A round of eight rooms came back as ninety-four pages — about two   */
+/* findings a side, which nobody reads and nobody files. The screen    */
+/* layout gives every finding a card with generous padding, which is   */
+/* right on a phone and wasteful on paper.                             */
+/*                                                                     */
+/* Designed to the intersection of A4 and US Letter rather than to     */
+/* either: A4 is narrower (210mm vs 216mm) and Letter is shorter       */
+/* (279mm vs 297mm), so a sheet that fits 210 x 279 fits both, and no  */
+/* one has to pick a paper size before pressing print.                 */
+/* ------------------------------------------------------------------ */
+@page {
+  size: auto;
+  margin: 12mm 10mm;
+}
+
+@media print {
+  .insp-sheet {
+    /* The narrower of the two papers, less the margins above. */
+    width: 190mm !important;
+    max-width: 190mm !important;
+    padding: 0 !important;
+    font-size: 9.5pt;
+    line-height: 1.35;
+  }
+
+  .insp-report-page h1 {
+    font-size: 17pt;
+  }
+
+  .insp-sheet-head {
+    padding-bottom: 6pt;
+    margin-bottom: 8pt;
+  }
+
+  /* The summary boxes earn their space once; make them a strip, not tiles. */
+  .insp-summary {
+    gap: 4pt;
+    margin-bottom: 10pt;
+  }
+
+  .insp-sum-box {
+    flex: 1 1 0;
+    padding: 4pt 2pt;
+  }
+
+  .insp-sum-box strong {
+    font-size: 13pt;
+  }
+
+  .insp-sum-box span {
+    font-size: 6.5pt;
+    letter-spacing: 0.02em;
+  }
+
+  .insp-round-table {
+    font-size: 8.5pt;
+  }
+
+  .insp-round-table th,
+  .insp-round-table td {
+    padding: 2.5pt 4pt;
+  }
+
+  /* --- The findings themselves, which are the bulk of the document --- */
+  .insp-findings {
+    gap: 0;
+  }
+
+  .insp-finding {
+    padding: 4pt 0 4pt 7pt;
+    border: none;
+    border-left: 2.5pt solid var(--p-medium);
+    border-bottom: 0.5pt solid #e2e8f0;
+    border-radius: 0;
+    background: none !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .insp-finding-head {
+    gap: 5pt;
+    align-items: baseline;
+  }
+
+  .insp-finding-no {
+    width: 14pt;
+    height: 14pt;
+    line-height: 14pt;
+    font-size: 7.5pt;
+  }
+
+  .insp-finding-label {
+    font-size: 10pt;
+  }
+
+  .insp-finding-head .muted,
+  .insp-finding-note,
+  .insp-would-be,
+  .insp-raised,
+  .insp-pin-note {
+    font-size: 8pt;
+  }
+
+  .insp-finding-note,
+  .insp-finding .insp-raised,
+  .insp-pin-note {
+    margin: 2pt 0 0 19pt;
+  }
+
+  /* Screen guidance, not part of the record. */
+  .insp-would-be,
+  .insp-pin-note {
+    display: none !important;
+  }
+
+  .insp-sev-tag {
+    padding: 0.5pt 5pt;
+    font-size: 7pt;
+  }
+
+  /* Photographs: small enough to sit beside the words they belong to. */
+  .insp-finding-photos {
+    margin: 3pt 0 0 19pt;
+    gap: 3pt;
+  }
+
+  .insp-finding-photos .insp-thumb,
+  .insp-sheet .insp-thumb {
+    width: 27mm !important;
+    height: 27mm !important;
+    border-radius: 0;
+  }
+
+  .insp-thumb-x {
+    display: none !important;
+  }
+
+  /* --- Room sections ------------------------------------------------ */
+  .insp-round-room {
+    margin-bottom: 10pt;
+    /* Rooms run on by default. Eight rooms should not cost eight part-empty
+       sheets; the toggle below is there for when a page per room is wanted. */
+    break-before: auto;
+  }
+
+  .insp-round-room-head {
+    padding-bottom: 3pt;
+    margin-bottom: 5pt;
+    border-bottom: 1pt solid #0f172a;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .insp-round-room-head h2 {
+    font-size: 12pt;
+  }
+
+  .insp-round-room-head p {
+    font-size: 8pt;
+  }
+
+  /* One room per page, when somebody wants a sheet to hand over. */
+  .insp-sheet.page-per-room .insp-round-room {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .insp-round-clean p {
+    font-size: 8.5pt;
+  }
+
+  .insp-amended {
+    display: block !important;
+    max-width: none;
+    margin: 0 0 8pt;
+    font-size: 8.5pt;
   }
 }

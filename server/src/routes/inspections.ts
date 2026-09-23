@@ -10,6 +10,7 @@ import { upload, UPLOADS_DIR } from "../lib/upload";
 import { readExif } from "../lib/exif";
 import { storeImage } from "../lib/images";
 import { countPoints, parseOutcome, parseSeverity, SEVERITY_PRIORITY, type Severity } from "../lib/inspections";
+import { can } from "../lib/permissions";
 
 /**
  * Inspections: the templates, the walk, and what comes out of it.
@@ -394,10 +395,32 @@ inspectionsRouter.put("/:id", requires("inspection.run"), async (req, res) => {
     if (req.body.status !== undefined) {
       const status = String(req.body.status);
       if (!["in_progress", "completed", "abandoned"].includes(status)) return res.status(400).json({ error: "invalid status" });
+
+      // Reopening something already signed off is a different act from finishing
+      // it, and needs its own permission and its own mark on the record.
+      const reopening = status === "in_progress" && existing.status !== "in_progress";
+      if (reopening) {
+        if (!can(req.user!.role, "inspection.amend")) {
+          return res.status(403).json({ error: "You don't have permission to reopen a finished inspection." });
+        }
+        data.amendedAt = new Date();
+      }
       data.status = status;
-      data.completedAt = status === "in_progress" ? null : (existing.completedAt ?? new Date());
+      // Finishing again stamps a new completion; reopening clears it, but the
+      // amendment mark stays so the report can say it has been changed since.
+      data.completedAt = status === "in_progress" ? null : new Date();
     }
     const inspection = await prisma.inspection.update({ where: { id: existing.id }, data, include: INSPECTION_INCLUDE });
+
+    if (req.body.status === "in_progress" && existing.status !== "in_progress") {
+      await logActivity(req, {
+        action: "inspection.reopened",
+        entityType: "inspection",
+        entityId: inspection.id,
+        propertyId: inspection.propertyId,
+        summary: `Reopened the finished inspection of ${inspection.roomName} to amend it`,
+      });
+    }
 
     if (req.body.status === "completed" && existing.status !== "completed") {
       const flagged = inspection.checks.filter((c) => c.outcome === "flagged").length;

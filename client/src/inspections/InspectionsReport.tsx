@@ -70,6 +70,9 @@ export default function InspectionsReport() {
   const [projectName, setProjectName] = useState("");
   const [existingProjectId, setExistingProjectId] = useState("");
   const [raising, setRaising] = useState(false);
+  // Rooms run on by default: eight rooms should not cost eight part-empty
+  // sheets. Turn it on when a page per room is wanted to hand over.
+  const [pagePerRoom, setPagePerRoom] = useState(false);
 
   const query = useMemo(
     () => ({
@@ -197,6 +200,10 @@ export default function InspectionsReport() {
         <Link to="/inspections" className="btn btn-ghost btn-small">
           ← Inspections
         </Link>
+        <label className="checkbox-row print-opt">
+          <input type="checkbox" checked={pagePerRoom} onChange={(e) => setPagePerRoom(e.target.checked)} />
+          A page per room
+        </label>
         <button type="button" className="btn btn-primary btn-small" onClick={() => window.print()}>
           Print all {totals.rooms} rooms
         </button>
@@ -205,7 +212,7 @@ export default function InspectionsReport() {
       {error && <div className="banner banner-error no-print">{error}</div>}
       {note && <div className="banner banner-info no-print">{note}</div>}
 
-      <div className="report-sheet insp-sheet">
+      <div className={`report-sheet insp-sheet ${pagePerRoom ? "page-per-room" : ""}`}>
         <header className="insp-sheet-head">
           <div>
             <h1>Inspection round</h1>
@@ -372,7 +379,8 @@ export default function InspectionsReport() {
                 </span>
               </h2>
               <p className="muted small">
-                {room.inspection.technician?.name ?? room.inspection.inspector} · {formatDateTime(room.inspection.startedAt)} · {room.checked} checked · {room.findings.length} flagged
+                {room.inspection.technician?.name ?? room.inspection.inspector} · {formatDateTime(room.inspection.startedAt)}
+                {room.inspection.amendedAt ? " · amended" : ""} · {room.checked} checked · {room.findings.length} flagged
               </p>
             </div>
             {room.inspection.notes && <p className="insp-finding-note">{room.inspection.notes}</p>}

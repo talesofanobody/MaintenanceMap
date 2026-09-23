@@ -141,6 +141,12 @@ export default function InspectionReport() {
         </button>
       </div>
 
+      {inspection.amendedAt && (
+        <p className="insp-amended">
+          This inspection was reopened and corrected after it was first signed off. An earlier printed copy may not match.
+        </p>
+      )}
+
       {error && <div className="banner banner-error no-print">{error}</div>}
       {note && <div className="banner banner-info no-print">{note}</div>}
 
@@ -168,6 +174,12 @@ export default function InspectionReport() {
               <dt>{inspection.completedAt ? "Finished" : "Status"}</dt>
               <dd>{inspection.completedAt ? formatDateTime(inspection.completedAt) : "Still under way"}</dd>
             </div>
+            {inspection.amendedAt && (
+              <div>
+                <dt>Amended</dt>
+                <dd>{formatDateTime(inspection.amendedAt)}</dd>
+              </div>
+            )}
           </dl>
         </header>
 

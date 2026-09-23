@@ -1,6 +1,7 @@
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
+import { useCan } from "../auth/AuthContext";
 import { preparePhoto } from "./preparePhoto";
 import { describeFix, getFix, locationAllowedHere, locationAlreadyGranted, type Fix, type LocationError } from "../lib/deviceLocation";
 import PhotoLightbox from "../components/PhotoLightbox";
@@ -39,6 +40,7 @@ function CheckRow({
   onChange,
   onPhoto,
   onRemove,
+  onRemovePhoto,
   onView,
 }: {
   check: InspectionCheck;
@@ -48,6 +50,7 @@ function CheckRow({
   onChange: (patch: Parameters<typeof api.updateCheck>[1]) => void;
   onPhoto: (files: File[]) => void;
   onRemove?: () => void;
+  onRemovePhoto?: (photoId: string) => void;
   onView: (src: string) => void;
 }) {
   // Two separate inputs: one that opens the camera, one that opens the library.
@@ -125,9 +128,16 @@ function CheckRow({
 
           <div className="insp-photos">
             {check.photos.map((photo) => (
-              <button key={photo.id} type="button" className="insp-thumb" onClick={() => onView(api.photoUrl(photo.id))}>
-                <img src={api.photoThumbUrl(photo.id)} alt="" loading="lazy" />
-              </button>
+              <span key={photo.id} className="insp-thumb-wrap">
+                <button type="button" className="insp-thumb" onClick={() => onView(api.photoUrl(photo.id))}>
+                  <img src={api.photoThumbUrl(photo.id)} alt="" loading="lazy" />
+                </button>
+                {editable && onRemovePhoto && (
+                  <button type="button" className="insp-thumb-x" title="Delete this photo" onClick={() => onRemovePhoto(photo.id)}>
+                    ×
+                  </button>
+                )}
+              </span>
             ))}
             {editable && (
               <>
@@ -214,6 +224,7 @@ export default function InspectionRun() {
   const [newSeverity, setNewSeverity] = useState<Severity>("minor");
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [uploading, setUploading] = useState<{ checkId: string; done: number; total: number } | null>(null);
+  const can = useCan();
   // Asked for once, then reused for every photo in the room that has none of its
   // own. Kept in memory rather than re-asked, so the walk is not interrupted.
   const [fix, setFix] = useState<Fix | null>(null);
@@ -375,6 +386,35 @@ export default function InspectionRun() {
     }
   }
 
+  /**
+   * Something was missed, or went in wrong. Reopening puts the walk back into
+   * the state it was in, and marks the record as amended so a report printed
+   * before the change and one printed after do not silently disagree.
+   */
+  async function reopen() {
+    if (!inspection) return;
+    if (!confirm("Reopen this inspection so it can be corrected? The report will show it was amended.")) return;
+    try {
+      const fresh = await api.updateInspection(inspection.id, { status: "in_progress" });
+      setInspection(fresh);
+      setError(null);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+
+  async function removePhoto(check: InspectionCheck, photoId: string) {
+    if (!confirm("Delete this photo?")) return;
+    try {
+      await api.deletePhoto(photoId);
+      setInspection((prev) =>
+        prev ? { ...prev, checks: prev.checks.map((c) => (c.id === check.id ? { ...c, photos: c.photos.filter((p) => p.id !== photoId) } : c)) } : prev
+      );
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+
   async function finish() {
     if (!inspection) return;
     const untouched = inspection.checks.filter((c) => c.pointId && c.outcome === "ok" && !c.note).length;
@@ -435,10 +475,16 @@ export default function InspectionRun() {
           <Link to={`/inspections/${inspection.id}/report`} className="btn btn-secondary btn-small">
             Report
           </Link>
-          {editable && (
+          {editable ? (
             <button type="button" className="btn btn-primary btn-small" onClick={finish}>
               Finish
             </button>
+          ) : (
+            can("inspection.amend") && (
+              <button type="button" className="btn btn-secondary btn-small" onClick={reopen}>
+                Reopen to amend
+              </button>
+            )
           )}
         </div>
       </div>
@@ -504,6 +550,7 @@ export default function InspectionRun() {
                 busy={uploading?.checkId === check.id}
                 onPhoto={(files) => addPhotos(check, files)}
                 onRemove={() => removeFinding(check)}
+                onRemovePhoto={(photoId) => removePhoto(check, photoId)}
                 onView={setLightbox}
               />
             ))}

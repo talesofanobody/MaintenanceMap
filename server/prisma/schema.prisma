@@ -490,6 +490,10 @@ model Inspection {
   notes        String?
   startedAt    DateTime            @default(now())
   completedAt  DateTime?
+  /// When a finished walk was last reopened to correct something. A report that
+  /// has been changed since it was first signed off has to say so, or a printed
+  /// copy and the live one disagree with nobody able to tell which is current.
+  amendedAt    DateTime?
   checks       InspectionCheck[]
 
   @@index([propertyId, startedAt])

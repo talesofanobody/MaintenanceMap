@@ -793,6 +793,8 @@ export interface Inspection {
   notes: string | null;
   startedAt: string;
   completedAt: string | null;
+  /** Set once a finished walk has been reopened to correct something. */
+  amendedAt: string | null;
   property: { id: string; name: string };
   checks: InspectionCheck[];
 }

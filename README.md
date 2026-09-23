@@ -532,6 +532,19 @@ a photo.
 When the checklist was written it did not know about your building, so a line that does not apply is
 marked N/A rather than deleted — the report then shows it was considered.
 
+#### Correcting a walk after it is finished
+
+Something gets missed, or goes in against the wrong line. **Reopen to amend** on a finished walk puts
+every line back in reach — change an outcome, fix a note, add the thing that was skipped, delete a
+photo that should not be there.
+
+The record keeps the mark. A reopened inspection shows **Amended** with the date, on its own report
+and in the room-by-room table of any round it belongs to, so a copy printed before the change and
+one printed after do not quietly disagree with nobody able to tell which is current.
+
+A finding that has already been raised as work is left alone: the photo has moved to the issue by
+then, and the issue is where it should be changed.
+
 Whole sections often do not apply: most rooms have no private pool. **Not in this room** on a section
 heading marks everything in it N/A in one tap. It only touches lines nobody has answered yet, so a
 finding already recorded in that section stays exactly as it is.
@@ -581,6 +594,26 @@ on that room's property, at that room's pin; only the project they are grouped u
 Nothing about the report is stored. The findings have been on the server since the moment they were
 typed into a phone; the report is assembled when it is asked for and exists only until it is printed
 or closed. Printing the same range next week picks up whatever has changed since.
+
+#### On paper
+
+Reports are laid out for a real sheet, to the intersection of A4 and US Letter rather than to either
+one: A4 is the narrower at 210mm, Letter the shorter at 279mm, so a page that fits 210 × 279 fits
+both and nobody has to choose a paper size before pressing print.
+
+Density is the point. The screen gives every finding a card with room to tap, which is right on a
+phone and wasteful on paper — a real round of eight rooms came back as **ninety-four sides**, about
+two findings each, which nobody reads and nobody files. In print each finding becomes a single ruled
+line with its note, the screen-only guidance drops away, photographs shrink to 27mm and sit beside
+the words they belong to, and rooms run on instead of each starting a fresh sheet. The same round
+now prints in about **eleven sides**.
+
+**A page per room** is still there, beside the print button, for when a sheet is going to be handed
+to whoever owns that room.
+
+Browsers add their own header and footer — the date, and the page's URL. There is no way to suppress
+those from a stylesheet; untick **Headers and footers** in the print dialog if you would rather they
+were not on the sheet.
 
 #### Projects
 

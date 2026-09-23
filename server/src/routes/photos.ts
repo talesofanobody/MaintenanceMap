@@ -6,6 +6,7 @@ import { upload, UPLOADS_DIR } from "../lib/upload";
 import { readExif } from "../lib/exif";
 import { storeImage } from "../lib/images";
 import { requires } from "../middleware/requireAuth";
+import { can } from "../lib/permissions";
 import { isOnCrew } from "../lib/crew";
 import { logActivity } from "../lib/activity";
 
@@ -82,9 +83,44 @@ photosRouter.get("/:id/thumb", async (req, res) => {
   res.sendFile(path.join(UPLOADS_DIR, photo.thumbFilename ?? photo.filename));
 });
 
+/**
+ * A photo belongs to one of three things, and each has its own rule about who
+ * may remove it. This used to assume an issue, which meant a photo taken during
+ * an inspection could not be deleted at all — the route refused it with a
+ * message about guest reports.
+ */
 photosRouter.delete("/:id", requires("issue.write"), async (req, res) => {
-  const photo = await prisma.photo.findUnique({ where: { id: req.params.id }, include: { issue: true } });
+  const photo = await prisma.photo.findUnique({
+    where: { id: req.params.id },
+    include: { issue: true, check: { include: { inspection: { select: { id: true, status: true, roomName: true, propertyId: true } } } } },
+  });
   if (!photo) return res.status(404).json({ error: "not found" });
+
+  if (photo.check) {
+    // Evidence on a finding. Follows the same rule as the finding itself: only
+    // while the walk is open, so a signed-off report cannot quietly lose a photo.
+    if (!can(req.user!.role, "inspection.run")) {
+      return res.status(403).json({ error: "You don't have permission to change an inspection." });
+    }
+    if (photo.check.inspection.status !== "in_progress") {
+      return res.status(400).json({ error: "That inspection is finished. Reopen it to remove a photo." });
+    }
+    if (photo.check.issueId) {
+      return res.status(400).json({ error: "That finding has already been raised as work — remove the photo from the issue instead." });
+    }
+    await prisma.photo.delete({ where: { id: photo.id } });
+    await logActivity(req, {
+      action: "photo.removed",
+      entityType: "photo",
+      entityId: photo.id,
+      propertyId: photo.check.inspection.propertyId,
+      summary: `Removed a photo from "${photo.check.label}" in ${photo.check.inspection.roomName}`,
+    });
+    await fs.unlink(path.join(UPLOADS_DIR, photo.filename)).catch(() => {});
+    if (photo.thumbFilename) await fs.unlink(path.join(UPLOADS_DIR, photo.thumbFilename)).catch(() => {});
+    return res.status(204).end();
+  }
+
   // A photo still attached to a guest report goes when the report is declined or deleted,
   // so there is nothing to do here and no issue to check permission against.
   if (!photo.issue) return res.status(400).json({ error: "That photo belongs to a guest report, not an issue." });
