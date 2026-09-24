@@ -3,55 +3,76 @@
 /* ------------------------------------------------------------------ */
 
 :root {
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  /**
+   * The system face, on purpose.
+   *
+   * "Apple-like" is not a typeface you download — on the phones this is used on it
+   * IS the system face, and asking a housekeeper in a corridor on hotel wifi to
+   * wait for a webfont to arrive before they can read a room number is the
+   * opposite of the brief. SF Display is used for headings, which is where Apple
+   * switches too: tighter tracking, made for size.
+   */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  /* Numbers in a table must line up, or a list of hours is unreadable. */
+  --font-num: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
 
-  --brand: #2563eb;
-  --brand-dark: #1d4ed8;
-  --brand-soft: #dbeafe;
-  --brand-text: #1e40af;
+  /* One blue, used sparingly. Everything that is not blue is not important. */
+  --brand: #0071e3;
+  --brand-dark: #0059b2;
+  --brand-soft: #eaf3fe;
+  --brand-text: #0058ad;
+  --brand-ring: rgba(0, 113, 227, 0.28);
 
-  --bg: #f4f6fa;
+  --bg: #f5f5f7;
   --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
+  --surface-2: #fafafb;
+  /* Hairlines, not borders. At 8% they read as a fold in the paper rather than a
+     drawn box, which is what lets the cards go away. */
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.16);
 
-  --text: #0f172a;
-  --text-2: #475569;
-  --text-3: #94a3b8;
+  --text: #1d1d1f;
+  --text-2: #6e6e73;
+  --text-3: #a1a1a6;
 
-  --danger: #dc2626;
-  --danger-soft: #fee2e2;
-  --success: #16a34a;
-  --success-soft: #dcfce7;
-  --warn-soft: #fef3c7;
-  --warn-text: #92400e;
+  --danger: #d70015;
+  --danger-soft: #ffeceb;
+  --success: #1a8f3c;
+  --success-soft: #e6f6ea;
+  --warn-soft: #fff4e0;
+  --warn-text: #90590a;
 
-  --p-low: #16a34a;
-  --p-medium: #eab308;
-  --p-high: #f97316;
-  --p-urgent: #dc2626;
-  --p-low-soft: #dcfce7;
-  --p-medium-soft: #fef9c3;
-  --p-high-soft: #ffedd5;
-  --p-urgent-soft: #fee2e2;
+  --p-low: #1a8f3c;
+  --p-medium: #a86400;
+  --p-high: #c2410c;
+  --p-urgent: #d70015;
+  --p-low-soft: #e6f6ea;
+  --p-medium-soft: #fdf3e0;
+  --p-high-soft: #feeee4;
+  --p-urgent-soft: #ffeceb;
 
-  --s-pending: #64748b;
-  --s-progress: #2563eb;
-  --s-completed: #16a34a;
+  --s-pending: #6e6e73;
+  --s-progress: #0071e3;
+  --s-completed: #1a8f3c;
 
+  /* Continuous-feeling curvature: generous, and generous again at larger sizes. */
   --radius-sm: 8px;
   --radius: 12px;
-  --radius-lg: 16px;
+  --radius-lg: 18px;
   --radius-pill: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 30px -14px rgba(15, 23, 42, 0.2);
-  --shadow-lg: 0 4px 12px rgba(15, 23, 42, 0.1), 0 24px 48px -20px rgba(15, 23, 42, 0.35);
+  /* Depth is for things that genuinely float. A row in a list does not float. */
+  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.03);
+  --shadow: 0 4px 16px -6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 16px 56px -16px rgba(0, 0, 0, 0.22);
 
-  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --fast: 140ms;
-  --normal: 220ms;
+  /* A long tail and almost no overshoot: things arrive rather than bounce. */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.2, 0.64, 1);
+  --fast: 150ms;
+  --normal: 260ms;
+  --slow: 420ms;
 
   color-scheme: light;
 }
@@ -7138,5 +7159,453 @@ li.unread .bell-item:hover {
     max-width: none;
     margin: 0 0 8pt;
     font-size: 8.5pt;
+  }
+}
+
+/* ================================================================== */
+/* Refinement layer                                                    */
+/*                                                                     */
+/* A pass over the primitives after the tokens above had already moved */
+/* the whole app. Three ideas, applied everywhere:                     */
+/*                                                                     */
+/*   1. Fewer boxes. A list of rooms is one surface with hairlines      */
+/*      between the rows, not eleven floating cards. Elevation is kept  */
+/*      for things that genuinely float — a menu, a sheet, a photo.     */
+/*   2. One blue. Colour means "this is the action" or "this is wrong". */
+/*      Everything else is ink on white and gets out of the way.        */
+/*   3. Things arrive rather than appear. Short, single-direction, and  */
+/*      always cancellable by the operating system.                     */
+/*                                                                     */
+/* It sits at the end so it wins ties on specificity without unpicking  */
+/* seven thousand lines that already work.                              */
+/* ================================================================== */
+
+/* ---- Type ------------------------------------------------------- */
+
+body {
+  font-size: 15px;
+  line-height: 1.47;
+  letter-spacing: -0.008em;
+  text-rendering: optimizeLegibility;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 650;
+}
+
+/* Tracking tightens as size grows, the way an optical face does it. */
+h1 {
+  font-size: 28px;
+  letter-spacing: -0.024em;
+  line-height: 1.16;
+}
+
+h2 {
+  font-size: 19px;
+  letter-spacing: -0.017em;
+}
+
+h3 {
+  font-size: 15px;
+  letter-spacing: -0.012em;
+}
+
+/* Figures that sit in columns have to line up. */
+.insp-card-counts,
+.load-facts,
+.activity-time,
+.field-count,
+table td,
+table th {
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--text-2);
+}
+
+.small {
+  font-size: 13px;
+  letter-spacing: -0.003em;
+}
+
+/* ---- Chrome ------------------------------------------------------ */
+
+/**
+ * The header stays put and lets the page move under it. The blur is the whole
+ * trick: it keeps the bar legible over whatever scrolls beneath without a
+ * border heavy enough to cut the page in half.
+ */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  /**
+   * min-height, not height. On a phone the nav wraps onto a second row and
+   * scrolls sideways; pinning the height clipped it over the page title, which
+   * is what happens when a rule written for a laptop is added at the end of the
+   * file and quietly wins against the mobile one above it.
+   */
+  min-height: 52px;
+  height: auto;
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.brand-mark {
+  filter: none;
+}
+
+.app-nav a {
+  position: relative;
+  padding: 6px 11px;
+  border-radius: var(--radius-pill);
+  font-weight: 500;
+  font-size: 13.5px;
+  letter-spacing: -0.006em;
+  color: var(--text-2);
+  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.app-nav a:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text);
+}
+
+.app-nav a.active {
+  background: var(--brand-soft);
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
+.app-nav a:active {
+  transform: scale(0.97);
+}
+
+/* ---- Surfaces: fewer boxes --------------------------------------- */
+
+.card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  padding: 20px;
+}
+
+/**
+ * A list is one surface.
+ *
+ * Every row used to be its own card with its own border, shadow and gap, which
+ * on a round of eleven rooms is eleven boxes to look past before you reach the
+ * room numbers. Collapse the gap, drop the shadow, and let a hairline do the
+ * separating — the eye follows one column instead of counting containers.
+ */
+.insp-cards,
+.user-list,
+.activity-list,
+.tech-list {
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.insp-card,
+.user-row,
+.activity-row {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  transition: background var(--fast) var(--ease);
+}
+
+.insp-cards > li:last-child,
+.user-list > *:last-child,
+.activity-list > *:last-child {
+  border-bottom: 0;
+}
+
+.insp-card:hover,
+.user-row:hover,
+.activity-row:hover {
+  background: var(--surface-2);
+}
+
+/**
+ * The status stripe survives, because on a snagging round it is the one thing
+ * read at a glance — but as a 3px mark inset from the edge rather than a border
+ * wrapped round a box.
+ */
+.insp-card {
+  position: relative;
+  padding-left: 22px;
+}
+
+.insp-card::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  transition: background var(--fast) var(--ease), inset var(--normal) var(--ease);
+}
+
+.insp-card.status-in_progress::before {
+  background: var(--s-progress);
+}
+
+.insp-card.status-completed::before {
+  background: var(--s-completed);
+}
+
+.insp-card:hover::before {
+  top: 8px;
+  bottom: 8px;
+}
+
+/* ---- Controls ---------------------------------------------------- */
+
+.btn {
+  border-radius: var(--radius-pill);
+  font-weight: 500;
+  letter-spacing: -0.006em;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease), transform var(--fast) var(--ease-spring);
+}
+
+/* The press is the feedback. Nothing else needs to move. */
+.btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.btn-primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  box-shadow: none;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.form input,
+.form select,
+.form textarea {
+  border-color: var(--border-strong);
+  border-radius: 10px;
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease),
+    background var(--fast) var(--ease);
+}
+
+.form input:focus,
+.form select:focus,
+.form textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 4px var(--brand-ring);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* ---- Motion ------------------------------------------------------ */
+
+@keyframes mm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes mm-shimmer {
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/**
+ * One movement per navigation: the page arrives from slightly below. Because
+ * each route mounts its own element, this runs on every change without any
+ * JavaScript holding transition state.
+ */
+.page {
+  animation: mm-rise var(--normal) var(--ease) both;
+}
+
+/**
+ * A list settles a row at a time. Capped at ten: beyond that the last row is
+ * waiting on an animation nobody is still watching, and a round of thirty rooms
+ * should not take a second to appear.
+ */
+.insp-cards > li,
+.user-list > *,
+.activity-list > * {
+  animation: mm-rise var(--normal) var(--ease) both;
+}
+
+.insp-cards > li:nth-child(1),
+.user-list > *:nth-child(1),
+.activity-list > *:nth-child(1) { animation-delay: 0ms; }
+.insp-cards > li:nth-child(2),
+.user-list > *:nth-child(2),
+.activity-list > *:nth-child(2) { animation-delay: 22ms; }
+.insp-cards > li:nth-child(3),
+.user-list > *:nth-child(3),
+.activity-list > *:nth-child(3) { animation-delay: 44ms; }
+.insp-cards > li:nth-child(4),
+.user-list > *:nth-child(4),
+.activity-list > *:nth-child(4) { animation-delay: 66ms; }
+.insp-cards > li:nth-child(5),
+.user-list > *:nth-child(5),
+.activity-list > *:nth-child(5) { animation-delay: 88ms; }
+.insp-cards > li:nth-child(6),
+.user-list > *:nth-child(6),
+.activity-list > *:nth-child(6) { animation-delay: 110ms; }
+.insp-cards > li:nth-child(7),
+.user-list > *:nth-child(7),
+.activity-list > *:nth-child(7) { animation-delay: 132ms; }
+.insp-cards > li:nth-child(8),
+.user-list > *:nth-child(8),
+.activity-list > *:nth-child(8) { animation-delay: 154ms; }
+.insp-cards > li:nth-child(9),
+.user-list > *:nth-child(9),
+.activity-list > *:nth-child(9) { animation-delay: 176ms; }
+.insp-cards > li:nth-child(n + 10),
+.user-list > *:nth-child(n + 10),
+.activity-list > *:nth-child(n + 10) { animation-delay: 198ms; }
+
+/* Waiting should look like waiting, not like an empty page. */
+.loading-state {
+  background: linear-gradient(90deg, var(--surface-2) 25%, rgba(0, 0, 0, 0.045) 37%, var(--surface-2) 63%);
+  background-size: 200% 100%;
+  animation: mm-shimmer 1.4s linear infinite;
+  border-radius: var(--radius);
+  color: transparent;
+  user-select: none;
+}
+
+/* ---- When motion is unwelcome, or on paper --------------------- */
+
+/**
+ * Both of these matter more than they look.
+ *
+ * Someone who has asked their phone to stop animating things has usually asked
+ * for a reason. And a reveal that starts at opacity 0 prints blank if its
+ * animation never runs — which on paper it does not. A report that comes out of
+ * the printer empty would be a straight loss of the work above it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .page,
+  .insp-cards > li,
+  .user-list > *,
+  .activity-list > * {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media print {
+  .page,
+  .insp-cards > li,
+  .user-list > *,
+  .activity-list > *,
+  .loading-state {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    color: inherit;
+  }
+
+  .app-header {
+    position: static;
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* The nav carries fourteen destinations. Every pixel of padding is one fewer
+   word visible before it starts scrolling sideways, so it gets tighter as the
+   window does — and the blur behind it keeps it legible while it does. */
+@media (max-width: 1600px) {
+  .app-nav a {
+    padding: 6px 9px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 1360px) {
+  .app-nav a {
+    padding: 6px 7px;
+    font-size: 12.5px;
+    letter-spacing: -0.01em;
+  }
+}
+
+/**
+ * Four things in three columns.
+ *
+ * The row holds a tick box, the room, its counts and its actions, but the grid
+ * only had three tracks — so the actions dropped onto a second line and every
+ * row stood 170px tall. On a round of thirty rooms that is most of a screen per
+ * room. Give it the fourth track and the whole round fits in one view.
+ *
+ * Above the phone breakpoint only: below it the row is deliberately a stack.
+ */
+@media (min-width: 721px) {
+  .insp-card {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 16px;
+    padding: 11px 16px 11px 22px;
+  }
+
+  .insp-card-actions {
+    justify-self: end;
+  }
+
+  .insp-card-pick {
+    padding-right: 0;
   }
 }
