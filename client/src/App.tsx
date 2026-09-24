@@ -1,4 +1,4 @@
-import { HashRouter, Link, Navigate, NavLink, Outlet, Route, Routes } from "react-router-dom";
+import { HashRouter, Link, Navigate, NavLink, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth, useCan } from "./auth/AuthContext";
 import { api } from "./api";
 import { ROLE_LABELS, type AuthUser } from "./types";
@@ -35,7 +35,8 @@ import InspectionRun from "./inspections/InspectionRun";
 import InspectionReport from "./inspections/InspectionReport";
 import InspectionsReport from "./inspections/InspectionsReport";
 import Projects from "./inspections/Projects";
-import { useEffect, useState } from "react";
+import Walkthrough from "./inspections/Walkthrough";
+import { useEffect, useRef, useState } from "react";
 
 export function BrandMark() {
   return (
@@ -78,30 +79,52 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
   // Gated on what the login may do rather than on its role name, so a new role
   // gets the right nav from the capability table without touching this file.
   const can = useCan();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  // Going somewhere closes it. Without this the drawer sits over the page you
+  // just asked for, which on a phone makes every navigation two taps.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  // Escape closes it and hands focus back to the button that opened it, so a
+  // keyboard does not end up somewhere off-screen.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenuOpen(false);
+      toggleRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell${menuOpen ? " is-menu-open" : ""}`}>
       <header className="app-header">
         <div className="app-header-left">
+          <button
+            ref={toggleRef}
+            type="button"
+            className="nav-toggle"
+            aria-expanded={menuOpen}
+            aria-controls="main-nav"
+            aria-label={menuOpen ? "Close the menu" : "Open the menu"}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span className="nav-toggle-bars" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+          </button>
           <Link to="/" className="app-title">
             <BrandMark />
-            <span className="hide-mobile">MaintenanceMap</span>
+            <span>MaintenanceMap</span>
           </Link>
-          <nav className="app-nav" aria-label="Main">
-            {(user.technicianId || can("issue.assign")) && <NavLink to="/today">Today</NavLink>}
-            <NavLink to="/properties">Properties</NavLink>
-            <NavLink to="/inspections">Inspections</NavLink>
-            {can("project.write") && <NavLink to="/projects">Projects</NavLink>}
-            {can("technician.write") && <NavLink to="/team">Team</NavLink>}
-            {can("issue.assign") && <NavLink to="/scheduler">Scheduler</NavLink>}
-            {can("issue.assign") && <NavLink to="/crew">Crew map</NavLink>}
-            {can("schedule.write") && <NavLink to="/schedules">Schedules</NavLink>}
-            <NavLink to="/dashboard">Dashboards</NavLink>
-            {can("request.review") && <RequestsLink />}
-            {can("insights.view") && <NavLink to="/reports">Reports</NavLink>}
-            {can("activity.view") && <NavLink to="/activity">Activity</NavLink>}
-            {can("user.manage") && <NavLink to="/access">Access</NavLink>}
-            {can("settings.write") && <NavLink to="/settings">Settings</NavLink>}
-          </nav>
         </div>
         <div className="app-header-right">
           {user.technicianId && <ActiveTimer />}
@@ -119,6 +142,47 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
           </button>
         </div>
       </header>
+      {/* Clicking away is how a drawer is dismissed on every platform. */}
+      <div className="nav-scrim" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+
+      {/**
+        * Fourteen destinations. In a row they were unreadable and the last few
+        * scrolled off the end; in a column they need grouping or they are just a
+        * long list. The headings are the reason for moving it, not the drawer.
+        */}
+      <nav id="main-nav" className="app-nav" aria-label="Main">
+        <p className="nav-group-label">Work</p>
+        {(user.technicianId || can("issue.assign")) && <NavLink to="/today">Today</NavLink>}
+        <NavLink to="/inspections">Inspections</NavLink>
+        {can("inspection.run") && <NavLink to="/walkthrough">Walk-through</NavLink>}
+        {can("project.write") && <NavLink to="/projects">Projects</NavLink>}
+        {can("issue.assign") && <NavLink to="/scheduler">Scheduler</NavLink>}
+        {can("request.review") && <RequestsLink />}
+
+        <p className="nav-group-label">Places</p>
+        <NavLink to="/properties">Properties</NavLink>
+        {can("issue.assign") && <NavLink to="/crew">Crew map</NavLink>}
+        {can("schedule.write") && <NavLink to="/schedules">Schedules</NavLink>}
+
+        {can("technician.write") && <p className="nav-group-label">People</p>}
+        {can("technician.write") && <NavLink to="/team">Team</NavLink>}
+
+        <p className="nav-group-label">Looking back</p>
+        <NavLink to="/dashboard">Dashboards</NavLink>
+        {can("insights.view") && <NavLink to="/reports">Reports</NavLink>}
+        {can("activity.view") && <NavLink to="/activity">Activity</NavLink>}
+
+        {(can("user.manage") || can("settings.write")) && <p className="nav-group-label">Setup</p>}
+        {can("user.manage") && <NavLink to="/access">Access</NavLink>}
+        {can("settings.write") && <NavLink to="/settings">Settings</NavLink>}
+
+        <div className="nav-drawer-foot">
+          <Link to="/account" className="nav-account">
+            {user.technician?.name ?? user.username} · {ROLE_LABELS[user.role]}
+          </Link>
+        </div>
+      </nav>
+
       <OfflineBar />
       <main className="app-main">
         <Outlet />
@@ -186,6 +250,8 @@ function AppRoutes() {
           <Route path="/inspections/report" element={<InspectionsReport />} />
           <Route path="/inspections/:id" element={<InspectionRun />} />
           <Route path="/inspections/:id/report" element={<InspectionReport />} />
+          {able("inspection.run") && <Route path="/walkthrough" element={<Walkthrough />} />}
+          {able("inspection.run") && <Route path="/walkthrough/:id" element={<Walkthrough />} />}
           {able("project.write") && <Route path="/projects" element={<Projects />} />}
           <Route path="/account" element={<Account />} />
           {able("technician.write") && <Route path="/team" element={<Technicians />} />}

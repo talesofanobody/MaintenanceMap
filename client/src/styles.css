@@ -7609,3 +7609,482 @@ table th {
     padding-right: 0;
   }
 }
+
+/* ================================================================== */
+/* Navigation: a drawer, not a bar                                     */
+/*                                                                     */
+/* Fourteen destinations never fitted. On a laptop the last few         */
+/* scrolled off behind a fade; on a phone they were a sideways strip    */
+/* of 12px labels. A column has room for all of them at a readable      */
+/* size, and room for the headings that make a list of fourteen         */
+/* scannable — which is the actual reason for the change.               */
+/*                                                                     */
+/* These rules come last and reset the old bar's layout explicitly,     */
+/* because the mobile ones masked and scrolled it sideways and would    */
+/* otherwise still apply to a drawer.                                   */
+/* ================================================================== */
+
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 1 auto;
+  overflow: visible;
+}
+
+/* ---- The button -------------------------------------------------- */
+
+.nav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--fast) var(--ease);
+}
+
+.nav-toggle:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.nav-toggle:active {
+  transform: scale(0.94);
+}
+
+.nav-toggle-bars {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 12px;
+}
+
+.nav-toggle-bars i {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 1.5px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform var(--normal) var(--ease), opacity var(--fast) var(--ease);
+}
+
+.nav-toggle-bars i:nth-child(1) { top: 0; }
+.nav-toggle-bars i:nth-child(2) { top: 5.25px; }
+.nav-toggle-bars i:nth-child(3) { top: 10.5px; }
+
+/* Three lines fold into a cross rather than being swapped for one. */
+.is-menu-open .nav-toggle-bars i:nth-child(1) {
+  transform: translateY(5.25px) rotate(45deg);
+}
+
+.is-menu-open .nav-toggle-bars i:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0.4);
+}
+
+.is-menu-open .nav-toggle-bars i:nth-child(3) {
+  transform: translateY(-5.25px) rotate(-45deg);
+}
+
+/* ---- The drawer -------------------------------------------------- */
+
+.app-nav {
+  position: fixed;
+  z-index: 70;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(292px, 86vw);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  padding: 14px 12px calc(14px + env(safe-area-inset-bottom));
+  margin: 0;
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+  border-right: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Undo the old bar: it faded its right edge and scrolled sideways. */
+  mask-image: none;
+  -webkit-mask-image: none;
+  flex-wrap: nowrap;
+  order: 0;
+  /* Closed: off-canvas and out of the tab order, not merely invisible. */
+  visibility: hidden;
+  transform: translateX(-100%);
+  transition: transform var(--normal) var(--ease), visibility 0s linear var(--normal);
+}
+
+.is-menu-open .app-nav {
+  visibility: visible;
+  transform: none;
+  transition: transform var(--normal) var(--ease), visibility 0s;
+}
+
+/* Clear the top so the drawer does not sit under the brand. */
+.app-nav::before {
+  content: "";
+  display: block;
+  height: 38px;
+  flex: none;
+}
+
+.nav-group-label {
+  margin: 14px 0 4px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.nav-group-label:first-of-type {
+  margin-top: 2px;
+}
+
+.app-nav a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.app-nav a:hover {
+  background: rgba(0, 0, 0, 0.045);
+}
+
+.app-nav a.active {
+  background: var(--brand-soft);
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
+.nav-drawer-foot {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.nav-account {
+  display: block;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.nav-account:hover {
+  background: rgba(0, 0, 0, 0.045);
+  color: var(--text);
+}
+
+/* ---- The scrim --------------------------------------------------- */
+
+.nav-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--normal) var(--ease);
+}
+
+.is-menu-open .nav-scrim {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The brand gives way before the controls on the right do. */
+@media (max-width: 420px) {
+  .app-title span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-nav,
+  .nav-scrim,
+  .nav-toggle-bars i {
+    transition: none !important;
+  }
+}
+
+@media print {
+  .app-nav,
+  .nav-scrim,
+  .nav-toggle {
+    display: none !important;
+  }
+}
+
+/* ================================================================== */
+/* Walk-through                                                        */
+/* ================================================================== */
+
+.walk-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 10px;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.walk-steps b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.walk-start-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 14px 0 16px;
+}
+
+.walk-start-form label,
+.walk-finish .form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+/* ---- Capture ----------------------------------------------------- */
+
+/**
+ * The two buttons are the page. Everything else can wait until somebody sits
+ * down, so nothing competes with them for the thumb.
+ */
+.walk-capture {
+  margin: 0 0 24px;
+}
+
+.walk-capture-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.walk-capture-actions .btn-large {
+  flex: 1 1 200px;
+}
+
+.walk-help {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.walk-help summary {
+  cursor: pointer;
+  padding: 6px 0;
+  font-weight: 500;
+  color: var(--brand-text);
+}
+
+.walk-help[open] summary {
+  margin-bottom: 10px;
+}
+
+/* ---- The pile ---------------------------------------------------- */
+
+.walk-shots {
+  margin-bottom: 26px;
+}
+
+.walk-shots-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.walk-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.walk-shot {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.walk-shot-hit {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.walk-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform var(--normal) var(--ease), filter var(--fast) var(--ease);
+}
+
+.walk-shot:hover img {
+  transform: scale(1.03);
+}
+
+/* Selected is a state you must be able to read at arm's length, in daylight,
+   on a cracked phone. Hence the whole tile, not a corner. */
+.walk-shot.is-picked img {
+  filter: brightness(0.72) saturate(1.06);
+}
+
+.walk-shot.is-picked {
+  outline: 3px solid var(--brand);
+  outline-offset: -3px;
+}
+
+.walk-tick {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  transition: background var(--fast) var(--ease), transform var(--fast) var(--ease-spring);
+}
+
+.walk-shot.is-picked .walk-tick {
+  background: var(--brand);
+  border-color: var(--brand);
+  transform: scale(1.08);
+}
+
+.walk-geo {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  font-size: 12px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.walk-shot-x {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.walk-shot:hover .walk-shot-x,
+.walk-shot-x:focus-visible {
+  opacity: 1;
+}
+
+/* No hover on a phone, so it is simply always there. */
+@media (hover: none) {
+  .walk-shot-x {
+    opacity: 1;
+  }
+}
+
+.walk-shot-x:hover {
+  background: var(--danger);
+}
+
+/* ---- The one action that follows you ------------------------------ */
+
+.walk-groupbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 18px -4px calc(-8px + env(safe-area-inset-bottom));
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  animation: mm-rise var(--fast) var(--ease) both;
+}
+
+.walk-finish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.walk-made {
+  margin-bottom: 26px;
+}
+
+@media (max-width: 560px) {
+  .walk-grid {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  }
+
+  .walk-capture-actions .btn-large {
+    flex-basis: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .walk-groupbar {
+    animation: none;
+  }
+}

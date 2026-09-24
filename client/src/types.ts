@@ -849,3 +849,40 @@ export interface Project {
   issues: ProjectIssue[];
   counts: { total: number; open: number; done: number; progress: number };
 }
+
+
+/** A walk-round of a property: photographs first, issues afterwards. */
+export interface WalkthroughIssue {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: Priority;
+  status: Status;
+  roomName: string | null;
+  category: string | null;
+  lat: number;
+  lng: number;
+  createdAt: string;
+  photos: { id: string; filename: string; thumbFilename: string | null }[];
+}
+
+export interface WalkthroughSummary {
+  id: string;
+  propertyId: string;
+  property: { id: string; name: string };
+  technician: { id: string; name: string; color: string } | null;
+  walkedBy: string;
+  areas: string | null;
+  notes: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  lat: number | null;
+  lng: number | null;
+  _count?: { photos: number; issues: number };
+}
+
+export interface Walkthrough extends WalkthroughSummary {
+  /** Only the photos not yet grouped: grouping moves them onto their issue. */
+  photos: Photo[];
+  issues: WalkthroughIssue[];
+}

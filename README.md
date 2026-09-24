@@ -661,6 +661,42 @@ thumbnail. **Delete** removes the issue and its photos (with a confirmation prom
 The status and priority dropdowns filter which pins are shown; a small banner tells you how many
 are hidden. It's a view-only filter — the report always includes every issue.
 
+### Walk-throughs
+
+Nobody writes up a finding while standing in front of it. They photograph it and move on, because
+the round has to be finished. So a walk-through asks for nothing at the moment of capture and puts
+the whole cost of describing things at the end, where there is a chair.
+
+**Walk-through** (in the menu) → pick the property → **Start walking**. The date, the time and who
+walked it are recorded from that moment.
+
+1. **Walk and shoot.** Take as many photos as you need. They land in one pile and nothing asks you
+   to type anything while you are on your feet.
+2. **Pick the ones that are the same problem.** Three shots of one cracked tile are one finding, not
+   three.
+3. **Press Group.** Those photos become a single issue with the pictures already attached, pinned
+   from the photo's own GPS where it has one, otherwise from where the phone said the walk began,
+   otherwise the middle of the property.
+4. **Describe it afterwards.** The issue is an ordinary issue from that moment: open it and add
+   what is wrong, how urgent it is, the trade and who should look at it. It is already in the
+   issues list, on the map and on the board.
+
+Finishing asks which areas you covered, and will not let you finish without saying. That is the
+record the walk exists to produce: who covered what, when, and the work it turned up. Photos left
+ungrouped stay on the walk rather than being thrown away.
+
+**A walk-through is not an inspection.** An inspection answers a fixed checklist room by room and
+produces a report. A walk-through is someone covering ground and reconciling it afterwards. Forcing
+the two together would mean a checklist nobody filled in and a template that fits neither, so they
+are separate things that both end up as issues.
+
+### Finding your way around
+
+Everything lives behind the button at the top left. Fourteen destinations never fitted across a
+laptop and were unreadable on a phone; in a drawer they are grouped — Work, Places, People, Looking
+back, Setup — and the group headings do more for finding things than the bar ever did. The drawer
+closes when you go somewhere, when you press Escape, and when you click away.
+
 ### The team and assignment
 
 Not everyone on the team holds a tool. **Administration / office** is a category like any other, for

@@ -1,4 +1,4 @@
-import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician } from "./types";
+import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -80,6 +80,28 @@ export const api = {
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<{ ok: boolean }>("/auth/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
+
+  // ---- Walk-throughs ----------------------------------------------------
+  listWalkthroughs: (params?: { propertyId?: string; state?: "open" | "completed" }) => {
+    const q = new URLSearchParams();
+    if (params?.propertyId) q.set("propertyId", params.propertyId);
+    if (params?.state) q.set("state", params.state);
+    const qs = q.toString();
+    return request<WalkthroughSummary[]>(`/walkthroughs${qs ? `?${qs}` : ""}`);
+  },
+  getWalkthrough: (id: string) => request<Walkthrough>(`/walkthroughs/${id}`),
+  startWalkthrough: (data: { propertyId: string; technicianId?: string; lat?: number; lng?: number }) =>
+    request<Walkthrough>("/walkthroughs", { method: "POST", body: JSON.stringify(data) }),
+  addWalkthroughPhotos: (id: string, files: File[]) => {
+    const form = new FormData();
+    for (const file of files) form.append("photos", file);
+    return request<Photo[]>(`/walkthroughs/${id}/photos`, { method: "POST", body: form });
+  },
+  groupWalkthroughPhotos: (id: string, photoIds: string[], extra?: { title?: string; roomName?: string }) =>
+    request<Issue>(`/walkthroughs/${id}/group`, { method: "POST", body: JSON.stringify({ photoIds, ...extra }) }),
+  updateWalkthrough: (id: string, data: { areas?: string; notes?: string; state?: "open" | "completed" }) =>
+    request<Walkthrough>(`/walkthroughs/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteWalkthrough: (id: string) => request<void>(`/walkthroughs/${id}`, { method: "DELETE" }),
 
   listUsers: () => request<AppUser[]>("/users"),
   createUser: (data: { username: string; password: string; role: Role; technicianId?: string }) =>

@@ -92,7 +92,11 @@ photosRouter.get("/:id/thumb", async (req, res) => {
 photosRouter.delete("/:id", requires("issue.write"), async (req, res) => {
   const photo = await prisma.photo.findUnique({
     where: { id: req.params.id },
-    include: { issue: true, check: { include: { inspection: { select: { id: true, status: true, roomName: true, propertyId: true } } } } },
+    include: {
+      issue: true,
+      check: { include: { inspection: { select: { id: true, status: true, roomName: true, propertyId: true } } } },
+      walkthrough: { select: { id: true, completedAt: true, propertyId: true, walkedBy: true } },
+    },
   });
   if (!photo) return res.status(404).json({ error: "not found" });
 
@@ -115,6 +119,28 @@ photosRouter.delete("/:id", requires("issue.write"), async (req, res) => {
       entityId: photo.id,
       propertyId: photo.check.inspection.propertyId,
       summary: `Removed a photo from "${photo.check.label}" in ${photo.check.inspection.roomName}`,
+    });
+    await fs.unlink(path.join(UPLOADS_DIR, photo.filename)).catch(() => {});
+    if (photo.thumbFilename) await fs.unlink(path.join(UPLOADS_DIR, photo.thumbFilename)).catch(() => {});
+    return res.status(204).end();
+  }
+
+  if (photo.walkthrough) {
+    // Still loose on a walk, not yet grouped into anything. Whoever is walking
+    // can drop a blurred shot, while the walk is still open — afterwards the
+    // photo has either become evidence on an issue or the walk is a closed
+    // record, and neither should be edited from here.
+    if (!can(req.user!.role, "inspection.run")) {
+      return res.status(403).json({ error: "You don't have permission to change a walk-through." });
+    }
+    if (photo.walkthrough.completedAt) {
+      return res.status(400).json({ error: "That walk-through is finished." });
+    }
+    await prisma.photo.delete({ where: { id: photo.id } });
+    await logActivity(req, {
+      action: "photo.removed", entityType: "photo", entityId: photo.id,
+      propertyId: photo.walkthrough.propertyId,
+      summary: `Removed a photo from a walk-through by ${photo.walkthrough.walkedBy}`,
     });
     await fs.unlink(path.join(UPLOADS_DIR, photo.filename)).catch(() => {});
     if (photo.thumbFilename) await fs.unlink(path.join(UPLOADS_DIR, photo.thumbFilename)).catch(() => {});

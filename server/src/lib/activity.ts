@@ -3,7 +3,7 @@ import { prisma } from "../db";
 
 export interface ActivityInput {
   action: string;
-  entityType: "issue" | "property" | "technician" | "user" | "photo" | "guest_report" | "inspection" | "system";
+  entityType: "issue" | "property" | "technician" | "user" | "photo" | "guest_report" | "inspection" | "walkthrough" | "system";
   entityId: string;
   summary: string;
   /** Who to record when there is no session — a guest submitting through a public link. */

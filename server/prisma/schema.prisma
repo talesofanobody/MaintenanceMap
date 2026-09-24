@@ -93,6 +93,7 @@ model Technician {
   assignments IssueAssignee[]
   inspections Inspection[]
   timeOff     TimeOff[]
+  walkthroughs Walkthrough[]
 }
 
 model Property {
@@ -115,6 +116,7 @@ model Property {
   guestReports  GuestReport[]
   inspections   Inspection[]
   projects      Project[]
+  walkthroughs Walkthrough[]
 }
 
 model Issue {
@@ -138,6 +140,10 @@ model Issue {
   closedAt         DateTime?
   technicianId     String?
   technician       Technician?      @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  /// Set when this issue was reconciled out of a walk-through, so the walk can
+  /// show what it produced and the issue can say where it came from.
+  walkthroughId    String?
+  walkthrough      Walkthrough?     @relation(fields: [walkthroughId], references: [id], onDelete: SetNull)
   estimatedHours   Float?
   actualHours      Float?
   // Calendar days as YYYY-MM-DD in the user's local time: when work is planned to start,
@@ -209,6 +215,10 @@ model Photo {
   guestReport   GuestReport?     @relation(fields: [guestReportId], references: [id], onDelete: Cascade)
   checkId       String?
   check         InspectionCheck? @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  /// A photo taken on a walk-through that has not been grouped into an issue yet.
+  /// Grouping moves it onto the issue, so at most one of these is ever set.
+  walkthroughId String?
+  walkthrough   Walkthrough?     @relation(fields: [walkthroughId], references: [id], onDelete: Cascade)
   filename      String
   thumbFilename String?
   hasGps        Boolean          @default(false)
@@ -223,6 +233,7 @@ model Photo {
   @@index([issueId])
   @@index([guestReportId])
   @@index([checkId])
+  @@index([walkthroughId])
 }
 
 // Organisation-wide settings (turnaround days per priority, escalation rules), one JSON row.
@@ -547,4 +558,42 @@ model Project {
   issues      Issue[]
 
   @@index([status, createdAt])
+}
+
+
+/// A walk-round of a property, recorded as it happens.
+///
+/// Deliberately not an Inspection. An inspection answers a fixed checklist room
+/// by room; a walk-through is someone covering ground with a phone, shooting what
+/// they see and sorting it out afterwards. Forcing the two together would mean a
+/// checklist nobody filled in and a template that fits neither.
+///
+/// The photos arrive first and belong to the walk. Grouping some of them mints an
+/// Issue and moves them onto it, which is the reconciliation step — so a walk in
+/// progress is a pile of evidence, and a finished one is a list of issues plus a
+/// record of who covered what, and when.
+model Walkthrough {
+  id           String      @id @default(cuid())
+  propertyId   String
+  property     Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  /// Who walked it. Null when the login is not linked to anybody on the team.
+  technicianId String?
+  technician   Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  /// The name recorded at the time, kept verbatim: a person can leave, and the
+  /// record of who walked the building on a given night should not change.
+  walkedBy     String
+  /// Which areas were covered, written by the person who covered them.
+  areas        String?
+  notes        String?
+  startedAt    DateTime    @default(now())
+  completedAt  DateTime?
+  /// Where the walk started, from the phone. A photo may carry its own, which
+  /// takes precedence when one is grouped into an issue.
+  lat          Float?
+  lng          Float?
+  photos       Photo[]
+  issues       Issue[]
+
+  @@index([propertyId, startedAt])
+  @@index([completedAt])
 }
