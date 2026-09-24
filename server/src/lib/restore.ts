@@ -37,6 +37,40 @@ export interface RestorePlan {
 
 export class RestoreError extends Error {}
 
+export interface RestoreResult {
+  safetyCopy: string;
+  issues: number;
+  /** Migrations the restored database was missing, and has now been brought up by. */
+  migrationsApplied: number;
+  /** Set when the schema could not be squared with the code. */
+  schemaWarning?: string;
+}
+
+const MIGRATIONS_DIR = path.resolve(__dirname, "../../prisma/migrations");
+/** Where `prisma` expects to be run from: the directory holding prisma/. */
+const SERVER_ROOT = path.resolve(__dirname, "../..");
+
+function migrationsOnDisk(): string[] {
+  if (!fs.existsSync(MIGRATIONS_DIR)) return [];
+  return fs
+    .readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+}
+
+/** What the database currently open says it has applied; empty when it cannot say. */
+async function appliedMigrations(): Promise<Set<string>> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<{ migration_name: string }[]>(
+      `SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`
+    );
+    return new Set(rows.map((r) => r.migration_name));
+  } catch {
+    return new Set();
+  }
+}
+
 /**
  * Where the SQLite file actually is.
  *
@@ -111,7 +145,7 @@ async function clearSidecars(dbFile: string): Promise<void> {
  * itself recoverable — the mistake people actually make is restoring the right
  * file to the wrong place, or the wrong file to the right one.
  */
-export async function applyRestore(plan: RestorePlan): Promise<{ safetyCopy: string; issues: number }> {
+export async function applyRestore(plan: RestorePlan): Promise<RestoreResult> {
   const safety = await createBackup(new Date(), "before-restore");
 
   const dbFile = databasePath();
@@ -136,12 +170,50 @@ export async function applyRestore(plan: RestorePlan): Promise<{ safetyCopy: str
 
   await fs.promises.rm(plan.staging, { recursive: true, force: true });
 
+  /**
+   * An archive carries the schema it had on the day it was taken, and the code
+   * running now may have moved on. Migrations otherwise only run when the
+   * container boots, so a restore could leave the database a version behind the
+   * app — every query touching a column added since would fail, and the restore
+   * would still have reported success. Square it here, while the safety copy
+   * taken above is the newest thing on the volume.
+   */
+  await prisma.$connect();
+  const before = await appliedMigrations();
+  const onDisk = migrationsOnDisk();
+  const pending = onDisk.filter((name) => !before.has(name));
+
+  let migrationsApplied = 0;
+  let schemaWarning: string | undefined;
+
+  if (pending.length > 0) {
+    await prisma.$disconnect().catch(() => {});
+    try {
+      await run("npx", ["prisma", "migrate", "deploy"], { cwd: SERVER_ROOT });
+    } catch (err) {
+      schemaWarning =
+        `The data is restored, but ${pending.length} migration(s) could not be applied to it, so the ` +
+        `database may be a version behind the app: ${(err as Error)?.message ?? err}`;
+    }
+    await prisma.$connect();
+    const after = await appliedMigrations();
+    migrationsApplied = onDisk.filter((name) => after.has(name) && !before.has(name)).length;
+  }
+
+  // The other direction: an archive from a newer version of the app than this one.
+  // No migration can fix that, and pretending otherwise would be worse than saying so.
+  const unknown = [...before].filter((name) => !onDisk.includes(name));
+  if (unknown.length > 0) {
+    schemaWarning =
+      `This archive is from a newer version of the app than the one running (${unknown.length} migration(s) ` +
+      `it knows are not in this build). Deploy the matching version before relying on it.`;
+  }
+
   // Prove it. A restore that leaves an unreadable database has to say so now,
   // not the next time somebody opens a property.
-  await prisma.$connect();
   const [{ n }] = await prisma.$queryRawUnsafe<{ n: number }[]>(`SELECT COUNT(*) AS n FROM "Issue"`);
 
-  return { safetyCopy: safety.name, issues: Number(n) };
+  return { safetyCopy: safety.name, issues: Number(n), migrationsApplied, schemaWarning };
 }
 
 /** A backup already sitting on the volume, by name. */

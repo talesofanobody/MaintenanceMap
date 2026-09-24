@@ -994,6 +994,16 @@ sign in again afterwards, because the logins came from the backup too.
 An archive that is truncated, not one of ours, or missing its database is refused before a single
 live file is touched.
 
+An archive carries the schema it had on the day it was taken. If the app has moved on since — a
+column added by an update you deployed after that backup — the restored database would be a version
+behind the code, and every query touching that column would fail. Migrations otherwise only run when
+the container boots, so this would last until the next deploy happened to fix it. So the restore
+brings the database up itself and tells you it did: *"The archive was 1 update behind this version,
+and has been brought up to it."* The safety copy taken beforehand is from before both steps.
+
+The reverse — an archive from a **newer** version of the app than the one running — cannot be fixed
+by migrating, so it says so plainly instead. Deploy the matching version first.
+
 #### If the app ever asks you to create an account again
 
 That screen means the User table is empty, and an empty database almost never means what it looks

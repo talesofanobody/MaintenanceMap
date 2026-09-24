@@ -97,15 +97,25 @@ async function doRestore(req: any, res: any, archivePath: string, label: string)
   });
 
   try {
-    const { safetyCopy, issues } = await applyRestore(plan);
+    const { safetyCopy, issues, migrationsApplied, schemaWarning } = await applyRestore(plan);
+    // An older archive arrives with an older schema. Saying so matters: the person
+    // restoring needs to know the database was changed again after they pressed the
+    // button, and that the copy taken beforehand is what they would go back to.
+    const broughtUp = migrationsApplied
+      ? ` The archive was ${migrationsApplied} update${migrationsApplied === 1 ? "" : "s"} behind this version, and has been brought up to it.`
+      : "";
     res.json({
       restored: label,
       photoCount: plan.photoCount,
       issues,
       safetyCopy,
+      migrationsApplied,
+      schemaWarning,
       message:
-        `Restored from ${label} — ${issues} issue${issues === 1 ? "" : "s"} and ${plan.photoCount} photo${plan.photoCount === 1 ? "" : "s"}. ` +
-        `What was here was saved as ${safetyCopy} first. Sessions came from the backup too, so you may need to sign in again.`,
+        `Restored from ${label} — ${issues} issue${issues === 1 ? "" : "s"} and ${plan.photoCount} photo${plan.photoCount === 1 ? "" : "s"}.` +
+        broughtUp +
+        ` What was here was saved as ${safetyCopy} first. Sessions came from the backup too, so you may need to sign in again.` +
+        (schemaWarning ? ` ${schemaWarning}` : ""),
     });
   } catch (err) {
     console.error("restore failed", err);
