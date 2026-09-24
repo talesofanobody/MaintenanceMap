@@ -37,6 +37,35 @@ function entries(dir: string | null, matching?: RegExp): string[] {
   }
 }
 
+/**
+ * A receipt, printed on every deploy that starts normally.
+ *
+ * Silence on success is how this went unnoticed for a fortnight: each deploy came
+ * up on an empty filesystem and said nothing about it, because nothing was wrong
+ * as far as any one container could tell. A line naming what is actually on the
+ * volume makes a wipe obvious in the log the moment it happens, instead of when
+ * somebody opens the app and is asked to create an account.
+ */
+async function reportWhatIsHere(users: number): Promise<void> {
+  try {
+    const [properties, issues, inspections, photoRows] = await Promise.all([
+      prisma.property.count(),
+      prisma.issue.count(),
+      prisma.inspection.count(),
+      prisma.photo.count(),
+    ]);
+    const archives = entries(BACKUP_DIR, ARCHIVE).length;
+    const files = entries(UPLOADS_DIR).length;
+    console.log(
+      `Data on the volume: ${users} account(s), ${properties} propert${properties === 1 ? "y" : "ies"}, ` +
+        `${issues} issue(s), ${inspections} inspection(s), ${photoRows} photo(s).`
+    );
+    console.log(`On disk beside it: ${files} upload file(s), ${archives} backup archive(s).`);
+  } catch (err) {
+    console.warn("Could not summarise what is on the volume:", (err as Error)?.message ?? err);
+  }
+}
+
 async function main(): Promise<void> {
   if (process.env.ALLOW_EMPTY_DATABASE === "1" || process.env.ALLOW_EPHEMERAL_DATA === "1") {
     console.warn("Not checking whether this empty database should be empty (override set).");
@@ -53,7 +82,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (users > 0) return;
+  if (users > 0) {
+    await reportWhatIsHere(users);
+    return;
+  }
 
   const archives = entries(BACKUP_DIR, ARCHIVE);
   const photos = entries(UPLOADS_DIR);

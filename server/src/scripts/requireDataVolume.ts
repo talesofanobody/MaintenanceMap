@@ -72,7 +72,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (mounted(target)) return;
+  if (mounted(target)) {
+    console.log(`${target} is a mounted volume.`);
+    return;
+  }
 
   // An attach can lag the container by a few seconds. Worth waiting out; not
   // worth waiting forever, because a boot that never finishes is harder to
@@ -84,7 +87,7 @@ async function main(): Promise<void> {
   while (Date.now() < deadline) {
     await sleep(2000);
     if (mounted(target)) {
-      console.log(`${target} mounted after ${Math.round((WAIT_SECONDS * 1000 - (deadline - Date.now())) / 1000)}s.`);
+      console.log(`${target} mounted after ${Math.round((WAIT_SECONDS * 1000 - (deadline - Date.now())) / 1000)}s — a slow attach, worth watching.`);
       return;
     }
   }
