@@ -86,10 +86,15 @@ async function main(): Promise<void> {
   if (suggestion) {
     console.error("");
     console.error(`To put it back, restore this archive once the storage is right: ${suggestion}`);
+    console.error("");
+    console.error("Note that the restore screen is inside the app, which this check has just stopped");
+    console.error("from starting. So: fix the storage first, then set ALLOW_EMPTY_DATABASE=1 for one");
+    console.error("deploy to get in, restore from Settings -> Backups, and take the variable back out.");
+    console.error("Restoring before the storage is right only writes the data back to the wrong place.");
   }
   console.error("");
-  console.error("If this really is a fresh start and the old data is meant to go, set");
-  console.error("ALLOW_EMPTY_DATABASE=1 for one deploy.");
+  console.error("If instead this really is a fresh start and the old data is meant to go, the same");
+  console.error("ALLOW_EMPTY_DATABASE=1 lets it through.");
   await prisma.$disconnect().catch(() => {});
   process.exit(1);
 }
