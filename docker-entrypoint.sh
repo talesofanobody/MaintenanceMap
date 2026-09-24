@@ -4,6 +4,13 @@
 # so it is safe to run on every boot, including the first one on an empty volume.
 set -e
 
+# Everything worth keeping lives on the volume, and nothing in here can tell
+# whether the host actually mounted one: the mkdir below succeeds either way, and
+# a missing mount would have the app come up on an empty database looking like a
+# first install. Check before creating anything.
+echo "Checking the data volume…"
+node dist/scripts/requireDataVolume.js /data
+
 mkdir -p /data/uploads /data/backups
 
 # A migration rebuilds whole tables in SQLite, so it is the single riskiest thing

@@ -133,10 +133,18 @@ a single writer, so a second replica will corrupt the database rather than share
 On **Railway** specifically:
 
 1. Create the service from the repo. It picks up the `Dockerfile` at the root on its own.
-2. **Attach a Volume with the mount path `/data`.** Do this before the first deploy — without it the
-   database and the photos are written into the container's writable layer and vanish on the next
-   one. (Railway rejects a Dockerfile containing a `VOLUME` instruction, which is why this one has
-   none; the mount is configured on their side instead.)
+2. **Attach a Volume with the mount path `/data`.** Do this before the first deploy. Without it the
+   database and the photos would go into the container's writable layer and vanish on the next one,
+   so the app checks and **refuses to start** rather than come up on storage it is about to lose.
+   (Railway rejects a Dockerfile containing a `VOLUME` instruction, which is why this one has none;
+   the mount is configured on their side instead.)
+
+   The check also covers a slower failure: a volume that attaches a moment *after* the container
+   starts. The app would migrate and serve a throwaway database until the real one appeared
+   underneath it. It now waits up to 60 seconds for the mount — raise
+   `DATA_MOUNT_WAIT_SECONDS` if your platform is slower — and gives up rather than guessing. If you
+   genuinely want storage that does not survive a deploy, a demo for instance, set
+   `ALLOW_EPHEMERAL_DATA=1`.
 3. Set the variables: `SESSION_SECRET` (generate one — the server refuses to start in production
    without it), `NODE_ENV=production`, `TRUST_PROXY=1`, and `BACKUP_KEEP=3`.
 4. Point the healthcheck at `/api/health`.
