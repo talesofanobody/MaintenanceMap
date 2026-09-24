@@ -1,6 +1,7 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { prisma } from "../db";
+import { mintCsrfToken } from "../middleware/csrf";
 import { hashPassword, verifyPassword } from "../lib/passwords";
 import { logActivity } from "../lib/activity";
 import { requireAuth } from "../middleware/requireAuth";
@@ -74,6 +75,7 @@ authRouter.post("/setup", async (req, res) => {
   const passwordHash = await hashPassword(password);
   const user = await prisma.user.create({ data: { username: username.trim(), passwordHash, role: "admin", lastLoginAt: new Date() } });
   req.session.userId = user.id;
+  res.setHeader("X-CSRF-Token", mintCsrfToken(req.session));
   const presented = await presentUser(user.id);
   res.status(201).json({ authenticated: true, username: user.username, user: presented });
 });
@@ -96,6 +98,8 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
   req.session.regenerate(async (err) => {
     if (err) return res.status(500).json({ error: "Login failed." });
     req.session.userId = user.id;
+    // regenerate() throws the old session away, token included.
+    res.setHeader("X-CSRF-Token", mintCsrfToken(req.session));
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     const presented = await presentUser(user.id);
     res.json({ authenticated: true, username: user.username, user: presented });

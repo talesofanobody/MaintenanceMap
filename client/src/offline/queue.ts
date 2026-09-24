@@ -1,5 +1,13 @@
 import type { Priority, Status } from "../types";
 
+import { currentCsrfToken } from "../api";
+
+/** The queue posts outside api.ts, so it carries the token itself. */
+function csrfHeader(): Record<string, string> {
+  const token = currentCsrfToken();
+  return token ? { "X-CSRF-Token": token } : {};
+}
+
 /**
  * Issues logged with no connection are kept in IndexedDB (photos included, as blobs)
  * and sent when the connection returns. Nothing is lost if the tab is closed or the
@@ -127,7 +135,8 @@ export async function flushQueue(): Promise<FlushResult> {
       response = await fetch("/api/issues", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        // Queued work goes up through the same guard as anything else.
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
         body: JSON.stringify({ propertyId: entry.propertyId, ...entry.payload }),
       });
     } catch {
@@ -147,7 +156,7 @@ export async function flushQueue(): Promise<FlushResult> {
       const form = new FormData();
       form.append("photo", new File([photo.blob], photo.name, { type: photo.type }));
       try {
-        await fetch(`/api/issues/${issue.id}/photos`, { method: "POST", credentials: "include", body: form });
+        await fetch(`/api/issues/${issue.id}/photos`, { method: "POST", credentials: "include", headers: csrfHeader(), body: form });
       } catch {
         // The issue is in; a missing photo shouldn't hold up the rest of the queue.
       }

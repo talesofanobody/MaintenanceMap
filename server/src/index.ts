@@ -30,6 +30,7 @@ import { seedTemplates, topUpTemplates } from "./lib/inspections";
 import { startBackupSchedule } from "./lib/backup";
 import { attachUser, requireAuth, requires } from "./middleware/requireAuth";
 import { securityHeaders } from "./middleware/securityHeaders";
+import { csrfGuard } from "./middleware/csrf";
 import { usersRouter } from "./routes/users";
 import { activityRouter } from "./routes/activity";
 import { PrismaSessionStore, purgeExpiredSessions } from "./lib/sessionStore";
@@ -75,7 +76,7 @@ if (process.env.TRUST_PROXY) {
 // and the static client shell.
 app.use(securityHeaders(isProduction));
 
-app.use(cors({ origin: CLIENT_ORIGINS, credentials: true }));
+app.use(cors({ origin: CLIENT_ORIGINS, credentials: true, exposedHeaders: ["X-CSRF-Token"] }));
 app.use(express.json({ limit: "5mb" }));
 
 app.use(
@@ -95,6 +96,9 @@ app.use(
 );
 
 app.use(attachUser);
+
+// After attachUser, because whether a token is demanded depends on being signed in.
+app.use(csrfGuard(CLIENT_ORIGINS));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRouter);

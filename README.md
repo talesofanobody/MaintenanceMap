@@ -983,6 +983,25 @@ anyway, set `SKIP_PREMIGRATE_BACKUP=1` and deploy again. A backup that hangs is 
 failure after five minutes (`PREMIGRATE_TIMEOUT_MS`), because a container that never finishes
 starting is harder to diagnose than one that fails loudly.
 
+### Forged requests
+
+Three things have to be true before a state-changing request is honoured, and they fail
+independently of each other.
+
+1. The session cookie is `SameSite=Lax`, so a browser will not attach it to a cross-site POST at all.
+2. Whatever `Origin` the request claims must be this app's own.
+3. A signed-in session must echo a secret the server handed it. Another site can make your browser
+   send a request; it cannot read the reply to one, which is what it would need to learn the secret.
+
+The token is sent back on every response as `X-CSRF-Token` and kept in memory by the client — never
+in a cookie or in `localStorage`, which would give it away. If it ever goes stale (a tab left open
+across a restart), the client retries once with the fresh one, so nobody sees a security error
+halfway through a room.
+
+The guest form sits outside all of this deliberately. It has no session and no credentials to ride
+on, so there is nothing for a forged request to abuse — and demanding a token there would mean
+minting a session for every stranger who scans a QR code.
+
 ### What the browser is told
 
 Every response carries a content security policy and the headers that go with it. The policy is

@@ -15,12 +15,47 @@ export interface TechnicianInput {
 
 const BASE = "/api";
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+/**
+ * The CSRF token, which the server hands back on every response while signed in.
+ * Kept in memory on purpose: another site can make the browser send a request,
+ * but it cannot read a response, so a token that only ever lives here is one it
+ * cannot obtain. Storing it in a cookie or localStorage would give that away.
+ */
+let csrfToken: string | null = null;
+export const currentCsrfToken = () => csrfToken;
+
+const NEEDS_TOKEN = (method: string) => !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
+
+async function send(path: string, options: RequestInit | undefined, method: string): Promise<Response> {
+  const headers: Record<string, string> = {};
+  if (options?.body && !(options.body instanceof FormData)) headers["Content-Type"] = "application/json";
+  if (csrfToken && NEEDS_TOKEN(method)) headers["X-CSRF-Token"] = csrfToken;
   const res = await fetch(`${BASE}${path}`, {
     credentials: "include",
-    headers: options?.body && !(options.body instanceof FormData) ? { "Content-Type": "application/json" } : undefined,
     ...options,
+    headers: { ...headers, ...((options?.headers as Record<string, string>) ?? {}) },
   });
+  const fresh = res.headers.get("X-CSRF-Token");
+  if (fresh) csrfToken = fresh;
+  return res;
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const method = options?.method ?? "GET";
+  let res = await send(path, options, method);
+
+  /**
+   * A token can go stale — a tab left open over a restart, or a session that
+   * predates this build. The refused response carries the current one, so try
+   * again with it. Once only: a second refusal is a real one.
+   *
+   * Worth the trouble because the alternative is a technician halfway through a
+   * room being told to reload.
+   */
+  if (res.status === 403 && NEEDS_TOKEN(method) && csrfToken) {
+    res = await send(path, options, method);
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(body.error || `Request failed: ${res.status}`);
