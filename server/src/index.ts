@@ -1,3 +1,6 @@
+// First, before any route file is loaded: a Layer built before the patch would
+// keep its unguarded handler.
+import { asyncRouteErrorsCaught } from "./lib/asyncErrors";
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -38,6 +41,14 @@ import { scheduleRouter } from "./routes/schedule";
 import { inspectionsRouter } from "./routes/inspections";
 import { projectsRouter } from "./routes/projects";
 import { guestReportsRouter } from "./routes/guestReports";
+
+if (!asyncRouteErrorsCaught) {
+  console.warn(
+    "Could not make Express hand async route errors to the error handler — most likely because Express\n" +
+    "has been upgraded. On Express 5 this is built in and the warning can go; on Express 4 it means a\n" +
+    "rejected query in a handler without a try/catch will stop the server. See lib/asyncErrors.ts."
+  );
+}
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -173,10 +184,27 @@ seedTags()
   .then((n) => n && console.log(`Seeded ${n} default tags.`))
   .catch((err) => console.error("tag seed failed", err));
 
+/**
+ * Async handlers now reach here instead of stopping the process, which means a
+ * database error's message gets handed to whoever made the request — and Prisma
+ * writes the schema and this server's file paths into it. Those are replaced with
+ * something plain; the full error is on the log either way.
+ *
+ * Messages the app raises on purpose are left alone, because they were written to
+ * be read: "Unsupported file type. Use JPEG, PNG, WebP or HEIC photos." is the
+ * only explanation a technician gets when a photo will not go up.
+ */
+function isDatabaseError(err: Error): boolean {
+  if (err.name?.startsWith("PrismaClient")) return true;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" && /^P\d{4}$/.test(code);
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
-  res.status(500).json({ error: err.message || "internal error" });
+  const message = isDatabaseError(err) ? "Something went wrong saving or reading that. It has been logged." : err.message || "internal error";
+  res.status(500).json({ error: message });
 });
 
 // Turns due/start dates into reminders every 15 minutes.
