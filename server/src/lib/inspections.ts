@@ -317,7 +317,7 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
  * Bumped whenever the built-in checklists gain points. An install that is behind
  * gets the new ones added on the next boot; one that is level is left alone.
  */
-export const SEED_VERSION = 3;
+export const SEED_VERSION = 4;
 
 /**
  * Adds points that a later release decided were missing, to templates that were
@@ -343,9 +343,45 @@ export async function topUpTemplates(): Promise<number> {
       continue;
     }
 
-    for (const wantedSection of source.sections) {
+    for (const [sourceIndex, wantedSection] of source.sections.entries()) {
       const section = template.sections.find((s) => s.name === wantedSection.name);
-      if (!section) continue;
+
+      /**
+       * A whole section the install has never had — private pools and hot tubs, on
+       * checklists written before anybody walked a room with one.
+       *
+       * The original top-up only filled in points on sections that already existed,
+       * so a new section could never reach an install that was not brand new: the
+       * points had nowhere to go and were skipped in silence. Create it, in the place
+       * the default puts it, shifting what comes after along.
+       *
+       * Only ever on the way up through a seed version. Once the template is marked
+       * as having had this revision, a section somebody then deletes stays deleted.
+       */
+      if (!section) {
+        await prisma.inspectionSection.updateMany({
+          where: { templateId: template.id, position: { gte: sourceIndex } },
+          data: { position: { increment: 1 } },
+        });
+        await prisma.inspectionSection.create({
+          data: {
+            templateId: template.id,
+            name: wantedSection.name,
+            position: sourceIndex,
+            points: {
+              create: wantedSection.points.map((point, i) => ({
+                label: point.label,
+                hint: point.hint ?? null,
+                category: point.category ?? null,
+                position: i,
+              })),
+            },
+          },
+        });
+        added += wantedSection.points.length;
+        continue;
+      }
+
       const have = new Set(section.points.map((p) => p.label));
       let position = section.points.reduce((max, p) => Math.max(max, p.position), -1);
       for (const point of wantedSection.points) {
