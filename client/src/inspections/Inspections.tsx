@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth, useCan } from "../auth/AuthContext";
 import { formatDate, formatDateTime } from "../lib/dates";
 import type { InspectionSummary, InspectionTemplate, Property, Technician } from "../types";
 
@@ -19,6 +19,9 @@ const TABS: { key: string; label: string }[] = [
 export default function Inspections() {
   const navigate = useNavigate();
   const { state } = useAuth();
+  const can = useCan();
+  // Choosing who walked a room is not any of the named capabilities — it is
+  // attributing work to someone else — so it stays with admins until there is one.
   const isAdmin = state.status === "authenticated" && state.user.role === "admin";
 
   const [tab, setTab] = useState("in_progress");
@@ -284,7 +287,14 @@ export default function Inspections() {
                 <Link to={`/inspections/${i.id}/report`} className="btn btn-secondary btn-small">
                   Report
                 </Link>
-                {isAdmin && (
+                {/* A finished walk was reachable only through its report, which is a
+                    read-only page — so the amend screen existed with no way in. */}
+                {i.status !== "in_progress" && can("inspection.amend") && (
+                  <Link to={`/inspections/${i.id}`} className="btn btn-secondary btn-small">
+                    Amend
+                  </Link>
+                )}
+                {can("inspection.delete") && (
                   <button type="button" className="btn btn-ghost btn-small danger" onClick={() => remove(i)}>
                     Delete
                   </button>
