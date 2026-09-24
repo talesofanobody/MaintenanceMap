@@ -24,4 +24,10 @@ node dist/scripts/preMigrateBackup.js
 echo "Applying database migrations…"
 npx prisma migrate deploy
 
+# The database is now at the current schema — but is it the right database? An
+# empty one beside a full uploads folder is a lost install, not a new one, and
+# starting would offer the setup screen to whoever opens the address first.
+echo "Checking the data is the data we had…"
+node dist/scripts/requireConsistentData.js
+
 exec "$@"

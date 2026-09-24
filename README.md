@@ -994,6 +994,31 @@ sign in again afterwards, because the logins came from the backup too.
 An archive that is truncated, not one of ours, or missing its database is refused before a single
 live file is touched.
 
+#### If the app ever asks you to create an account again
+
+That screen means the User table is empty, and an empty database almost never means what it looks
+like. The photos and the backup archives live beside the database on the same volume and do not
+vanish with it, so the app now checks: **no accounts, but archives or photos on the volume, and it
+refuses to start.** Better a deploy that fails than a setup form offered to whoever opens the
+address first, writing a fresh install over the top of the real one.
+
+The two things that cause it, and what to do, in this order:
+
+1. **Is the volume actually mounted?** The container also checks this before it touches anything,
+   waiting up to `DATA_MOUNT_WAIT_SECONDS` (60) for a late attach. If that is what failed, the real
+   data is still sitting on the detached volume, untouched — **do not create a new one**, attach the
+   existing one at `/data`.
+2. **Is `DATABASE_URL` still pointing at the volume?** It should be `file:/data/maintenancemap.db`.
+   A platform that injects its own `DATABASE_URL` overrides the one in the `Dockerfile`, and the app
+   ends up on a different file while the photos stay where they were — which looks exactly like
+   this.
+
+Only once the storage is right, restore the newest `…-before-update.tar.gz` from **Settings →
+Backups**. Restoring before that fixes nothing: it would write the recovered data straight back
+onto whatever wrong place the app is pointed at, and lose it again on the next deploy.
+
+If the old data really is meant to go, set `ALLOW_EMPTY_DATABASE=1` for one deploy.
+
 #### Rehearse it
 
 A backup nobody has ever restored is a backup you only think you have. Do this once, on something
