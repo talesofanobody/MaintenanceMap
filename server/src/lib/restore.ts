@@ -117,8 +117,17 @@ export async function prepareRestore(archive: string): Promise<RestorePlan> {
   }
 
   try {
-    // No absolute paths, no "..": only ever unpack what this app packed.
-    await run("tar", ["-xzf", archive, "-C", staging]);
+    /**
+     * An archive is chosen by an admin, but it is still a file from outside.
+     *
+     * Escaping the staging directory is already handled, and not by us: tar
+     * strips a leading "/" and refuses outright to extract a member whose name
+     * contains "..", exiting non-zero — checked against GNU tar 1.35 with an
+     * archive built to try it. So the two things left worth saying are that the
+     * archive does not get to choose who owns what it unpacks, or what mode it
+     * lands with, since this runs as root in the container.
+     */
+    await run("tar", ["-xzf", archive, "-C", staging, "--no-same-owner", "--no-same-permissions"]);
   } catch {
     throw new RestoreError("That archive could not be opened. It may be truncated or not a MaintenanceMap backup.");
   }

@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import rateLimit from "express-rate-limit";
 import { prisma } from "../db";
-import { upload } from "../lib/upload";
+import { guestUpload } from "../lib/upload";
 import { readExif } from "../lib/exif";
 import { storeImage } from "../lib/images";
 import { logActivity } from "../lib/activity";
@@ -58,7 +58,7 @@ async function openProperty(token: string) {
 }
 
 function acceptPhotos(req: Request, res: Response, next: NextFunction) {
-  upload.array("photos", MAX_PHOTOS)(req, res, (err: unknown) => {
+  guestUpload.array("photos", MAX_PHOTOS)(req, res, (err: unknown) => {
     if (err) {
       const message = err instanceof Error ? err.message : "Upload failed";
       return res.status(400).json({ error: message });

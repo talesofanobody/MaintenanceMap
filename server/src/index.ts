@@ -14,7 +14,7 @@ import { techniciansRouter } from "./routes/technicians";
 import { dashboardRouter } from "./routes/dashboard";
 import { exportRouter } from "./routes/export";
 import { prisma } from "./db";
-import { computeDeadline } from "./lib/validation";
+import { computeDeadline, ValidationError } from "./lib/validation";
 import { getSettings } from "./lib/settings";
 import { settingsRouter } from "./routes/settings";
 import { schedulesRouter } from "./routes/schedules";
@@ -29,6 +29,7 @@ import { seedTags } from "./lib/taxonomy";
 import { seedTemplates, topUpTemplates } from "./lib/inspections";
 import { startBackupSchedule } from "./lib/backup";
 import { attachUser, requireAuth, requires } from "./middleware/requireAuth";
+import { securityHeaders } from "./middleware/securityHeaders";
 import { usersRouter } from "./routes/users";
 import { activityRouter } from "./routes/activity";
 import { PrismaSessionStore, purgeExpiredSessions } from "./lib/sessionStore";
@@ -69,6 +70,10 @@ const CLIENT_ORIGINS = (process.env.CLIENT_ORIGIN ?? "http://localhost:5173")
 if (process.env.TRUST_PROXY) {
   app.set("trust proxy", 1);
 }
+
+// Before anything can answer, so every response carries them — including errors
+// and the static client shell.
+app.use(securityHeaders(isProduction));
 
 app.use(cors({ origin: CLIENT_ORIGINS, credentials: true }));
 app.use(express.json({ limit: "5mb" }));
@@ -194,16 +199,26 @@ seedTags()
  * be read: "Unsupported file type. Use JPEG, PNG, WebP or HEIC photos." is the
  * only explanation a technician gets when a photo will not go up.
  */
-function isDatabaseError(err: Error): boolean {
-  if (err.name?.startsWith("PrismaClient")) return true;
-  const code = (err as { code?: unknown }).code;
-  return typeof code === "string" && /^P\d{4}$/.test(code);
-}
-
+/**
+ * Only messages written to be read get out.
+ *
+ * A ValidationError says something a person can act on — "Pick a team member to
+ * plan for". Anything else reaching here was not expected, and its message is as
+ * likely to carry a file path, a column name or a driver's internals as anything
+ * useful. Both go to the log in full either way.
+ *
+ * Routes that raise something the user needs to see handle it themselves and
+ * return a 4xx; both upload paths do exactly that. So this is the last resort,
+ * and the last resort should say little.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
-  const message = isDatabaseError(err) ? "Something went wrong saving or reading that. It has been logged." : err.message || "internal error";
+  if (err instanceof ValidationError) {
+    return res.status(400).json({ error: err.message });
+  }
+  // In development the message is worth more than the exposure.
+  const message = isProduction ? "Something went wrong. It has been logged." : err.message || "internal error";
   res.status(500).json({ error: message });
 });
 

@@ -983,6 +983,29 @@ anyway, set `SKIP_PREMIGRATE_BACKUP=1` and deploy again. A backup that hangs is 
 failure after five minutes (`PREMIGRATE_TIMEOUT_MS`), because a container that never finishes
 starting is harder to diagnose than one that fails loudly.
 
+### What the browser is told
+
+Every response carries a content security policy and the headers that go with it. The policy is
+strict because the app needs almost nothing from anywhere: scripts and styles come from this origin,
+and the single exception is the satellite tile server the map draws from.
+
+| Header | What it does here |
+| --- | --- |
+| `Content-Security-Policy` | Scripts only from this origin, no `unsafe-eval`, nothing may frame the app |
+| `X-Content-Type-Options` | Stops a browser second-guessing the type of an uploaded photo |
+| `X-Frame-Options` | The same refusal, for anything too old to read the policy |
+| `Referrer-Policy` | A property's address does not leak to the tile server |
+| `Permissions-Policy` | Camera and location for this app only; microphone, payment and USB off |
+| `Strict-Transport-Security` | **Only when the request really arrived over TLS** |
+
+That last one matters if you self-host. Sending HSTS from a plain-HTTP install would tell the
+browser to refuse to reach it over HTTP again — locking you out of your own machine. It is sent only
+when `NODE_ENV=production` *and* the request came in over HTTPS, which behind a tunnel or reverse
+proxy means `TRUST_PROXY=1` is set so the forwarded protocol is believed.
+
+If you ever add something loaded from another origin — a font, an analytics script, a different tile
+server — the policy will block it, deliberately. Add the origin to `server/src/middleware/securityHeaders.ts`.
+
 #### Restoring
 
 **Settings → Backups → Restore**, on any archive in the list, or **Restore from a file…** for one
