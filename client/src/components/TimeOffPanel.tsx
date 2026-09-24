@@ -95,7 +95,7 @@ export default function TimeOffPanel({ technicians }: { technicians: Technician[
           <label>
             Who
             <select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)} required>
-              <option value="">Pick a technician</option>
+              <option value="">Pick a team member</option>
               {technicians
                 .filter((t) => t.active)
                 .map((t) => (

@@ -59,7 +59,7 @@ exportRouter.get("/issues.csv", async (req, res) => {
       "Origin",
       "Priority",
       "Status",
-      "Technician",
+      "Team member",
       "Trade",
       "Start date",
       "Due date",
@@ -141,7 +141,7 @@ exportRouter.get("/technicians.csv", async (_req, res) => {
     include: { issues: { select: { status: true, estimatedHours: true, actualHours: true, scheduledFor: true, dueDate: true } } },
   });
   const rows: Cell[][] = [
-    ["Name", "Trade", "Covers", "Phone", "Active", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Hours per week", "Open issues", "Open estimated hours", "Completed issues", "Completed actual hours", "Notes", "Technician ID"],
+    ["Name", "Trade", "Covers", "Phone", "Active", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Hours per week", "Open issues", "Open estimated hours", "Completed issues", "Completed actual hours", "Notes", "Team member ID"],
   ];
   for (const t of technicians) {
     const { weeklyHours, categories } = serializeTechnician(t);
@@ -179,7 +179,7 @@ exportRouter.get("/costs.csv", async (req, res) => {
     orderBy: [{ incurredOn: "desc" }, { createdAt: "desc" }],
   });
   const rows: Cell[][] = [
-    ["Date", "Property", "Issue", "Issue priority", "Issue status", "Technician", "Kind", "Description", "Contractor", "Contractor trade", "Invoice ref", "Unit amount", "Quantity", "Line total", "Recorded by", "Recorded at", "Cost ID"],
+    ["Date", "Property", "Issue", "Issue priority", "Issue status", "Team member", "Kind", "Description", "Contractor", "Contractor trade", "Invoice ref", "Unit amount", "Quantity", "Line total", "Recorded by", "Recorded at", "Cost ID"],
   ];
   for (const c of lines) {
     rows.push([

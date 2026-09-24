@@ -104,7 +104,7 @@ export default function MyDay() {
       <div className="page">
         <h1>Today</h1>
         <p className="empty-state">
-          {isAdmin ? "Add a technician first — this page shows one person's day." : "Your login isn't linked to a technician, so there's no day sheet to show."}
+          {isAdmin ? "Add a team member first — this page shows one person's day." : "Your login isn't linked to a team member, so there's no day sheet to show."}
         </p>
       </div>
     );
@@ -124,7 +124,7 @@ export default function MyDay() {
         </div>
         {isAdmin && technicians.length > 1 && (
           <label className="myday-picker">
-            Technician
+            Team member
             <select value={technicianId} onChange={(e) => setParams({ tech: e.target.value }, { replace: true })}>
               {technicians.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -178,7 +178,7 @@ export default function MyDay() {
       </div>
 
       {mine.length === 0 && doneToday.length === 0 && state.data && (
-        <p className="empty-state">Nothing assigned to {isAdmin ? technician?.name ?? "this technician" : "you"} right now.</p>
+        <p className="empty-state">Nothing assigned to {isAdmin ? technician?.name ?? "this team member" : "you"} right now.</p>
       )}
 
       {(["overdue", "today", "week", "later"] as Bucket[]).map((b) =>

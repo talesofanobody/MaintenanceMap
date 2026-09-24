@@ -51,7 +51,7 @@ async function parseBody(body: any, partial: boolean) {
     if (body.technicianId === null || body.technicianId === "") data.technicianId = null;
     else {
       const tech = await prisma.technician.findUnique({ where: { id: String(body.technicianId) } });
-      if (!tech) throw new ValidationError("technician not found");
+      if (!tech) throw new ValidationError("team member not found");
       data.technicianId = tech.id;
     }
   }

@@ -69,11 +69,11 @@ export default function DepartureBoard({ showControls = true }: { showControls?:
             Group by
             <select className="dash-select" value={filters.group} onChange={(e) => setFilters({ group: e.target.value as GroupMode })}>
               <option value="priority">Priority, then due date</option>
-              <option value="technician">Technician</option>
+              <option value="technician">Team member</option>
             </select>
           </label>
           <label>
-            Technician
+            Team member
             <select className="dash-select" value={filters.technicianId ?? ""} onChange={(e) => setFilters({ technicianId: e.target.value || undefined })}>
               <option value="">Everyone</option>
               {data.technicians

@@ -785,11 +785,11 @@ export default function IssuePanel({
               </div>
             )}
             {category && suggestions.length === 0 && canManage && (
-              <span className="muted small">Nobody is set up to cover {categoryLabel(category).toLowerCase()} — set who covers what on the Technicians page.</span>
+              <span className="muted small">Nobody is set up to cover {categoryLabel(category).toLowerCase()} — set who covers what on the Team page.</span>
             )}
             <div className="field">
               <span className="field-label">
-                Technicians <span className="muted small">— up to {MAX_ASSIGNEES}, the first one leads</span>
+                Team <span className="muted small">— up to {MAX_ASSIGNEES}, the first one leads</span>
               </span>
               {crew.length > 0 && (
                 <ul className="crew-list">
@@ -827,7 +827,7 @@ export default function IssuePanel({
                   onChange={(e) => {
                     if (e.target.value) setCrew([...crew, e.target.value]);
                   }}
-                  aria-label="Add a technician"
+                  aria-label="Add a team member"
                 >
                   <option value="">{crew.length === 0 ? "Unassigned — pick someone" : "Add another…"}</option>
                   {selectableTechs
@@ -854,7 +854,7 @@ export default function IssuePanel({
               </label>
             )}
             {technicians.length === 0 && canManage && (
-              <span className="muted small">No technicians yet — add them under Technicians in the top menu.</span>
+              <span className="muted small">No team members yet — add them under Team in the top menu.</span>
             )}
             <label>
               Estimated hours

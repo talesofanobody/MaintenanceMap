@@ -32,9 +32,9 @@ timeOffRouter.get("/", async (req, res) => {
 timeOffRouter.post("/", requires("timeoff.write"), async (req, res) => {
   try {
     const technicianId = typeof req.body.technicianId === "string" ? req.body.technicianId : "";
-    if (!technicianId) return res.status(400).json({ error: "Which technician is away?" });
+    if (!technicianId) return res.status(400).json({ error: "Which team member is away?" });
     const technician = await prisma.technician.findUnique({ where: { id: technicianId }, select: { id: true, name: true } });
-    if (!technician) return res.status(404).json({ error: "technician not found" });
+    if (!technician) return res.status(404).json({ error: "team member not found" });
 
     const { startDay, endDay } = parseRange(req.body.startDay, req.body.endDay);
     const kind: TimeOffKind = parseKind(req.body.kind);

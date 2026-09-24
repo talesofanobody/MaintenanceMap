@@ -96,7 +96,7 @@ export default function Settings() {
 
         <section className="card settings-section">
           <h2>Running-out-of-time warning</h2>
-          <p>Technicians get a reminder, and boards flag the issue as at risk, once this share of the response window has gone. Set to 0 to turn it off.</p>
+          <p>Team members get a reminder, and boards flag the issue as at risk, once this share of the response window has gone. Set to 0 to turn it off.</p>
           <div className="settings-row">
             Warn at
             <input
@@ -117,7 +117,7 @@ export default function Settings() {
           <h2>Automatic escalation</h2>
           <p>
             Overdue issues climb one priority level after a set number of hours, and again every time that many hours pass — so a forgotten low-priority job
-            works its way up the boards until someone deals with it. Each escalation is recorded in the activity log and notifies the technician and admins.
+            works its way up the boards until someone deals with it. Each escalation is recorded in the activity log and notifies the team member and admins.
           </p>
           <label className="checkbox-row">
             <input

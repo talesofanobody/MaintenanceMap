@@ -74,7 +74,7 @@ function TechnicianForm({ initial, onCancel, onSaved }: { initial?: Technician; 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
-      setError("Give the technician a name.");
+      setError("Give the team member a name.");
       return;
     }
     setSaving(true);
@@ -106,7 +106,7 @@ function TechnicianForm({ initial, onCancel, onSaved }: { initial?: Technician; 
 
   return (
     <form className="card form technician-form" onSubmit={handleSubmit}>
-      <h3>{initial ? `Edit ${initial.name}` : "New technician"}</h3>
+      <h3>{initial ? `Edit ${initial.name}` : "New team member"}</h3>
       {error && <div className="banner banner-error">{error}</div>}
       <div className="form-row">
         <label>
@@ -221,7 +221,7 @@ function TechnicianForm({ initial, onCancel, onSaved }: { initial?: Technician; 
 
       <div className="form-actions">
         <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? "Saving…" : initial ? "Save changes" : "Add technician"}
+          {saving ? "Saving…" : initial ? "Save changes" : "Add team member"}
         </button>
         <button type="button" className="btn btn-ghost" onClick={onCancel}>
           Cancel
@@ -259,7 +259,7 @@ export default function Technicians() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1>Technicians</h1>
+          <h1>Team</h1>
           <p className="muted">Set each person's working hours, then assign issues to them — free time is worked out from what's scheduled.</p>
         </div>
         <div className="page-header-actions">
@@ -269,12 +269,12 @@ export default function Technicians() {
           <a className="btn btn-ghost" href={api.exportCostsUrl()} download title="Every cost line across all properties">
             Export costs
           </a>
-          <Link className="btn btn-secondary" to="/technicians/rota">
+          <Link className="btn btn-secondary" to="/team/rota">
             Week schedule
           </Link>
           {!adding && (
             <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
-              + Add technician
+              + Add team member
             </button>
           )}
         </div>
@@ -296,10 +296,10 @@ export default function Technicians() {
         <p className="loading-state">Loading…</p>
       ) : technicians.length === 0 && !adding ? (
         <section className="welcome card">
-          <h2>No technicians yet</h2>
+          <h2>No team members yet</h2>
           <p>Add the people who do the work. Each one gets weekly working hours; when you assign issues with an estimated duration, the app shows how much of their day is still free.</p>
           <button type="button" className="btn btn-primary btn-large" onClick={() => setAdding(true)}>
-            Add the first technician
+            Add the first team member
           </button>
         </section>
       ) : (

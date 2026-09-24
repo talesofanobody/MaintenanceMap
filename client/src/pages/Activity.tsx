@@ -9,7 +9,7 @@ const TYPES = [
   { value: "issue", label: "Issues" },
   { value: "photo", label: "Photos" },
   { value: "property", label: "Properties" },
-  { value: "technician", label: "Technicians" },
+  { value: "technician", label: "Team members" },
   { value: "user", label: "Logins" },
   { value: "guest_report", label: "Guest reports" },
 ];
@@ -47,7 +47,7 @@ export default function Activity() {
         <div>
           <h1>Activity</h1>
           <p className="muted">
-            Who changed what, and when — every issue, photo, property, technician and login change, and what guests reported.
+            Who changed what, and when — every issue, photo, property, team member and login change, and what guests reported.
           </p>
         </div>
       </div>

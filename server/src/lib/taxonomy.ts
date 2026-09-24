@@ -26,6 +26,10 @@ export const CATEGORIES = [
   { key: "fire_safety", label: "Fire & safety" },
   { key: "lift", label: "Lifts" },
   { key: "general", label: "General maintenance" },
+  // Not a trade. Office and front-of-house work — chasing a supplier, a
+  // booking problem, anything that lands on a desk rather than a toolbelt.
+  // Nothing to do with the admin *role*, which is about what a login may do.
+  { key: "admin_office", label: "Administration / office" },
 ] as const;
 
 export const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));

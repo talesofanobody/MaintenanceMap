@@ -100,7 +100,7 @@ function TrendsView({ months, onMonths }: { months: number; onMonths: (n: number
 
       <div className="chart-row">
         <RankedBars
-          title="Issues closed by technician"
+          title="Issues closed by team member"
           rows={data.byTechnician.map((t) => ({
             label: t.name,
             value: t.closed,

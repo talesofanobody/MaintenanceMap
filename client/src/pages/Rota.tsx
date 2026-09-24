@@ -60,8 +60,8 @@ export default function Rota() {
           <input type="checkbox" checked={showJobs} onChange={(e) => setShowJobs(e.target.checked)} />
           Show booked jobs
         </label>
-        <Link to="/technicians" className="btn btn-ghost btn-small">
-          Back to technicians
+        <Link to="/team" className="btn btn-ghost btn-small">
+          Back to team members
         </Link>
       </div>
 
@@ -70,7 +70,7 @@ export default function Rota() {
       {!data ? (
         <p className="loading-state">Loading…</p>
       ) : data.technicians.length === 0 ? (
-        <p className="empty-state">No active technicians yet.</p>
+        <p className="empty-state">No active team members yet.</p>
       ) : (
         <article className="rota-sheet">
           <header className="rota-header">
@@ -82,7 +82,7 @@ export default function Rota() {
             </div>
             <div className="report-meta">
               <div>
-                <dt>Technicians</dt>
+                <dt>Team members</dt>
                 <dd>{data.technicians.length}</dd>
               </div>
               <div>
@@ -95,7 +95,7 @@ export default function Rota() {
           <table className={`rota-table ${showJobs ? "" : "compact"}`}>
             <thead>
               <tr>
-                <th>Technician</th>
+                <th>Team member</th>
                 {data.days.map((day, i) => (
                   <th key={day} className={day === today ? "is-today" : ""}>
                     {WEEKDAYS[i]}

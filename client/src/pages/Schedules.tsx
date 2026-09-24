@@ -282,7 +282,7 @@ export default function Schedules() {
             </select>
           </label>
           <label>
-            Technician
+            Team member
             <select value={form.technicianId} onChange={(e) => setForm({ ...form, technicianId: e.target.value })}>
               <option value="">Unassigned — admins are reminded</option>
               {technicians

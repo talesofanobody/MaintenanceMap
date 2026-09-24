@@ -83,7 +83,7 @@ export default function SummaryBoard() {
       <div className="summary-grid">
         <section className="summary-panel">
           <h2>Crew today</h2>
-          {techs.length === 0 && <p className="dash-muted">No active technicians.</p>}
+          {techs.length === 0 && <p className="dash-muted">No active team members.</p>}
           <ul className="crew-list">
             {techs.map(({ t, mine, load }) => {
               const pct = load.today.capacity ? Math.min(100, (load.today.committed / load.today.capacity) * 100) : 0;

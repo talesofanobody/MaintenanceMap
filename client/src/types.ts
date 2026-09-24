@@ -26,7 +26,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin",
   manager: "Manager",
   dispatcher: "Dispatcher",
-  technician: "Technician",
+  technician: "Team member",
   display: "Display",
 };
 
@@ -308,6 +308,9 @@ export const CATEGORIES: Category[] = [
   { key: "fire_safety", label: "Fire & safety" },
   { key: "lift", label: "Lifts" },
   { key: "general", label: "General maintenance" },
+  // Keep in step with server/src/lib/taxonomy.ts — the server validates
+  // against its own copy, so a key only here would be rejected on save.
+  { key: "admin_office", label: "Administration / office" },
 ];
 
 export function categoryLabel(key: string | null | undefined): string {

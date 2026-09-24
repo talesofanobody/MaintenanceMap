@@ -334,7 +334,7 @@ inspectionsRouter.post("/", requires("inspection.run"), async (req, res) => {
   let who: string | null = null;
   if (technicianId) {
     const t = await prisma.technician.findUnique({ where: { id: technicianId }, select: { name: true } });
-    if (!t) return res.status(404).json({ error: "technician not found" });
+    if (!t) return res.status(404).json({ error: "team member not found" });
     who = t.name;
   }
   const where = parseFix(req.body);
@@ -385,7 +385,7 @@ inspectionsRouter.put("/:id", requires("inspection.run"), async (req, res) => {
       const id = typeof req.body.technicianId === "string" && req.body.technicianId ? req.body.technicianId : null;
       if (id) {
         const t = await prisma.technician.findUnique({ where: { id }, select: { name: true } });
-        if (!t) return res.status(404).json({ error: "technician not found" });
+        if (!t) return res.status(404).json({ error: "team member not found" });
         data.technicianId = id;
         data.inspector = t.name;
       } else {

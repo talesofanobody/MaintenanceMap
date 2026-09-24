@@ -139,7 +139,7 @@ export async function runScheduledChecks(now = new Date()): Promise<{ created: n
       created += await notifyUsers(admins, {
         ...base,
         kind: "unassigned",
-        title: `${priorityWord(issue.priority)} issue needs a technician: ${issue.title}`,
+        title: `${priorityWord(issue.priority)} issue needs a team member: ${issue.title}`,
         body: line,
         dedupeKey: `unassigned:${issue.id}`,
       });

@@ -124,7 +124,7 @@ export default function CostPanel({ issue, editable, onChanged }: Props) {
         <div className="costs-labour">
           <span>
             Labour · {summary.labourHours.toFixed(2)} h clocked
-            <span className="costs-meta">Valued at the technician's rate</span>
+            <span className="costs-meta">Valued at the team member's rate</span>
           </span>
           <strong>{money(summary.labour)}</strong>
         </div>

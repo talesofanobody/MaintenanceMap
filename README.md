@@ -8,7 +8,7 @@ dates, checklists, photos, time clocked on site, what it cost, and the work orde
 Guests and staff without a login can report a problem themselves, by scanning a code in the room,
 and an admin accepts or turns down what comes in.
 
-Around that sits the rest of a working day: per-person logins for admins and technicians, a day sheet
+Around that sits the rest of a working day: per-person logins for admins and team members, a day sheet
 with clock in/out, a drag-and-drop scheduler for the whole crew's day, emergencies that push the rest
 of a day back and put it right again afterwards, vacation and time off, a map of where everyone
 probably is, a planner that fills someone's day by urgency and proximity, recurring maintenance
@@ -198,7 +198,7 @@ account — that one becomes the admin.
 
 ### Making it reachable from outside
 
-Technicians on site and guests scanning a QR code are not on your home Wi-Fi, so the app needs a
+Team members on site and guests scanning a QR code are not on your home Wi-Fi, so the app needs a
 public address. **Don't forward ports on your router** for this — it puts your home IP in the QR
 codes and exposes the machine directly.
 
@@ -237,7 +237,7 @@ own crew.
 
 **Check the shifts.** They are the pattern typical of each role on the sheet, not a per-person
 transcription, and the sheet's own rows do not line up reliably enough to trust cell by cell. Every
-shift is editable on the Technicians page.
+shift is editable on the Team page.
 
 ### Get the backups off the machine
 
@@ -310,14 +310,14 @@ rather than inferred.
 | **Admin** | Everything, including logins, restoring a backup, and deleting anything |
 | **Manager** | Runs the operation. Everything except deleting records and restoring over the database |
 | **Dispatcher** | Logs issues, assigns and schedules them, triages what guests send in |
-| **Technician** | Their own work, and walking inspections |
+| **Team member** | Their own work, and walking inspections |
 | **Display** | A screen on a wall. Dashboards only |
 
 A manager is defined by what they cannot undo: no deleting a property, an issue, an inspection, a
 schedule or a login, and no restoring a backup over the live database. Deactivating a login is the
 reversible equivalent and they can do that freely.
 
-Managers can create logins, but only for the roles below them — technician, dispatcher and display.
+Managers can create logins, but only for the roles below them — team member, dispatcher and display.
 Not admin, and not another manager. The rule is about seniority rather than about user management
 in general, and it applies to existing accounts too: a manager cannot reset an admin's password or
 promote anybody to admin. Without that second half the first would be decoration, since resetting
@@ -415,7 +415,7 @@ Three things put an issue in context, and all three feed the boards, the report 
 - **Category** — the trade it belongs to: plumbing, electrical, HVAC, kitchen equipment, pool and
   spa, and about fifteen more. This is what drives the **suggestion** when you assign the work: pick
   a category and the form proposes whoever covers it and has the most room left in their day, with an
-  **Assign** button. Technicians who cover the category are ticked in the dropdown too.
+  **Assign** button. Team members who cover the category are ticked in the dropdown too.
 - **Room / location** — where in the property it is: "Room 214", "Pool plant room", "Floor 2
   corridor". The field suggests rooms already used at that property as you type, so the same room
   stays spelled the same way without anyone maintaining a list.
@@ -427,10 +427,10 @@ Three things put an issue in context, and all three feed the boards, the report 
 ### The conversation on an issue
 
 Every issue carries a running conversation instead of a single notes box. Each message records who
-wrote it and when, so a job reads as a thread: the office asks for a photo, the technician says the
+wrote it and when, so a job reads as a thread: the office asks for a photo, the team member says the
 valve is seized, the next person on site knows why before they walk in.
 
-- **Anyone signed in can read it. Admins and technicians can post**, on any issue — not only the
+- **Anyone signed in can read it. Admins and team members can post**, on any issue — not only the
   ones assigned to them, because access notes, parts and "I've already looked at this" are exactly
   the things that need passing on. Display logins are read-only.
 - **Enter sends, Shift+Enter starts a new line.** Messages post on their own, separately from the
@@ -442,7 +442,7 @@ valve is seized, the next person on site knows why before they walk in.
   anyone's. Nobody can rewrite someone else's words.
 - **The thread refreshes itself** while the panel is open and whenever you come back to the tab, so
   a reply arrives without reloading the page.
-- **Posting notifies** the assigned technician and the admins — never the person who wrote it.
+- **Posting notifies** the assigned team member and the admins — never the person who wrote it.
 - The whole thread prints on the property report and goes into the issues CSV, both as a message
   count and as the full conversation in one cell.
 
@@ -464,7 +464,7 @@ completed with steps still unticked asks you to confirm first.
 record what is not right.
 
 Start one from **Inspections** — pick the property, type the room and choose a checklist. A
-technician's walk is recorded against them automatically; an admin is also asked **who walked it**,
+team member's walk is recorded against them automatically; an admin is also asked **who walked it**,
 so a round done on paper can be typed up and still credited to the person who did it. The report
 names them rather than the login that entered it. Two come
 with the app and can be edited or replaced:
@@ -639,11 +639,11 @@ Each issue has a **Costs** box for what the work actually cost: parts and materi
 invoice, hire or anything else, with a quantity, a date and an optional invoice reference. Lines
 attributed to a contractor feed that contractor's total spend.
 
-**Labour is worked out for you**: give a technician an **hourly rate** on the Technicians page and
+**Labour is worked out for you**: give a team member an **hourly rate** on the Team page and
 their clocked time on an issue is valued automatically and added to the total. Nothing is typed
 twice.
 
-**Contractors** are managed at the bottom of the Technicians page — outside firms with their trade
+**Contractors** are managed at the bottom of the Team page — outside firms with their trade
 and contact details, and what has been spent with each. A contractor that appears on any cost line
 can't be deleted (deactivate them instead), so the spend history stays intact.
 
@@ -661,33 +661,39 @@ thumbnail. **Delete** removes the issue and its photos (with a confirmation prom
 The status and priority dropdowns filter which pins are shown; a small banner tells you how many
 are hidden. It's a view-only filter — the report always includes every issue.
 
-### Technicians and assignment
+### The team and assignment
 
-**Technicians** (top menu) is where the admin sets up the crew. Each technician has a name, trade,
+Not everyone on the team holds a tool. **Administration / office** is a category like any other, for
+the people who work a desk rather than a room — chasing a supplier, sorting a booking, anything that
+lands in an inbox. Tag them with it and they can be assigned work, scheduled and reported on exactly
+like anyone else. It has nothing to do with the **Admin** role, which is about what a login is
+allowed to do; this is about what kind of work somebody does.
+
+**Team** (top menu) is where the admin sets up the crew. Each team member has a name, trade,
 phone, a colour, an optional **hourly rate** (which values their clocked time on an issue), the
 **categories they cover**, and a **working week**: a start and end time for each day they work, with
 presets to fill it in quickly. Hours per day are worked out from those times, so capacity, planning
 and the boards all follow the rota rather than a number typed separately.
 
-**Week schedule** (button on the Technicians page) prints the rota: every technician down the side,
+**Week schedule** (button on the Team page) prints the rota: every team member down the side,
 the seven days across, each cell showing that day's shift, how much of it is already booked, and the
 jobs in it. Step through weeks with the arrows and print it for the crew room. Their card shows, for today and for this week, how many hours are already scheduled
 against their capacity and how much is **free**, plus unscheduled backlog and overdue counts, and
-their open assignments. Removing a technician leaves their issues unassigned; deactivating keeps
+their open assignments. Removing a team member leaves their issues unassigned; deactivating keeps
 the history but takes them off the boards.
 
 In the issue form, the **Schedule** box holds a **start date** and a **due date**. Every issue
 gets a due date: it's filled in automatically from the priority's turnaround (by default urgent:
 same day, high: 3 days, medium: 14 days, low: 30 days — counted from the start date if you set one,
-otherwise today; change the defaults in **Settings**) and you can change it per issue. The **Assignment** box below picks the technician and an
-**estimated duration** in hours; as you type it tells you how much of that technician's start day
+otherwise today; change the defaults in **Settings**) and you can change it per issue. The **Assignment** box below picks the team member and an
+**estimated duration** in hours; as you type it tells you how much of that team member's start day
 is still free and warns when the estimate would overbook them. When an issue is completed you can
 also record the **actual hours** for time tracking. The report shows assignee, start/due dates,
 estimate and actual per issue, and anything past its due date is flagged in red.
 
 ### Today: the day sheet and clock in/out
 
-**Today** is where a technician starts. It shows their jobs grouped into **Overdue**, **Today**,
+**Today** is where a team member starts. It shows their jobs grouped into **Overdue**, **Today**,
 **Later this week** and **Further out**, ordered by priority then due date, with three figures at
 the top: hours planned for today against the hours they're available, hours actually logged today,
 and whatever they're currently clocked in on.
@@ -702,30 +708,30 @@ from what was really worked. The issue panel lists every entry (who, when, how l
 correct or remove one if someone forgets to clock out. Anyone still clocked in after ten hours gets
 a reminder, and so do the admins.
 
-Admins can open anyone's day sheet with the technician picker.
+Admins can open anyone's day sheet with the team member picker.
 
 ### Plan a day
 
-**Plan this day** (on Today, or `/#/planner`) proposes a running order for one technician on one
+**Plan this day** (on Today, or `/#/planner`) proposes a running order for one team member on one
 day. Work already pinned to that day comes first, then the most urgent outstanding work — overdue
 and due-today before anything else — and among jobs of similar urgency it picks the one nearest to
 the previous stop, until the day's hours run out. Jobs that didn't fit are listed underneath with
 the reason.
 
 Nothing changes until you press the button: untick anything you don't want, then apply, and the
-chosen jobs are scheduled for that day and assigned. Technicians can plan their own day; only
+chosen jobs are scheduled for that day and assigned. Team members can plan their own day; only
 admins can plan someone else's.
 
 ### Recurring maintenance
 
 **Schedules** (admin) covers the work that comes round again: gutters every three months, a boiler
-service every year, alarm tests every month. A recurring task carries a title, priority, technician,
+service every year, alarm tests every month. A recurring task carries a title, priority, team member,
 estimate, a pin on the map and a checklist template.
 
 Set how often it repeats and how many days ahead the job should appear, and the app creates an
 ordinary issue that far before each due date — with the checklist already on it — then rolls the
 schedule on to its next date. Monthly cadences keep their day of the month (clamped for short
-months). The technician is notified, or the admins are if nobody is assigned.
+months). The team member is notified, or the admins are if nobody is assigned.
 
 **Run now** creates the next occurrence early, **Pause** stops it without losing the history, and
 deleting a schedule leaves the jobs it already created alone.
@@ -746,12 +752,12 @@ deleting a schedule leaves the jobs it already created alone.
   Raising an issue's priority moves its deadline with it — put something on Critical and it is due
   two hours from that moment.
 - **Running-out-of-time warning** — once this share of the window has gone (80% by default), the
-  technician gets a reminder, the board shows **AT RISK**, the Today page flags the row, and the
+  team member gets a reminder, the board shows **AT RISK**, the Today page flags the row, and the
   issue panel says how long is left. Set it to 0 to switch it off.
 - **Automatic escalation** — an overdue issue climbs one priority level after a set number of
   **hours** overdue, and again each time that many hours pass, so a forgotten low-priority job
   works its way up the boards until somebody deals with it. Every escalation is recorded in the
-  activity log and notifies the technician and the admins. Can be switched off.
+  activity log and notifies the team member and the admins. Can be switched off.
 
 ### How a job moves: the status workflow
 
@@ -760,7 +766,7 @@ Every issue is in one of seven states:
 | Status | What it means |
 |---|---|
 | **Requested** | Logged, nobody has picked it up yet |
-| **Accepted** | A technician has taken it on |
+| **Accepted** | A team member has taken it on |
 | **In Progress** | Being worked on now |
 | **On Hold** | Parked on something — access, a decision, a guest in the room |
 | **Needs Parts** | Waiting on a part or a delivery |
@@ -772,9 +778,9 @@ are closed. **Cancelled work is closed but never counts as resolved** — it lea
 immediately and stays out of the average-time-to-resolve figures, because counting an abandoned job
 as a fast one would flatter the numbers.
 
-### Crews: up to four technicians on a job
+### Crews: up to four team members on a job
 
-A job can carry up to four technicians. The first is the **lead** — they are who it is booked to,
+A job can carry up to four team members. The first is the **lead** — they are who it is booked to,
 who the day scheduler places, and whose name appears on the boards. The others are there because
 the job needs more than one pair of hands.
 
@@ -784,7 +790,7 @@ issue panel, and use **Make lead** to change who runs it.
 
 ### Vacation and time off
 
-**Technicians → Time off** books someone off: vacation, sick leave, training or anything else, over
+**Team members → Time off** books someone off: vacation, sick leave, training or anything else, over
 a single day or a range. While they are off:
 
 - their column on the day scheduler is greyed out and marked, and work can't be dropped on them;
@@ -796,11 +802,11 @@ it tells you how many jobs clash so you can decide where they go.
 
 ### The day scheduler
 
-**Scheduler** (admin) is the day, technician by technician. Each column is one person's shift with
+**Scheduler** (admin) is the day, team member by team member. Each column is one person's shift with
 their jobs laid end to end from the start of it, so every job has a start and finish time worked
 out from the one before it and its own estimate.
 
-- **Drag a card onto a technician** to give them the job for that day. Drop it on the narrow gap
+- **Drag a card onto a team member** to give them the job for that day. Drop it on the narrow gap
   above an existing card to place it in front of that one; drop it anywhere else in the column to
   put it at the end.
 - **Drag it back to Unassigned** to take it off the day entirely.
@@ -811,18 +817,18 @@ out from the one before it and its own estimate.
 ### Emergencies: slotting one in
 
 A burst pipe does not wait for the schedule. The **⚡** on any card slots that job into the front of
-the technician's day and pushes everything behind it one place later.
+the team member's day and pushes everything behind it one place later.
 
 The shift is **linear and reversible**: each displaced job remembers exactly where it was and which
 emergency moved it. When the emergency is completed or cancelled, the day goes straight back to the
 order somebody planned — it does not re-sort or re-optimise. A second emergency on the same day
 stacks without losing the original positions.
 
-Displaced cards are marked *pushed* while it lasts, and both the technician and the admins are told.
+Displaced cards are marked *pushed* while it lasts, and both the team member and the admins are told.
 
 ### Where the crew are
 
-**Crew map** (admin) puts a pin on each technician showing where they probably are.
+**Crew map** (admin) puts a pin on each team member showing where they probably are.
 
 This is worked out from **clock-ins** — the job someone is clocked into, or the last one they
 finished today. **Nobody's phone is tracked.** A live pin pulses; an older one fades and goes
@@ -832,7 +838,7 @@ guessed at.
 
 ### Notifications
 
-The bell in the header carries an unread count (and puts it in the browser tab title). Technicians
+The bell in the header carries an unread count (and puts it in the browser tab title). Team members
 are told when a job is assigned or reassigned to them, when its status, priority or dates change,
 when it starts today, is due tomorrow, is due today or has gone overdue. Admins are told when
 someone else logs an issue or changes a status, when work is overdue, and when a high or urgent
@@ -861,13 +867,13 @@ fullscreen. Five views:
   whole list is in one ranked run rather than paged, so nothing is hidden waiting for a page to turn.
   If there are more rows than fit the screen it creeps down the list and back up again. Each row
   carries the issue's category under its title and the room under the property. By default it's
-  **grouped by priority, ordered by due date** within each group; switch to **grouped by technician** (with today's load and free hours
+  **grouped by priority, ordered by due date** within each group; switch to **grouped by team member** (with today's load and free hours
   in each section header, and an UNASSIGNED section for work still needing someone). Columns are
   DUE (OVERDUE / DUE TODAY / DUE TMRW / DUE FRI 20, with the start day and estimate underneath),
   TECH, ISSUE, LOCATION, PRIORITY and STATUS. Overdue rows blink, urgent rows are red, in-progress
-  rows pulse green, and long lists page automatically. Filter by technician or property with the
-  dropdowns — the choice goes into the URL (`?group=technician&tech=…&property=…`), so a TV can be
-  pointed at one technician's or one property's board, and the same filters apply to the live map.
+  rows pulse green, and long lists page automatically. Filter by team member or property with the
+  dropdowns — the choice goes into the URL (`?group=team member&tech=…&property=…`), so a TV can be
+  pointed at one team member's or one property's board, and the same filters apply to the live map.
 - **Tickets** — a kitchen-display board, the kind a kitchen runs on. See below.
 - **Summary** — KPIs (open, urgent, high, in progress, overdue, unassigned, closed in the last 7
   days, average time to resolve), today's crew capacity bars, a "needs attention" list, and open
@@ -910,7 +916,7 @@ The dashboards use the same login as everything else — sign in once on the TV'
 
 **Trends** charts how the work is going over the last 6, 12 or 24 months: issues logged against
 issues closed each month, average days to resolve, spend by month, and ranked breakdowns of open
-work and spend by property, closed work by technician, and spend by contractor. The charts are drawn
+work and spend by property, closed work by team member, and spend by contractor. The charts are drawn
 inline, so they print with the page.
 
 **Portfolio** puts every property on one page: open issues, urgent and high counts, overdue, average
@@ -924,7 +930,7 @@ Google Calendar or Apple Calendar and scheduled work appears alongside the rest 
 job as an all-day event on its start date (or its due date if it hasn't been scheduled) carrying the
 priority, property, location, estimate, checklist progress and work order number.
 
-A technician's feed holds their own jobs; an admin's holds the whole crew's. The link is the
+A team member's feed holds their own jobs; an admin's holds the whole crew's. The link is the
 credential, so treat it like a password — anyone who has it can read the feed. **Reset link**
 generates a new address and immediately stops the old one working.
 
@@ -1067,7 +1073,7 @@ photos. Then:
 
 - **Accept and log it** opens the ordinary issue form on that property, already carrying their
   words, room, issue type and photos, with the pin dropped where a photo says it was taken (or at
-  the property's centre if none of them carried GPS). Set the priority, pick a technician —
+  the property's centre if none of them carried GPS). Set the priority, pick a team member —
   the usual suggestion is offered from the category — move the pin, change anything you like, and
   save. That creates the issue, brings the photos across, and marks the report accepted. Closing
   the form without saving leaves it in the queue.
@@ -1092,7 +1098,7 @@ anything already reported. Only admins ever see the secret in the link.
 ### Activity log
 
 **Activity** (admin) is the record of who changed what, and when — every property, issue, photo,
-technician, schedule, cost and login change, everything guests reported and what was done with it, with the before-and-after values for the fields that
+team member, schedule, cost and login change, everything guests reported and what was done with it, with the before-and-after values for the fields that
 matter ("Status: pending → in_progress"). Filter by kind or property, or search the text. Each issue
 also shows its own history at the bottom of its panel, which is usually the quickest way to answer
 "why is this marked done?".
@@ -1100,16 +1106,16 @@ also shows its own history at the bottom of its panel, which is usually the quic
 ### Export to CSV
 
 **Export CSV** in the top-right of the header downloads every issue across all properties as a
-spreadsheet: property, issue number, title, where it came from, priority, status, technician and
+spreadsheet: property, issue number, title, where it came from, priority, status, team member and
 trade, start and due
 dates, logged/closed timestamps, days to resolve, estimated and actual hours, work order details
 and EAM link, description, action, the number of messages and the whole conversation,
 coordinates, and photo counts/paths. Each property's
-report has a **Download CSV** button for just that property, and the Technicians page exports the
+report has a **Download CSV** button for just that property, and the Team page exports the
 crew with their weekly hours and workload.
 
 The issues export also carries checklist progress and the recorded, labour and total cost per issue.
-**Export costs** (Technicians page, or the portfolio report) gives one row per cost line with its
+**Export costs** (Team page, or the portfolio report) gives one row per cost line with its
 property, issue, contractor, invoice reference, quantity and total. Files open directly in Excel,
 Numbers or Google Sheets.
 
@@ -1135,7 +1141,7 @@ for a file. Tip: give the map a second to finish loading imagery before printing
 
 ## Data model
 
-- `User`: username, bcrypt password hash, role (admin / technician / display), the technician it's
+- `User`: username, bcrypt password hash, role (admin / team member / display), the team member it's
   linked to, active flag, forced-password-change flag, last sign-in, calendar feed token
 - `Session`: server-side session store backing the login cookie (housekept automatically)
 - `Activity`: who changed what and when, with the before-and-after details
@@ -1143,16 +1149,16 @@ for a file. Tip: give the map a second to finish loading imagery before printing
 - `Setting`: the organisation's turnaround days, warning threshold and escalation rule (one row)
 - `Property`: name, address, notes, boundary (GeoJSON polygon), center lat/lng, whether guest
   reporting is open and the secret in its public link
-- `Technician`: name, trade, phone, colour, active flag, the working week as a start and end time
+- `Team member`: name, trade, phone, colour, active flag, the working week as a start and end time
   per day (a shift may run past midnight, for the night crew), the categories they cover, hourly rate
 - `IssueAssignee`: who is on a job — up to four per issue, the lead mirrored from `Issue.technicianId`
-- `TimeOff`: a technician away from a start day to an end day, with the kind and an optional note
+- `TimeOff`: a team member away from a start day to an end day, with the kind and an optional note
 - `Tag` / `IssueTag`: the tag list and which issues carry which tags
 - `Contractor`: name, trade, phone, email, notes, active flag
 - `Issue`: title, description, action needed, priority, status, work order flag/number/EAM link,
-  lat/lng, closed-at timestamp (managed from the status), assigned technician,
+  lat/lng, closed-at timestamp (managed from the status), assigned team member,
   estimated/actual hours, start date, due date and the deadline behind it, place in the assigned
-  technician's day, whether it is an emergency and which emergency (if any) pushed it back,
+  team member's day, whether it is an emergency and which emergency (if any) pushed it back,
   category, room, when it was last escalated, and the schedule that created it; belongs to a property
 - `Message`: one line of an issue's conversation — the author's login and name as it stood at
   the time, the text, when it was posted and when it was last edited
@@ -1171,7 +1177,7 @@ for a file. Tip: give the map a second to finish loading imagery before printing
 - `InspectionTemplate` / `InspectionSection` / `InspectionPoint`: a checklist — its sections, and the
   points in each, with the line saying what "right" looks like and the issue category it maps to
 - `Inspection`: one walk of one room — the property, the checklist used and its name as it stood at
-  the time, the room, the login that entered it and the technician who walked it, where the phone
+  the time, the room, the login that entered it and the team member who walked it, where the phone
   said it was, status, when it started and finished
 - `InspectionCheck`: one line of that walk — the point it came from (or nothing, if it was found on
   the walk), the section and label copied at the time, the outcome, severity, note, and the issue it
@@ -1221,7 +1227,7 @@ imagery resolution isn't sufficient for your properties.
 ## Known limitations (MVP scope)
 
 - **One organisation.** Roles separate what people can *do*, not what they can *see*: every
-  technician can see every property and issue. There's no tenant separation, and no per-property
+  team member can see every property and issue. There's no tenant separation, and no per-property
   access control.
 - **No automated test suite in the repo.** Each feature was verified end-to-end with a browser
   driving the real app, but those runs aren't checked in, so there's nothing for CI to run.

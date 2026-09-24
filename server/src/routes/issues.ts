@@ -74,9 +74,9 @@ function parseDate(value: unknown, field: string): Date | null | undefined {
 async function parseTechnicianId(value: unknown): Promise<string | null | undefined> {
   if (value === undefined) return undefined;
   if (value === null || value === "") return null;
-  if (typeof value !== "string") throw new ValidationError("invalid technician");
+  if (typeof value !== "string") throw new ValidationError("invalid team member");
   const tech = await prisma.technician.findUnique({ where: { id: value } });
-  if (!tech) throw new ValidationError("technician not found");
+  if (!tech) throw new ValidationError("team member not found");
   return tech.id;
 }
 
@@ -497,7 +497,7 @@ issuesRouter.delete("/:id", requires("issue.delete"), async (req, res) => {
 
 // ---- Checklist steps -------------------------------------------------------
 
-// Loads the issue and applies the same "technicians only touch their own work" rule as edits.
+// Loads the issue and applies the same "team members only touch their own work" rule as edits.
 async function issueForEdit(req: Parameters<typeof issuesRouter.get>[1] extends never ? never : any, res: any, id: string) {
   const issue = await prisma.issue.findUnique({ where: { id } });
   if (!issue) {

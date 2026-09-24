@@ -50,9 +50,9 @@ usersRouter.post("/", async (req, res) => {
 
   let linkedTechnicianId: string | null = null;
   if (role === "technician") {
-    if (!technicianId || typeof technicianId !== "string") return res.status(400).json({ error: "Pick the technician this login belongs to." });
+    if (!technicianId || typeof technicianId !== "string") return res.status(400).json({ error: "Pick the team member this login belongs to." });
     const tech = await prisma.technician.findUnique({ where: { id: technicianId }, include: { user: true } });
-    if (!tech) return res.status(404).json({ error: "technician not found" });
+    if (!tech) return res.status(404).json({ error: "team member not found" });
     if (tech.user) return res.status(409).json({ error: `${tech.name} already has a login (${tech.user.username}).` });
     linkedTechnicianId = tech.id;
   }
@@ -109,13 +109,13 @@ usersRouter.put("/:id", async (req, res) => {
   if (nextRole !== "technician") {
     nextTechnicianId = null;
   } else if (technicianId !== undefined) {
-    if (technicianId === null || technicianId === "") return res.status(400).json({ error: "A technician login must be linked to a technician." });
+    if (technicianId === null || technicianId === "") return res.status(400).json({ error: "A team member login must be linked to a team member." });
     const tech = await prisma.technician.findUnique({ where: { id: technicianId }, include: { user: true } });
-    if (!tech) return res.status(404).json({ error: "technician not found" });
+    if (!tech) return res.status(404).json({ error: "team member not found" });
     if (tech.user && tech.user.id !== existing.id) return res.status(409).json({ error: `${tech.name} already has a login.` });
     nextTechnicianId = tech.id;
   } else if (existing.role !== "technician") {
-    return res.status(400).json({ error: "Pick the technician this login belongs to." });
+    return res.status(400).json({ error: "Pick the team member this login belongs to." });
   }
 
   const user = await prisma.user.update({

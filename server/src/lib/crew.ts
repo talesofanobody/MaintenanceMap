@@ -20,11 +20,11 @@ export async function resolveAssignees(body: Record<string, any>): Promise<strin
 
   const ids = [...new Set(given.map(String).filter(Boolean))];
   if (ids.length > MAX_ASSIGNEES) {
-    throw new ValidationError(`An issue can have at most ${MAX_ASSIGNEES} technicians on it.`);
+    throw new ValidationError(`An issue can have at most ${MAX_ASSIGNEES} team members on it.`);
   }
   if (ids.length === 0) return [];
   const found = await prisma.technician.findMany({ where: { id: { in: ids } }, select: { id: true } });
-  if (found.length !== ids.length) throw new ValidationError("one or more technicians no longer exist");
+  if (found.length !== ids.length) throw new ValidationError("one or more team members no longer exist");
   // Keep the caller's order: the first is the lead.
   return ids;
 }

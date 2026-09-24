@@ -76,7 +76,7 @@ export default function Access() {
     const tech = technicians.find((t) => t.id === techForm.technicianId);
     await run("Create login", async () => {
       await api.createUser({ username: techForm.username.trim(), password, role: "technician", technicianId: techForm.technicianId });
-      setReveal({ username: techForm.username.trim(), password, label: tech?.name ?? "the technician" });
+      setReveal({ username: techForm.username.trim(), password, label: tech?.name ?? "the team member" });
       setTechForm(null);
     });
   }
@@ -157,7 +157,7 @@ export default function Access() {
         <div>
           <h1>Access</h1>
           <p className="muted">
-            Who can sign in and what they can do. <strong>Admins</strong> manage everything; <strong>technicians</strong> see all properties but only update
+            Who can sign in and what they can do. <strong>Admins</strong> manage everything; <strong>team members</strong> see all properties but only update
             issues assigned to them; <strong>display</strong> logins can only show the dashboards — use one on the office TV.
           </p>
         </div>
@@ -195,22 +195,22 @@ export default function Access() {
         <>
           <section className="access-section">
             <div className="access-section-head">
-              <h2>Technician logins</h2>
+              <h2>Team member logins</h2>
               {techsWithoutLogin.length > 0 && !techForm && (
                 <button
                   type="button"
                   className="btn btn-primary btn-small"
                   onClick={() => setTechForm({ technicianId: techsWithoutLogin[0].id, username: suggestUsername(techsWithoutLogin[0].name) })}
                 >
-                  + Create technician login
+                  + Create team member login
                 </button>
               )}
             </div>
             {techForm && (
               <form className="card form property-form" onSubmit={createTechLogin}>
-                <h3>New technician login</h3>
+                <h3>New team member login</h3>
                 <label>
-                  Technician
+                  Team member
                   <select
                     value={techForm.technicianId}
                     onChange={(e) => {
@@ -244,10 +244,10 @@ export default function Access() {
             {techUsers.length === 0 && !techForm ? (
               <p className="empty-state">
                 {technicians.length === 0
-                  ? "Add technicians first, then create logins for them here."
+                  ? "Add team members first, then create logins for them here."
                   : techsWithoutLogin.length === 0
-                    ? "Every technician has a login."
-                    : "No technician logins yet. Technicians with a login can update their own issues from their phone."}
+                    ? "Every team member has a login."
+                    : "No team member logins yet. Team members with a login can update their own issues from their phone."}
               </p>
             ) : (
               <ul className="user-list">

@@ -106,14 +106,14 @@ scheduleRouter.put("/assign", requires("issue.assign"), async (req, res) => {
 
   if (technicianId) {
     const tech = await prisma.technician.findUnique({ where: { id: technicianId }, select: { id: true, name: true, active: true } });
-    if (!tech) return res.status(404).json({ error: "technician not found" });
-    if (!tech.active) return res.status(400).json({ error: `${tech.name} is not an active technician.` });
+    if (!tech) return res.status(404).json({ error: "team member not found" });
+    if (!tech.active) return res.status(400).json({ error: `${tech.name} is not an active team member.` });
     // Booking someone onto a day they are away is nearly always a mistake, so it is
     // refused rather than quietly accepted.
     if (day) {
       const calendar = await TimeOffCalendar.forWindow(day, day);
       const off = calendar.on(technicianId, day);
-      if (off) return res.status(400).json({ error: `${tech.name} is away on ${day} (${off.kind}). Pick another day or another technician.` });
+      if (off) return res.status(400).json({ error: `${tech.name} is away on ${day} (${off.kind}). Pick another day or another team member.` });
     }
   }
 
@@ -172,7 +172,7 @@ scheduleRouter.post("/emergency", requires("issue.assign"), async (req, res) => 
     prisma.technician.findUnique({ where: { id: technicianId }, select: { id: true, name: true, active: true } }),
   ]);
   if (!issue) return res.status(404).json({ error: "issue not found" });
-  if (!tech) return res.status(404).json({ error: "technician not found" });
+  if (!tech) return res.status(404).json({ error: "team member not found" });
   if (!OPEN_STATUSES.includes(issue.status as any)) return res.status(400).json({ error: "That issue is already closed." });
 
   const { displaced } = await insertEmergency({ issueId, technicianId, day, position: Number.isFinite(position) ? position : 0 });

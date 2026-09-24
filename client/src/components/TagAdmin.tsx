@@ -140,7 +140,7 @@ export default function TagAdmin() {
       <details className="category-list">
         <summary>The {CATEGORIES.length} categories issues can belong to</summary>
         <p className="muted small">
-          Categories are fixed, because they drive who gets suggested for a job. Set which ones each person covers on the Technicians page.
+          Categories are fixed, because they drive who gets suggested for a job. Set which ones each person covers on the Team page.
         </p>
         <div className="tag-picker">
           {CATEGORIES.map((c) => (

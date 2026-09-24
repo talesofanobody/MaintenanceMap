@@ -101,7 +101,7 @@ export async function createOccurrence(scheduleId: string, opts: { force?: boole
   if (techUser) {
     await notifyUsers([techUser], { ...meta, kind: "assigned", title: `Scheduled job: ${issue.title}`, body: line }, opts.actor ?? null);
   } else {
-    await notifyUsers(await adminUserIds(), { ...meta, kind: "unassigned", title: `Scheduled job needs a technician: ${issue.title}`, body: line }, opts.actor ?? null);
+    await notifyUsers(await adminUserIds(), { ...meta, kind: "unassigned", title: `Scheduled job needs a team member: ${issue.title}`, body: line }, opts.actor ?? null);
   }
   return issue;
 }

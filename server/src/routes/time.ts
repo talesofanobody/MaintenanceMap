@@ -69,7 +69,7 @@ timeRouter.get("/open", async (req, res) => {
 timeRouter.post("/clock-in", requires("issue.write"), async (req, res) => {
   const { issueId } = req.body;
   const technicianId = resolveTechnicianId(req, req.body.technicianId);
-  if (!technicianId) return res.status(400).json({ error: "This login isn't linked to a technician, so it can't clock in." });
+  if (!technicianId) return res.status(400).json({ error: "This login isn't linked to a team member, so it can't clock in." });
   if (!issueId || typeof issueId !== "string") return res.status(400).json({ error: "issueId is required" });
 
   const issue = await prisma.issue.findUnique({ where: { id: issueId } });
@@ -82,7 +82,7 @@ timeRouter.post("/clock-in", requires("issue.write"), async (req, res) => {
     return res.status(403).json({ error: "That issue is assigned to someone else." });
   }
   const technician = await prisma.technician.findUnique({ where: { id: technicianId } });
-  if (!technician || !technician.active) return res.status(400).json({ error: "Technician not found or inactive." });
+  if (!technician || !technician.active) return res.status(400).json({ error: "Team member not found or inactive." });
 
   // Only one job at a time: clocking in elsewhere closes the running entry.
   const running = await openEntryFor(technicianId);
@@ -126,7 +126,7 @@ timeRouter.post("/clock-in", requires("issue.write"), async (req, res) => {
 
 timeRouter.post("/clock-out", requires("issue.write"), async (req, res) => {
   const technicianId = resolveTechnicianId(req, req.body.technicianId);
-  if (!technicianId) return res.status(400).json({ error: "This login isn't linked to a technician." });
+  if (!technicianId) return res.status(400).json({ error: "This login isn't linked to a team member." });
   const running = await openEntryFor(technicianId);
   if (!running) return res.status(404).json({ error: "Not clocked in." });
   const note = typeof req.body.note === "string" && req.body.note.trim() ? req.body.note.trim().slice(0, 500) : null;

@@ -97,7 +97,7 @@ export default function Planner() {
     return (
       <div className="page">
         <h1>Plan a day</h1>
-        <p className="empty-state">Your login isn't linked to a technician, so there's no day to plan.</p>
+        <p className="empty-state">Your login isn't linked to a team member, so there's no day to plan.</p>
       </div>
     );
   }
@@ -117,7 +117,7 @@ export default function Planner() {
         <div className="planner-controls">
           {isAdmin && technicians.length > 0 && (
             <label>
-              Technician
+              Team member
               <select value={technicianId} onChange={(e) => setParam("tech", e.target.value)}>
                 {technicians.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -148,7 +148,7 @@ export default function Planner() {
       {loading ? (
         <p className="loading-state">Building the plan…</p>
       ) : !plan ? (
-        <p className="empty-state">Add a technician first.</p>
+        <p className="empty-state">Add a team member first.</p>
       ) : (
         <>
           <div className="planner-summary card">

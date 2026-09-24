@@ -56,7 +56,7 @@ techniciansRouter.post("/", requires("technician.write"), async (req, res) => {
         active: active === undefined ? true : !!active,
       },
     });
-    await logActivity(req, { action: "technician.created", entityType: "technician", entityId: technician.id, summary: `Added technician ${technician.name}` });
+    await logActivity(req, { action: "technician.created", entityType: "technician", entityId: technician.id, summary: `Added team member ${technician.name}` });
     res.status(201).json({ ...serializeTechnician(technician), assignments: [] });
   } catch (err) {
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
@@ -92,7 +92,7 @@ techniciansRouter.put("/:id", requires("technician.write"), async (req, res) => 
       action: "technician.updated",
       entityType: "technician",
       entityId: technician.id,
-      summary: `Updated technician ${technician.name}${parsedHours ? " (working hours)" : ""}${active !== undefined ? (active ? " (activated)" : " (deactivated)") : ""}`,
+      summary: `Updated team member ${technician.name}${parsedHours ? " (working hours)" : ""}${active !== undefined ? (active ? " (activated)" : " (deactivated)") : ""}`,
     });
     res.json({ ...serializeTechnician(rest), assignments: issues });
   } catch (err) {
@@ -104,7 +104,7 @@ techniciansRouter.put("/:id", requires("technician.write"), async (req, res) => 
 techniciansRouter.delete("/:id", requires("technician.delete"), async (req, res) => {
   try {
     const technician = await prisma.technician.delete({ where: { id: req.params.id } });
-    await logActivity(req, { action: "technician.deleted", entityType: "technician", entityId: technician.id, summary: `Removed technician ${technician.name}` });
+    await logActivity(req, { action: "technician.deleted", entityType: "technician", entityId: technician.id, summary: `Removed team member ${technician.name}` });
     res.status(204).end();
   } catch {
     res.status(404).json({ error: "not found" });

@@ -91,7 +91,7 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
             <NavLink to="/properties">Properties</NavLink>
             <NavLink to="/inspections">Inspections</NavLink>
             {can("project.write") && <NavLink to="/projects">Projects</NavLink>}
-            {can("technician.write") && <NavLink to="/technicians">Technicians</NavLink>}
+            {can("technician.write") && <NavLink to="/team">Team</NavLink>}
             {can("issue.assign") && <NavLink to="/scheduler">Scheduler</NavLink>}
             {can("issue.assign") && <NavLink to="/crew">Crew map</NavLink>}
             {can("schedule.write") && <NavLink to="/schedules">Schedules</NavLink>}
@@ -188,8 +188,12 @@ function AppRoutes() {
           <Route path="/inspections/:id/report" element={<InspectionReport />} />
           {able("project.write") && <Route path="/projects" element={<Projects />} />}
           <Route path="/account" element={<Account />} />
-          {able("technician.write") && <Route path="/technicians" element={<Technicians />} />}
-          {able("technician.write") && <Route path="/technicians/rota" element={<Rota />} />}
+          {able("technician.write") && <Route path="/team" element={<Technicians />} />}
+          {able("technician.write") && <Route path="/team/rota" element={<Rota />} />}
+          {/* The page was called Technicians until the team grew past the trades.
+              Anyone's bookmark or pinned tab still lands in the right place. */}
+          <Route path="/technicians" element={<Navigate to="/team" replace />} />
+          <Route path="/technicians/rota" element={<Navigate to="/team/rota" replace />} />
           {able("issue.assign") && <Route path="/scheduler" element={<Scheduler />} />}
           {able("issue.assign") && <Route path="/crew" element={<CrewMap />} />}
           {able("schedule.write") && <Route path="/schedules" element={<Schedules />} />}

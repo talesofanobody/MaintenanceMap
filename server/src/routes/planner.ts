@@ -19,25 +19,25 @@ function resolveTechnicianId(req: any, requested: unknown): string | null {
 
 plannerRouter.get("/", async (req, res) => {
   const technicianId = resolveTechnicianId(req, req.query.technicianId);
-  if (!technicianId) return res.status(400).json({ error: "Pick a technician to plan for." });
+  if (!technicianId) return res.status(400).json({ error: "Pick a team member to plan for." });
   const day = typeof req.query.day === "string" && DATE_ONLY.test(req.query.day) ? req.query.day : dayFrom(new Date(), 0);
   const propertyId = typeof req.query.propertyId === "string" && req.query.propertyId ? req.query.propertyId : undefined;
   const plan = await planDay(technicianId, day, { propertyId });
-  if (!plan) return res.status(404).json({ error: "Technician not found" });
+  if (!plan) return res.status(404).json({ error: "Team member not found" });
   res.json(plan);
 });
 
 // Pins the chosen jobs to the day and assigns them to the technician.
 plannerRouter.post("/apply", requires("issue.assign"), async (req, res) => {
   const technicianId = resolveTechnicianId(req, req.body.technicianId);
-  if (!technicianId) return res.status(400).json({ error: "Pick a technician to plan for." });
+  if (!technicianId) return res.status(400).json({ error: "Pick a team member to plan for." });
   const { day, issueIds } = req.body;
   if (typeof day !== "string" || !DATE_ONLY.test(day)) return res.status(400).json({ error: "day must be YYYY-MM-DD" });
   if (!Array.isArray(issueIds) || issueIds.some((id) => typeof id !== "string")) return res.status(400).json({ error: "issueIds must be a list of issue ids" });
   if (issueIds.length === 0) return res.status(400).json({ error: "Pick at least one job." });
 
   const technician = await prisma.technician.findUnique({ where: { id: technicianId } });
-  if (!technician) return res.status(404).json({ error: "Technician not found" });
+  if (!technician) return res.status(404).json({ error: "Team member not found" });
 
   const issues = await prisma.issue.findMany({ where: { id: { in: issueIds }, status: { in: OPEN_STATUSES } }, include: { property: { select: { name: true } } } });
   if (issues.length === 0) return res.status(400).json({ error: "None of those jobs are open." });
