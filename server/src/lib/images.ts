@@ -24,6 +24,17 @@ export interface StoredImage {
 // Normalises any accepted upload into web-friendly JPEGs: HEIC is decoded first,
 // EXIF orientation is baked in, and a capped full-size + a thumbnail are written.
 export async function storeImage(buffer: Buffer, originalName: string): Promise<StoredImage> {
+  /**
+   * Time every photo, out loud.
+   *
+   * Every conversation about this being slow has been somebody's impression
+   * against somebody else's benchmark, with no way to settle it. One line per
+   * photo in the deploy log ends that: it says what arrived, what came out, and
+   * how long the server actually held it. If the number is small and it still
+   * feels slow, the time is going on the wire and no amount of server is the
+   * answer.
+   */
+  const started = Date.now();
   let source: Buffer = buffer;
   if (isHeic(buffer, originalName)) {
     source = Buffer.from(await convert({ buffer, format: "JPEG", quality: 0.92 }));
@@ -63,6 +74,13 @@ export async function storeImage(buffer: Buffer, originalName: string): Promise<
     .resize({ width: 480, height: 480, fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 78 })
     .toFile(path.join(UPLOADS_DIR, thumbFilename));
+
+  const ms = Date.now() - started;
+  const kb = (n: number) => `${Math.round(n / 1024)}KB`;
+  console.log(
+    `photo stored in ${ms}ms — ${kb(buffer.length)} in, ${kb(full.length)} out` +
+      `${source !== buffer ? " (HEIC decoded)" : ""}`
+  );
 
   return { filename, thumbFilename };
 }
