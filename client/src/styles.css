@@ -7696,7 +7696,22 @@ table th {
 
 .app-nav {
   position: fixed;
-  z-index: 70;
+  /**
+   * Above the map.
+   *
+   * Leaflet puts its panes at 400 and its controls at up to 1000, all of which
+   * compete in the page's root stacking context — so a drawer at 70 slid out
+   * underneath the map and looked broken on exactly the pages that matter most.
+   * The rest of the app's furniture tops out at 1200 (modals, the bell) and the
+   * lightbox owns 3000. This sits between them.
+   *
+   *   page furniture, map, modals   <= 1200
+   *   nav scrim                        1400
+   *   nav drawer                       1500
+   *   app header, while the menu is open  1600
+   *   lightbox                         3000
+   */
+  z-index: 1500;
   top: 0;
   left: 0;
   bottom: 0;
@@ -7801,11 +7816,20 @@ table th {
 .nav-scrim {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 1400;
   background: rgba(0, 0, 0, 0.22);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--normal) var(--ease);
+}
+
+/**
+ * The burger has to stay reachable and readable while the drawer is open —
+ * it is the close button. Lifted only for that moment, so a modal backdrop
+ * still covers the header the rest of the time.
+ */
+.is-menu-open .app-header {
+  z-index: 1600;
 }
 
 .is-menu-open .nav-scrim {

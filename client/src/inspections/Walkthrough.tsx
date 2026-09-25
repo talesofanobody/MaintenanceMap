@@ -130,10 +130,27 @@ export default function Walkthrough() {
     setError(null);
     setBusy(`Sending ${files.length} photo${files.length === 1 ? "" : "s"}…`);
     try {
-      // Shrink on the phone where the browser can read the metadata first; send
-      // the original when it cannot, so the server's better reader gets a chance.
       const prepared = await Promise.all(Array.from(files).map((f) => preparePhoto(f)));
-      await api.addWalkthroughPhotos(walk.id, prepared.map((p) => p.file));
+
+      /**
+       * Shrinking costs the photo its EXIF, so its position has to travel beside
+       * it. Where the photo had none of its own, the phone's does instead — one
+       * fix for the batch, taken only if permission is already given, because a
+       * permission prompt between someone and the shot they just took is how
+       * people stop taking them.
+       */
+      let fix: { lat: number; lng: number } | null = null;
+      if (prepared.some((p) => p.gpsLat == null) && locationAllowedHere() && (await locationAlreadyGranted())) {
+        fix = await getFix(4000).then((f) => ({ lat: f.lat, lng: f.lng })).catch(() => null);
+      }
+      const places = prepared.map((p) =>
+        p.gpsLat != null && p.gpsLng != null
+          ? { lat: p.gpsLat, lng: p.gpsLng, source: "exif" as const, takenAt: p.takenAt }
+          : fix
+            ? { lat: fix.lat, lng: fix.lng, source: "device" as const, takenAt: p.takenAt }
+            : null
+      );
+      await api.addWalkthroughPhotos(walk.id, prepared.map((p) => p.file), places);
       load();
     } catch (e) {
       setError((e as Error).message);

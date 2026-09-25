@@ -92,9 +92,17 @@ export const api = {
   getWalkthrough: (id: string) => request<Walkthrough>(`/walkthroughs/${id}`),
   startWalkthrough: (data: { propertyId: string; technicianId?: string; lat?: number; lng?: number }) =>
     request<Walkthrough>("/walkthroughs", { method: "POST", body: JSON.stringify(data) }),
-  addWalkthroughPhotos: (id: string, files: File[]) => {
+  addWalkthroughPhotos: (
+    id: string,
+    files: File[],
+    /** One entry per file, in the same order. Null where nothing is known. */
+    places?: ({ lat: number; lng: number; source: "exif" | "device"; takenAt?: string | null } | null)[]
+  ) => {
     const form = new FormData();
     for (const file of files) form.append("photos", file);
+    // Shrinking on the phone throws the EXIF away, so whatever was read off the
+    // original — or the phone's own fix — travels beside the files instead.
+    if (places?.some(Boolean)) form.append("places", JSON.stringify(places));
     return request<Photo[]>(`/walkthroughs/${id}/photos`, { method: "POST", body: form });
   },
   groupWalkthroughPhotos: (id: string, photoIds: string[], extra?: { title?: string; roomName?: string }) =>

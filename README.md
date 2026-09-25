@@ -661,6 +661,29 @@ thumbnail. **Delete** removes the issue and its photos (with a confirmation prom
 The status and priority dropdowns filter which pins are shown; a small banner tells you how many
 are hidden. It's a view-only filter — the report always includes every issue.
 
+### Why photos are quick now
+
+Three numbers, measured on four cores with a real 4032×3024 phone photo (8.7MB):
+
+| | before | after |
+| --- | --- | --- |
+| On the wire, 5 Mbps uplink | 14.0s | 2.2s |
+| Server decode + resize + encode | 1345ms | 243ms |
+| Peak memory per photo | 248MB | 155MB |
+
+The wire was the problem, and no amount of server memory fixes a wire. The device now shrinks every
+photo it can decode to 2048px before sending — it used to send the original whenever it could not
+parse the photo's metadata, which protected a location at a cost of twelve extra seconds a shot.
+
+Server side, the original was being decoded **twice**: cloning one `sharp` instance runs it as two
+pipelines, so the full size and the thumbnail each decoded 12 megapixels. The thumbnail is now made
+from the already-resized image. `mozjpeg` is also gone — it compresses about 10% better for roughly
+five times the CPU, which is a bad trade on a small container.
+
+Shrinking strips the EXIF, so a photo's position now travels beside the file: what the browser read
+off the original, or the phone's own fix where it could not. `gpsSource` still records which, because
+a camera's fix and a phone's are not the same thing.
+
 ### Walk-throughs
 
 Nobody writes up a finding while standing in front of it. They photograph it and move on, because

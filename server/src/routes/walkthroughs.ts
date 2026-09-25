@@ -120,10 +120,33 @@ walkthroughsRouter.post("/:id/photos", requires("inspection.run"), (req, res, ne
   const files = (req.files as Express.Multer.File[] | undefined) ?? [];
   if (!files.length) return res.status(400).json({ error: "No photos were sent." });
 
+  /**
+   * What the phone knew, one entry per file in the same order.
+   *
+   * A photo shrunk on the device arrives with its EXIF gone, so the client sends
+   * what it read off the original — or, where it could read nothing, the phone's
+   * own position. Anything still carrying EXIF is read here as before, and that
+   * reading wins: the camera's own fix is the honest one.
+   */
+  let places: ({ lat?: number; lng?: number; source?: string; takenAt?: string | null } | null)[] = [];
+  if (typeof req.body?.places === "string") {
+    try {
+      const parsed = JSON.parse(req.body.places);
+      if (Array.isArray(parsed)) places = parsed;
+    } catch {
+      // Malformed is the same as absent: the photos still matter more.
+    }
+  }
+
   const made = [];
-  for (const file of files) {
-    // Read the metadata off the original: resizing throws it away.
+  for (const [index, file] of files.entries()) {
+    // Read the metadata off whatever arrived; a shrunk file will have none.
     const exif = await readExif(file.buffer);
+    const told = places[index];
+    const hasTold = told && typeof told.lat === "number" && typeof told.lng === "number";
+    const lat = exif.hasGps ? exif.gpsLat : hasTold ? told!.lat! : null;
+    const lng = exif.hasGps ? exif.gpsLng : hasTold ? told!.lng! : null;
+    const source = exif.hasGps ? "exif" : hasTold ? (told!.source === "device" ? "device" : "exif") : null;
     let stored;
     try {
       stored = await storeImage(file.buffer, file.originalname);
@@ -137,11 +160,11 @@ walkthroughsRouter.post("/:id/photos", requires("inspection.run"), (req, res, ne
           walkthroughId: walk.id,
           filename: stored.filename,
           thumbFilename: stored.thumbFilename,
-          hasGps: exif.hasGps,
-          gpsLat: exif.gpsLat,
-          gpsLng: exif.gpsLng,
-          gpsSource: exif.hasGps ? "exif" : null,
-          takenAt: exif.takenAt,
+          hasGps: lat !== null && lng !== null,
+          gpsLat: lat,
+          gpsLng: lng,
+          gpsSource: source,
+          takenAt: exif.takenAt ?? (told?.takenAt ? new Date(told.takenAt) : null),
         },
       })
     );

@@ -13,10 +13,10 @@ import { readPhotoMeta } from "./photoMeta";
  * alongside the smaller file.
  *
  * Anything the browser cannot decode — HEIC outside Safari, mostly — is sent
- * untouched and the server handles it exactly as before. So is anything whose
- * metadata could not be read: the server's reader is the reference one, and it
- * is better to spend the bandwidth than to shrink a photo's location away and
- * leave nobody able to recover it.
+ * untouched, because there is nothing else to be done with it and the server
+ * handles it exactly as before. Everything it can decode is shrunk, whether or
+ * not the metadata came out, and `metaRead` says which happened so the caller
+ * can supply the phone's fix instead.
  */
 export interface PreparedPhoto {
   file: File;
@@ -26,6 +26,12 @@ export interface PreparedPhoto {
   takenAt: string | null;
   /** False when the original is being sent as-is. */
   shrunk: boolean;
+  /**
+   * Whether the photo's own metadata could be parsed. False means the location
+   * has to come from somewhere else — the phone's fix — because the resize has
+   * now thrown the original's away.
+   */
+  metaRead: boolean;
 }
 
 const MAX_EDGE = 2048;
@@ -43,7 +49,7 @@ function canvasToFile(canvas: HTMLCanvasElement, name: string): Promise<File | n
 }
 
 export async function preparePhoto(file: File): Promise<PreparedPhoto> {
-  const untouched: PreparedPhoto = { file, gpsLat: null, gpsLng: null, takenAt: null, shrunk: false };
+  const untouched: PreparedPhoto = { file, gpsLat: null, gpsLng: null, takenAt: null, shrunk: false, metaRead: false };
 
   let bitmap: ImageBitmap;
   try {
@@ -60,12 +66,22 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
     return untouched;
   }
 
+  /**
+   * Read what we can, then shrink regardless.
+   *
+   * This used to send the original whenever the metadata could not be parsed, on
+   * the grounds that the server's reader is better and it was worth the bandwidth
+   * to keep a photo's location recoverable. Measured, that trade was far worse
+   * than it looked: a 12MP phone photo is 8.7MB, which is fourteen seconds on a
+   * hotel's uplink against two for the shrunk version. Nobody stands in a
+   * corridor for fourteen seconds a photo, and on a walk of thirty that is seven
+   * minutes of waiting to protect a location that the walk already knows.
+   *
+   * So: always shrink, and tell the caller whether anything was read. Where it
+   * was not, the caller has the phone's own fix to fall back on, which is what
+   * every screen that takes photos now holds anyway.
+   */
   const meta = await readPhotoMeta(file);
-  // Could not read it, so do not destroy it. The server tries harder than we can.
-  if (!meta.read) {
-    bitmap.close();
-    return untouched;
-  }
 
   const scale = Math.min(1, MAX_EDGE / longest);
   const canvas = document.createElement("canvas");
@@ -81,6 +97,6 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
 
   const shrunk = await canvasToFile(canvas, file.name || "photo.jpg");
   // A small original re-encoded can come out larger; keep whichever is smaller.
-  if (!shrunk || shrunk.size >= file.size) return untouched;
-  return { file: shrunk, gpsLat: meta.gpsLat, gpsLng: meta.gpsLng, takenAt: meta.takenAt, shrunk: true };
+  if (!shrunk || shrunk.size >= file.size) return { ...untouched, gpsLat: meta.gpsLat, gpsLng: meta.gpsLng, takenAt: meta.takenAt, metaRead: meta.read };
+  return { file: shrunk, gpsLat: meta.gpsLat, gpsLng: meta.gpsLng, takenAt: meta.takenAt, shrunk: true, metaRead: meta.read };
 }
