@@ -441,6 +441,12 @@ model InspectionTemplate {
   /// Lets a later release add the points experience says were missing, without
   /// reinstating anything somebody deliberately took out.
   seedVersion Int                 @default(0)
+  /// "checklist" walks a fixed list of points. "general" has no list at all —
+  /// blank slots the person fills in as they find things.
+  kind        String              @default("checklist")
+  /// What to show in the empty area field, since a room number and a poolside
+  /// are both areas but nobody types them the same way.
+  areaHint    String?
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
   sections    InspectionSection[]
@@ -505,6 +511,13 @@ model Inspection {
   /// has been changed since it was first signed off has to say so, or a printed
   /// copy and the live one disagree with nobody able to tell which is current.
   amendedAt    DateTime?
+  /// When the walk was archived: closed off as a record, with its raw photos
+  /// released unless an issue still needs them.
+  archivedAt   DateTime?
+  /// What the walk found, frozen as JSON at the moment of archiving. The report
+  /// reads from this afterwards, so it keeps saying the same thing on the same
+  /// date once the photographs behind it are gone.
+  summary      String?
   checks       InspectionCheck[]
 
   @@index([propertyId, startedAt])
@@ -531,6 +544,10 @@ model InspectionCheck {
   /// minor | moderate | major, on a flagged line.
   severity     String?
   note         String?
+  /// Where this particular finding is. A checklist walk gets its area from the
+  /// inspection, because the whole walk is one room; a general walk covers
+  /// ground, so each finding carries its own.
+  area         String?
   position     Int        @default(0)
   /// Set once this finding has been turned into work.
   issueId      String?    @unique

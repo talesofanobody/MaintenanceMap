@@ -163,16 +163,25 @@ export default function Inspections() {
             </select>
           </label>
           <label>
-            Room
-            <input value={roomName} onChange={(e) => setRoomName(e.target.value)} maxLength={120} placeholder="Room 214" required />
+            Area
+            {/* The hint comes from the type: a room number and a poolside are
+                both areas, but nobody types them the same way. */}
+            <input
+              value={roomName}
+              onChange={(e) => setRoomName(e.target.value)}
+              maxLength={120}
+              placeholder={chosenTemplate?.areaHint ?? "Room 214"}
+              required
+            />
           </label>
           <label>
-            Checklist
+            Type
             <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
               {templates.length === 0 && <option value="">No checklist — findings only</option>}
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.name} ({t.pointCount} points)
+                  {t.name}
+                  {t.kind === "general" ? " — no checklist" : ` (${t.pointCount} points)`}
                 </option>
               ))}
             </select>
@@ -265,6 +274,7 @@ export default function Inspections() {
                 <Link to={i.status === "in_progress" ? `/inspections/${i.id}` : `/inspections/${i.id}/report`} className="insp-card-title">
                   {i.roomName}
                 </Link>
+                {i.archivedAt && <span className="insp-archived-tag">archived</span>}
                 <p className="muted small">
                   {i.property.name} · {i.templateName} · {i.inspector} · {formatDateTime(i.startedAt)}
                 </p>
@@ -289,7 +299,7 @@ export default function Inspections() {
                 </Link>
                 {/* A finished walk was reachable only through its report, which is a
                     read-only page — so the amend screen existed with no way in. */}
-                {i.status !== "in_progress" && can("inspection.amend") && (
+                {i.status !== "in_progress" && !i.archivedAt && can("inspection.amend") && (
                   <Link to={`/inspections/${i.id}`} className="btn btn-secondary btn-small">
                     Amend
                   </Link>

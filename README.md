@@ -458,21 +458,30 @@ automatically. Each tick records who did it and when, the panel shows a progress
 shows a ☑ 2/5 count, and the property report prints the list with its ticks. Marking an issue
 completed with steps still unticked asks you to confirm first.
 
-### Room inspections
+### Inspections
 
-**Inspections** is the detailed walk: go into a room with a checklist, look at every item on it, and
+**Inspections** is the detailed walk: go into an area with a checklist, look at every item on it, and
 record what is not right.
 
-Start one from **Inspections** — pick the property, type the room and choose a checklist. A
+Start one from **Inspections** — pick the property, type the **area** and choose a **type**. A
 team member's walk is recorded against them automatically; an admin is also asked **who walked it**,
 so a round done on paper can be typed up and still credited to the person who did it. The report
-names them rather than the login that entered it. Two come
-with the app and can be edited or replaced:
+names them rather than the login that entered it.
+
+The field is called area rather than room because half of what gets walked is not one. A guest room
+is "214"; a poolside is "Pool deck, west end". The greyed-out example in the field follows the type
+you picked, so it shows the shape of answer that type expects rather than one fixed suggestion.
+
+Three types come with the app, and they can be edited or replaced:
 
 - **Guest room** — 82 points across door and entry, bathroom, bedroom, air conditioning, windows and
   balcony, finishes, private pool or hot tub, and safety
 - **Public area** — 19 points across approach and entrance, floors and walls, lighting and signage,
   seating and fittings, and washrooms
+- **General** — no checklist at all. Ten empty slots, each taking an issue name, an area of its own
+  and a description, with the same camera and upload buttons as any other finding. For the walk
+  where nobody knows in advance what they are looking for: go round, write down what is wrong, and
+  turn it into work afterwards. Run out of slots and **+ Found something else** adds more.
 
 Every point carries a line saying what "right" looks like ("Full flush, refills quietly, no running
 after 60 seconds"), because the point of the exercise is the eye for detail, not the tick.
@@ -487,8 +496,12 @@ or reordered checklist is left alone entirely.
 The walk itself is built for a phone held in one hand. Each line has three targets — **Fine**,
 **Flag it**, **N/A** — sized for a thumb. Flagging a line opens **Minor / Moderate / Major**, a note
 box and two photo buttons. Everything saves as you touch it; there is no save button to forget.
-**Only what I flagged** hides the rest when you want to review what you have found, and
-**+ Found something else** records anything the checklist never thought of.
+**Only what I flagged** hides the rest when you want to review what you have found.
+
+**+ Found something else** records anything the checklist never thought of. It floats above the walk
+rather than sitting at the bottom of it, because the thing you notice on the way out is the thing you
+notice eighty lines from the button — and scrolling to the end of a guest-room checklist to log a
+cracked tile is how it ends up not logged.
 
 #### Photos
 
@@ -523,6 +536,19 @@ been allowed for the site, the walk does this by itself on opening and the butto
 but it is never demanded, and pressing **Start** never waits on a GPS fix, because a permission
 prompt or a slow satellite lock has no business standing between an inspector and the checklist.
 
+Once permission is given, the fix is kept warm for the length of the walk — refreshed quietly every
+forty-five seconds, and only ever replaced by a reading that is not meaningfully worse than the one
+in hand. A round takes twenty minutes and covers a building, and a fix taken at the front door is
+stale by the third floor. A stale fix is worse than none: it pins a finding somewhere the person
+never stood. This never raises a prompt of its own — if location was never allowed, nothing asks.
+
+Which of the two locations a photo gets is decided per photo, not per walk. The camera's own is
+preferred where the photo has one: it was recorded at the moment of the shot, by a device pointed at
+the thing. The phone's stands in where the photo carries nothing — but only when the fix is good to
+120 metres or better. A fix good to eight metres puts a pin on the right balcony; one good to four
+hundred puts it on a neighbouring street, which is a worse answer than admitting the photo has no
+location at all.
+
 When a finding becomes work, its pin is taken from the best thing available, in order:
 
 1. a photo the camera geotagged,
@@ -539,6 +565,13 @@ a photo.
 
 When the checklist was written it did not know about your building, so a line that does not apply is
 marked N/A rather than deleted — the report then shows it was considered.
+
+#### Correcting the header
+
+The property and the area are as easy to get wrong as anything on the list — a walk started against
+the wrong hotel, or "241" typed for 214. Both can be corrected in place on the walk itself, without
+reopening anything or starting again. The area is edited where it is shown; the property is a
+dropdown beside it. Neither touches a finding.
 
 #### Correcting a walk after it is finished
 
@@ -559,6 +592,32 @@ finding already recorded in that section stays exactly as it is.
 
 Starting an inspection copies the checklist's points onto it, so a report from six months ago still
 shows the questions that were actually asked, even if the checklist has since changed.
+
+#### Archiving a finished walk
+
+Photographs are what an inspection costs you. A forty-room round is several hundred of them, and
+most are of things that turned out to be fine or were fixed the same afternoon. Keeping every one
+for ever is how a self-hosted install fills its disk.
+
+**Archive** on a finished walk freezes the record and releases the photographs nothing else needs.
+What is kept, in full:
+
+- the property, the area, the type, who walked it and when, and whether it was amended
+- how many points were checked, how many flagged, how many raised as work
+- every finding, in order: its section, its line, its own area, the severity, the note, the category,
+  the issue it became, and how many photographs it had
+
+What goes is the image files behind findings that were never raised as work. A finding that became
+an issue moved its photographs onto that issue at the moment it was raised, so those are the issue's
+now and are not touched. What archiving deletes is evidence for a finding nobody acted on — and the
+summary still records, in words, that it existed and how many photographs it had.
+
+The report still prints after archiving, off the frozen record, so "this was the state of the room
+on that date" survives the photographs. Archiving is a one-way door: an archived walk cannot be
+reopened, amended, or archived twice, and says so plainly rather than half-working. Archive when the
+round is closed out, not while anything on it is still live.
+
+Archived walks are marked as such in the list, and **Amend** is not offered on them.
 
 #### The report
 

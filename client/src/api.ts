@@ -309,14 +309,16 @@ export const api = {
     for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
     return request<InspectionSummary[]>(`/inspections${q.toString() ? `?${q}` : ""}`);
   },
+  archiveInspection: (id: string) =>
+    request<{ inspection: Inspection; photosReleased: number }>(`/inspections/${id}/archive`, { method: "POST" }),
   getInspection: (id: string) => request<Inspection>(`/inspections/${id}`),
   startInspection: (data: { propertyId: string; roomName: string; templateId?: string | null; technicianId?: string | null; lat?: number; lng?: number }) =>
     request<Inspection>("/inspections", { method: "POST", body: JSON.stringify(data) }),
-  updateInspection: (id: string, data: { roomName?: string; notes?: string | null; status?: InspectionStatus; technicianId?: string | null; lat?: number; lng?: number }) =>
+  updateInspection: (id: string, data: { roomName?: string; propertyId?: string; notes?: string | null; status?: InspectionStatus; technicianId?: string | null; lat?: number; lng?: number }) =>
     request<Inspection>(`/inspections/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteInspection: (id: string) => request<void>(`/inspections/${id}`, { method: "DELETE" }),
 
-  updateCheck: (checkId: string, data: { outcome?: Outcome; severity?: Severity | null; note?: string | null; label?: string; category?: string | null }) =>
+  updateCheck: (checkId: string, data: { outcome?: Outcome; severity?: Severity | null; note?: string | null; label?: string; area?: string | null; category?: string | null }) =>
     request<InspectionCheck>(`/inspections/checks/${checkId}`, { method: "PUT", body: JSON.stringify(data) }),
   /** Marks every untouched line in a section n/a — a room with no pool, say. */
   markSectionNa: (inspectionId: string, section: string, outcome: "na" | "ok" = "na") =>

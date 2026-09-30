@@ -60,8 +60,16 @@ interface SeedSection {
 interface SeedTemplate {
   name: string;
   description: string;
+  /** "checklist" walks a fixed list; "general" is blank slots to fill in. */
+  kind?: "checklist" | "general";
+  /** What the empty area field suggests, since an area is named differently
+   *  depending on what kind of walk this is. */
+  areaHint?: string;
   sections: SeedSection[];
 }
+
+/** How many blank findings a general walk starts with. More can be added. */
+export const GENERAL_SLOTS = 10;
 
 /**
  * The starting templates. They are deliberately fussy — the point of an inspection
@@ -75,6 +83,7 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
   {
     name: "Guest room",
     description: "Full room check, walked the way a guest would arrive and use it.",
+    areaHint: "Room 214",
     sections: [
       {
         name: "Door and entry",
@@ -263,6 +272,7 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
   {
     name: "Public area",
     description: "Lobby, corridors, lifts and the front of house a guest walks through.",
+    areaHint: "Main lobby",
     sections: [
       {
         name: "Floors and walls",
@@ -317,7 +327,23 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
  * Bumped whenever the built-in checklists gain points. An install that is behind
  * gets the new ones added on the next boot; one that is level is left alone.
  */
-export const SEED_VERSION = 4;
+/**
+ * The third type, which is not a checklist.
+ *
+ * Sometimes there is nothing to walk against — somebody is going round the back
+ * of house writing down whatever is wrong. A checklist would be in the way, so
+ * this one has no points at all: the walk starts with a handful of blank slots
+ * and the person fills in what they find, where it is and what is wrong with it.
+ */
+const GENERAL_TEMPLATE: SeedTemplate = {
+  name: "General",
+  description: "No checklist. Log what you find, where you find it, as you go.",
+  kind: "general",
+  areaHint: "Where is it?",
+  sections: [],
+};
+
+export const SEED_VERSION = 5;
 
 /**
  * Adds points that a later release decided were missing, to templates that were
@@ -335,8 +361,55 @@ export async function topUpTemplates(): Promise<number> {
   });
 
   let added = 0;
+
+  /**
+   * A whole type the install has never had — General, on anything set up before
+   * it existed. Only created when nothing of that name is there at all, so one
+   * somebody renamed or deleted on purpose is not resurrected on every boot.
+   */
+  const names = new Set((await prisma.inspectionTemplate.findMany({ select: { name: true } })).map((t) => t.name));
+  const highest = await prisma.inspectionTemplate.aggregate({ _max: { sortOrder: true } });
+  let order = (highest._max.sortOrder ?? 0) + 1;
+  for (const source of allTemplates()) {
+    if (names.has(source.name)) continue;
+    await prisma.inspectionTemplate.create({
+      data: {
+        name: source.name,
+        description: source.description,
+        kind: source.kind ?? "checklist",
+        areaHint: source.areaHint ?? null,
+        sortOrder: order++,
+        seedVersion: SEED_VERSION,
+        sections: {
+          create: source.sections.map((section, sectionIndex) => ({
+            name: section.name,
+            position: sectionIndex,
+            points: {
+              create: section.points.map((point, pointIndex) => ({
+                label: point.label,
+                hint: point.hint ?? null,
+                category: point.category ?? null,
+                position: pointIndex,
+              })),
+            },
+          })),
+        },
+      },
+    });
+    added += Math.max(1, source.sections.reduce((n, sec) => n + sec.points.length, 0));
+  }
+
   for (const template of behind) {
-    const source = DEFAULT_TEMPLATES.find((t) => t.name === template.name);
+    const source = allTemplates().find((t) => t.name === template.name);
+
+    // The hint and the type are properties of the template rather than points on
+    // it, so they are set whether or not anything else changes.
+    if (source) {
+      await prisma.inspectionTemplate.update({
+        where: { id: template.id },
+        data: { kind: source.kind ?? "checklist", areaHint: source.areaHint ?? null },
+      });
+    }
     if (!source) {
       // Not one of ours any more; just mark it so we stop looking at it.
       await prisma.inspectionTemplate.update({ where: { id: template.id }, data: { seedVersion: SEED_VERSION } });
@@ -403,15 +476,22 @@ export async function topUpTemplates(): Promise<number> {
   return added;
 }
 
+/** Every type offered, checklists and the general one alike. */
+export function allTemplates(): SeedTemplate[] {
+  return [...DEFAULT_TEMPLATES, GENERAL_TEMPLATE];
+}
+
 export async function seedTemplates(): Promise<number> {
   const existing = await prisma.inspectionTemplate.count();
   if (existing > 0) return 0;
 
-  for (const [index, template] of DEFAULT_TEMPLATES.entries()) {
+  for (const [index, template] of allTemplates().entries()) {
     await prisma.inspectionTemplate.create({
       data: {
         name: template.name,
         description: template.description,
+        kind: template.kind ?? "checklist",
+        areaHint: template.areaHint ?? null,
         sortOrder: index,
         seedVersion: SEED_VERSION,
         sections: {
@@ -431,7 +511,7 @@ export async function seedTemplates(): Promise<number> {
       },
     });
   }
-  return DEFAULT_TEMPLATES.length;
+  return allTemplates().length;
 }
 
 /** How many points a template holds, which is what the picker wants to show. */

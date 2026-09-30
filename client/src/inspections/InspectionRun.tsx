@@ -14,6 +14,7 @@ import {
   type Inspection,
   type InspectionCheck,
   type Outcome,
+  type Property,
   type Severity,
 } from "../types";
 
@@ -34,6 +35,7 @@ function bySection(checks: InspectionCheck[]): { name: string; checks: Inspectio
  */
 function CheckRow({
   check,
+  general,
   propertyId,
   editable,
   busy,
@@ -46,6 +48,8 @@ function CheckRow({
   check: InspectionCheck;
   propertyId: string;
   editable: boolean;
+  /** A general walk: the line has no name until somebody types one. */
+  general: boolean;
   busy: boolean;
   onChange: (patch: Parameters<typeof api.updateCheck>[1]) => void;
   onPhoto: (files: File[]) => void;
@@ -64,10 +68,44 @@ function CheckRow({
     <li className={`insp-row outcome-${check.outcome} ${flagged ? `sev-${check.severity ?? "minor"}` : ""}`}>
       <div className="insp-row-main">
         <div className="insp-row-text">
-          <p className="insp-label">
-            {check.label}
-            {!check.pointId && <span className="insp-extra-tag">added</span>}
-          </p>
+          {/**
+            * A general walk has no checklist, so the line has no name until
+            * somebody gives it one. Those slots get a field; a checklist line
+            * keeps its wording from the template, which is the whole point of
+            * having a template.
+            */}
+          {general && editable ? (
+            <div className="insp-blank">
+              <input
+                className="insp-blank-name"
+                defaultValue={check.label}
+                onBlur={(e) => {
+                  const label = e.target.value.trim();
+                  if (label && label !== check.label) onChange({ label });
+                }}
+                placeholder="What did you find?"
+                maxLength={200}
+                aria-label="What did you find"
+              />
+              <input
+                className="insp-blank-area"
+                defaultValue={check.area ?? ""}
+                onBlur={(e) => {
+                  const area = e.target.value.trim();
+                  if (area !== (check.area ?? "")) onChange({ area: area || null });
+                }}
+                placeholder="Where is it?"
+                maxLength={160}
+                aria-label="Where is it"
+              />
+            </div>
+          ) : (
+            <p className="insp-label">
+              {check.label || <span className="muted">Untitled finding</span>}
+              {!check.pointId && !general && <span className="insp-extra-tag">added</span>}
+              {check.area ? <span className="insp-area-tag">{check.area}</span> : null}
+            </p>
+          )}
           {check.hint && <p className="insp-hint">{check.hint}</p>}
           {check.category && <span className="insp-cat">{categoryLabel(check.category)}</span>}
         </div>
@@ -220,6 +258,9 @@ export default function InspectionRun() {
   const [saving, setSaving] = useState(0);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [areaDraft, setAreaDraft] = useState("");
+  const [properties, setProperties] = useState<Property[]>([]);
+  const addRef = useRef<HTMLDivElement | null>(null);
   const [newLabel, setNewLabel] = useState("");
   const [newSeverity, setNewSeverity] = useState<Severity>("minor");
   const [onlyOpen, setOnlyOpen] = useState(false);
@@ -230,6 +271,7 @@ export default function InspectionRun() {
   const [fix, setFix] = useState<Fix | null>(null);
   const [locating, setLocating] = useState(false);
 
+  /** Refresh whatever is on screen, without blanking it. Used after a change. */
   const load = useCallback(() => {
     if (!id) return;
     api
@@ -239,9 +281,91 @@ export default function InspectionRun() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  useEffect(load, [load]);
+  /**
+   * Going to a different inspection clears the one on screen first.
+   *
+   * Without this the previous walk stays rendered until the new one arrives,
+   * which looks like a slow page and behaves like a trap: the fields are live,
+   * so anything typed in that gap is saved against the walk you just left. The
+   * guard covers the other half — a slow response for an inspection you have
+   * already navigated away from must not overwrite the one you are now on.
+   */
+  useEffect(() => {
+    if (!id) return;
+    let current = true;
+    setInspection(null);
+    setLoading(true);
+    setError(null);
+    api
+      .getInspection(id)
+      .then((got) => current && setInspection(got))
+      .catch((e: Error) => current && setError(e.message))
+      .finally(() => current && setLoading(false));
+    return () => {
+      current = false;
+    };
+  }, [id]);
 
-  const editable = inspection?.status === "in_progress";
+  const editable = inspection?.status === "in_progress" && !inspection?.archivedAt;
+  /** A general walk has no checklist; every line is one the person typed. */
+  const isGeneral = !!inspection && inspection.checks.every((c) => !c.pointId);
+  const areaHint = isGeneral ? "Where is it?" : "Room 214";
+
+  // Keep the editable area in step with whatever the server last confirmed.
+  useEffect(() => {
+    if (inspection) setAreaDraft(inspection.roomName);
+  }, [inspection?.id, inspection?.roomName]);
+
+  // Only needed for moving a walk to another property, so only loaded when it
+  // could actually be used.
+  useEffect(() => {
+    if (!editable) return;
+    api.listProperties().then(setProperties).catch(() => setProperties([]));
+  }, [editable]);
+
+  async function saveArea() {
+    const next = areaDraft.trim();
+    if (!inspection || !next || next === inspection.roomName) {
+      setAreaDraft(inspection?.roomName ?? "");
+      return;
+    }
+    try {
+      setInspection(await api.updateInspection(inspection.id, { roomName: next }));
+    } catch (e) {
+      setError((e as Error).message);
+      setAreaDraft(inspection.roomName);
+    }
+  }
+
+  async function moveProperty(propertyId: string) {
+    if (!inspection || propertyId === inspection.propertyId) return;
+    try {
+      setInspection(await api.updateInspection(inspection.id, { propertyId }));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function archive() {
+    if (!inspection) return;
+    if (!confirm(
+      "Archive this inspection?\n\nWhat was found is kept as a record. Photos that were never raised as work are deleted to free the space — photos on an issue stay with that issue.\n\nAn archived inspection cannot be reopened."
+    )) return;
+    try {
+      const { inspection: updated, photosReleased } = await api.archiveInspection(inspection.id);
+      setInspection(updated);
+      setError(photosReleased ? `Archived. ${photosReleased} photo${photosReleased === 1 ? "" : "s"} released.` : "Archived.");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  function openAdd() {
+    setShowAdd(true);
+    // The form is at the end of the page; jump to it rather than leaving the
+    // person to wonder where the button went.
+    window.setTimeout(() => addRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 40);
+  }
 
   /**
    * If location has already been allowed for this site, take a fix quietly so
@@ -250,22 +374,47 @@ export default function InspectionRun() {
    * room is worse than an unpinned finding, and the button is right there.
    */
   useEffect(() => {
-    if (!inspection || !editable || fix || inspection.lat != null) return;
+    if (!inspection || !editable) return;
     let alive = true;
-    locationAlreadyGranted().then((granted) => {
-      if (!granted || !alive) return;
+    let timer: number | undefined;
+
+    /**
+     * Keep a fix warm for the whole walk, not just once at the start.
+     *
+     * A round takes twenty minutes and covers a building. A fix taken at the
+     * front door is stale by the third floor, and a stale fix is worse than
+     * none: it pins a finding somewhere the person never stood. Refreshing
+     * quietly means whatever is current when a photo is taken is roughly where
+     * the photo was taken.
+     *
+     * Still only when permission is already given. A prompt in the middle of a
+     * room is worse than an unpinned finding.
+     */
+    const refresh = () => {
       getFix(10000)
         .then((got) => {
           if (!alive) return;
-          setFix(got);
-          return api.updateInspection(inspection.id, { lat: got.lat, lng: got.lng }).then((u) => alive && setInspection(u));
+          setFix((previous) => (previous && previous.accuracy < got.accuracy - 20 ? previous : got));
+          // The walk itself is pinned once, from the first fix worth having.
+          if (inspection.lat == null) {
+            api.updateInspection(inspection.id, { lat: got.lat, lng: got.lng })
+              .then((u) => alive && setInspection(u))
+              .catch(() => {});
+          }
         })
         .catch(() => {});
+    };
+
+    locationAlreadyGranted().then((granted) => {
+      if (!granted || !alive) return;
+      refresh();
+      timer = window.setInterval(refresh, 45000);
     });
+
     return () => {
       alive = false;
+      if (timer) window.clearInterval(timer);
     };
-    // Only ever run for a live walk that has no location yet.
   }, [inspection?.id, editable]);
 
   /** Optimistic: the line changes under the thumb, then the save catches up. */
@@ -300,8 +449,19 @@ export default function InspectionRun() {
         const prepared = await preparePhoto(original);
         // A photo with no location of its own borrows where we are standing —
         // labelled as such, so nobody reads it as a camera fix later.
+        /**
+         * Which position to believe.
+         *
+         * The camera's own is preferred when it has one: it was recorded at the
+         * moment of the shot, by a device pointed at the thing. The phone's is
+         * used when the photo carries nothing — but only if it is worth using.
+         * A fix good to eight metres puts a pin on the right balcony; one good
+         * to four hundred puts it on a neighbouring street, which is worse than
+         * admitting the photo has no location at all.
+         */
+        const USABLE_METRES = 120;
         const meta =
-          prepared.gpsLat == null && fix
+          prepared.gpsLat == null && fix && fix.accuracy <= USABLE_METRES
             ? { ...prepared, gpsLat: fix.lat, gpsLng: fix.lng, gpsSource: "device" as const }
             : prepared;
         const photo = await api.uploadCheckPhoto(check.id, prepared.file, meta);
@@ -458,11 +618,40 @@ export default function InspectionRun() {
           <p className="insp-eyebrow">
             <Link to="/inspections">Inspections</Link> · {inspection.property.name}
           </p>
-          <h1>{inspection.roomName}</h1>
+          {/**
+            * The area and the property are editable in place. The commonest
+            * mistakes are a mistyped room number and starting on the wrong
+            * property, and neither is worth walking the round again for.
+            */}
+          {editable ? (
+            <input
+              className="insp-area-edit"
+              value={areaDraft}
+              onChange={(e) => setAreaDraft(e.target.value)}
+              onBlur={saveArea}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              placeholder={areaHint}
+              aria-label="Area"
+              maxLength={120}
+            />
+          ) : (
+            <h1>{inspection.roomName}</h1>
+          )}
           <p className="muted">
             {inspection.templateName} · started by {inspection.inspector}
             {inspection.status !== "in_progress" && ` · ${inspection.status === "completed" ? "finished" : "abandoned"}`}
+            {inspection.archivedAt && " · archived"}
           </p>
+          {editable && properties.length > 1 && (
+            <label className="insp-move">
+              <span className="muted small">Property</span>
+              <select value={inspection.propertyId} onChange={(e) => moveProperty(e.target.value)}>
+                {properties.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
         <div className="insp-head-actions">
           {uploading ? (
@@ -480,10 +669,15 @@ export default function InspectionRun() {
               Finish
             </button>
           ) : (
-            can("inspection.amend") && (
-              <button type="button" className="btn btn-secondary btn-small" onClick={reopen}>
-                Reopen to amend
-              </button>
+            can("inspection.amend") && !inspection.archivedAt && (
+              <>
+                <button type="button" className="btn btn-secondary btn-small" onClick={reopen}>
+                  Reopen to amend
+                </button>
+                <button type="button" className="btn btn-ghost btn-small" onClick={archive}>
+                  Archive
+                </button>
+              </>
             )
           )}
         </div>
@@ -544,6 +738,7 @@ export default function InspectionRun() {
               <CheckRow
                 key={check.id}
                 check={check}
+                general={isGeneral}
                 propertyId={inspection.propertyId}
                 editable={!!editable}
                 onChange={(data) => patch(check, data)}
@@ -559,7 +754,7 @@ export default function InspectionRun() {
       ))}
 
       {editable && (
-        <section className="insp-section insp-add">
+        <section className="insp-section insp-add" ref={addRef}>
           {showAdd ? (
             <div className="form">
               <label>
@@ -588,12 +783,22 @@ export default function InspectionRun() {
                 </button>
               </div>
             </div>
-          ) : (
-            <button type="button" className="btn btn-secondary btn-block" onClick={() => setShowAdd(true)}>
-              + Found something else
-            </button>
-          )}
+          ) : null}
         </section>
+      )}
+
+      {/**
+        * Found something else, from anywhere on the page.
+        *
+        * It used to live at the bottom, past eighty checklist lines — which is
+        * fine when you are working down the list and useless when you are
+        * halfway up a corridor and have just noticed something. Floating it
+        * means the thought and the button are in the same place.
+        */}
+      {editable && !showAdd && (
+        <button type="button" className="insp-fab" onClick={openAdd}>
+          <span aria-hidden="true">+</span> Found something else
+        </button>
       )}
 
       {lightbox && <PhotoLightbox src={lightbox} onClose={() => setLightbox(null)} />}

@@ -7462,7 +7462,18 @@ table th {
  * JavaScript holding transition state.
  */
 .page {
-  animation: mm-rise var(--normal) var(--ease) both;
+  /**
+   * `backwards`, not `both`.
+   *
+   * `both` keeps the last keyframe applied for ever, and an animated
+   * `transform: none` computes to the identity matrix rather than to nothing —
+   * which is still a transform, and any element with one becomes the containing
+   * block for `position: fixed` descendants. Every page therefore quietly
+   * captured anything meant to cover the window. `backwards` holds the opening
+   * frame before the animation starts and then lets the element go back to
+   * having no transform at all, which is what it should have had all along.
+   */
+  animation: mm-rise var(--normal) var(--ease) backwards;
 }
 
 /**
@@ -7473,7 +7484,8 @@ table th {
 .insp-cards > li,
 .user-list > *,
 .activity-list > * {
-  animation: mm-rise var(--normal) var(--ease) both;
+  /* Same reason as .page above: no transform may be left behind. */
+  animation: mm-rise var(--normal) var(--ease) backwards;
 }
 
 .insp-cards > li:nth-child(1),
@@ -8110,5 +8122,169 @@ table th {
 @media (prefers-reduced-motion: reduce) {
   .walk-groupbar {
     animation: none;
+  }
+}
+
+/* ================================================================== */
+/* Inspections: editable header, general slots, the floating button    */
+/* ================================================================== */
+
+/* The area, edited in place. It should read as the heading it replaces
+   until somebody puts a cursor in it. */
+.insp-area-edit {
+  width: 100%;
+  max-width: 460px;
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.024em;
+  line-height: 1.16;
+  color: var(--text);
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.insp-area-edit:hover {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+.insp-area-edit:focus {
+  outline: none;
+  background: var(--surface);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 4px var(--brand-ring);
+}
+
+.insp-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.insp-move select {
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 13px;
+}
+
+/* ---- A general walk's blank slots -------------------------------- */
+
+.insp-blank {
+  display: grid;
+  gap: 6px;
+}
+
+.insp-blank-name,
+.insp-blank-area {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 15px;
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+
+.insp-blank-name {
+  font-weight: 550;
+}
+
+.insp-blank-area {
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.insp-blank-name:focus,
+.insp-blank-area:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 4px var(--brand-ring);
+}
+
+.insp-area-tag {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+/* ---- Found something else, from anywhere ------------------------- */
+
+/**
+ * It used to sit at the bottom, past eighty checklist lines. That is fine when
+ * you are working down the list and useless when you have just noticed
+ * something halfway up a corridor — so it follows you instead.
+ */
+.insp-fab {
+  position: fixed;
+  z-index: 40;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 20px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--brand);
+  color: #fff;
+  font-size: 14.5px;
+  font-weight: 550;
+  letter-spacing: -0.008em;
+  cursor: pointer;
+  box-shadow: 0 6px 24px -6px rgba(0, 113, 227, 0.55), 0 2px 6px rgba(0, 0, 0, 0.12);
+  animation: mm-rise var(--normal) var(--ease) backwards;
+  transition: background var(--fast) var(--ease), transform var(--fast) var(--ease-spring);
+}
+
+.insp-fab span {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 400;
+}
+
+.insp-fab:hover {
+  background: var(--brand-dark);
+}
+
+.insp-fab:active {
+  transform: scale(0.96);
+}
+
+/* On a phone it spans the width: a thumb reaches the bottom of the screen far
+   more easily than the bottom right corner of it. */
+@media (max-width: 560px) {
+  .insp-fab {
+    left: max(16px, env(safe-area-inset-left));
+    justify-content: center;
+  }
+}
+
+.insp-archived-tag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+@media print {
+  .insp-fab {
+    display: none !important;
   }
 }

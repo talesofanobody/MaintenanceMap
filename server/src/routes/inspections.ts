@@ -9,7 +9,7 @@ import { parseCategory } from "../lib/taxonomy";
 import { upload, UPLOADS_DIR } from "../lib/upload";
 import { readExif } from "../lib/exif";
 import { storeImage } from "../lib/images";
-import { countPoints, parseOutcome, parseSeverity, SEVERITY_PRIORITY, type Severity } from "../lib/inspections";
+import { countPoints, GENERAL_SLOTS, parseOutcome, parseSeverity, SEVERITY_PRIORITY, type Severity } from "../lib/inspections";
 import { can } from "../lib/permissions";
 
 /**
@@ -312,15 +312,36 @@ inspectionsRouter.post("/", requires("inspection.run"), async (req, res) => {
   if (!property) return res.status(404).json({ error: "property not found" });
 
   let templateName = "Ad-hoc inspection";
-  let lines: { section: string; label: string; hint: string | null; category: string | null; pointId: string; position: number }[] = [];
+  let lines: { section: string; label: string; hint: string | null; category: string | null; pointId: string | null; position: number }[] = [];
   if (templateId) {
     const template = await prisma.inspectionTemplate.findUnique({ where: { id: templateId }, include: TEMPLATE_INCLUDE });
     if (!template) return res.status(404).json({ error: "template not found" });
     templateName = template.name;
-    let position = 0;
-    for (const section of template.sections) {
-      for (const point of section.points) {
-        lines.push({ section: section.name, label: point.label, hint: point.hint, category: point.category, pointId: point.id, position: position++ });
+
+    if (template.kind === "general") {
+      /**
+       * No checklist. Start with a handful of blank slots so the page has
+       * somewhere to type immediately — an empty screen with an "add" button
+       * asks a question before the person has found anything.
+       *
+       * They are ordinary custom findings with no label yet, which means they
+       * can be deleted, added to, and raised as work like any other. A slot left
+       * blank is simply not a finding and never reaches the report.
+       */
+      lines = Array.from({ length: GENERAL_SLOTS }, (_, i) => ({
+        section: "Found",
+        label: "",
+        hint: null,
+        category: null,
+        pointId: null,
+        position: i,
+      }));
+    } else {
+      let position = 0;
+      for (const section of template.sections) {
+        for (const point of section.points) {
+          lines.push({ section: section.name, label: point.label, hint: point.hint, category: point.category, pointId: point.id, position: position++ });
+        }
       }
     }
   }
@@ -375,6 +396,17 @@ inspectionsRouter.put("/:id", requires("inspection.run"), async (req, res) => {
       if (!roomName) return res.status(400).json({ error: "Which room is this?" });
       data.roomName = roomName;
     }
+    /**
+     * The property, because the commonest mistake is starting a walk on the
+     * wrong one and not noticing until the third room. Moving it is cheaper than
+     * walking it again, and everything hanging off the walk moves with it.
+     */
+    if (req.body.propertyId !== undefined) {
+      const id = String(req.body.propertyId);
+      const property = await prisma.property.findUnique({ where: { id }, select: { id: true } });
+      if (!property) return res.status(404).json({ error: "property not found" });
+      data.propertyId = id;
+    }
     if (req.body.notes !== undefined) data.notes = parseOptionalString(req.body.notes, "notes", 2000) ?? null;
     const fix = parseFix(req.body);
     if (fix) {
@@ -398,6 +430,9 @@ inspectionsRouter.put("/:id", requires("inspection.run"), async (req, res) => {
 
       // Reopening something already signed off is a different act from finishing
       // it, and needs its own permission and its own mark on the record.
+      if (existing.archivedAt && status === "in_progress") {
+        return res.status(400).json({ error: "That inspection is archived. Its photos have been released, so it cannot be reopened." });
+      }
       const reopening = status === "in_progress" && existing.status !== "in_progress";
       if (reopening) {
         if (!can(req.user!.role, "inspection.amend")) {
@@ -439,6 +474,94 @@ inspectionsRouter.put("/:id", requires("inspection.run"), async (req, res) => {
   }
 });
 
+/**
+ * Archiving: keep what was found, let go of the photographs behind it.
+ *
+ * A finished walk is mostly photographs, and photographs are almost all of the
+ * disk. But the walk is also a statement — this is what the rooms were like on
+ * this date, checked by this person — and that statement has to survive the
+ * pictures being cleared, or archiving would amount to deleting the record.
+ *
+ * So the findings are frozen into a summary first, and only then are the raw
+ * photos released. Anything already raised as work keeps its photographs,
+ * because the person who has to fix it still needs to see the thing.
+ */
+inspectionsRouter.post("/:id/archive", requires("inspection.amend"), async (req, res) => {
+  const inspection = await prisma.inspection.findUnique({
+    where: { id: req.params.id },
+    include: {
+      property: { select: { name: true } },
+      checks: { include: { photos: true }, orderBy: { position: "asc" } },
+    },
+  });
+  if (!inspection) return res.status(404).json({ error: "not found" });
+  if (inspection.status === "in_progress") {
+    return res.status(400).json({ error: "Finish the inspection before archiving it." });
+  }
+  if (inspection.archivedAt) return res.status(400).json({ error: "That inspection is already archived." });
+
+  const findings = inspection.checks.filter((c) => c.outcome === "flagged");
+
+  // Frozen now, while the photographs are still here to be counted.
+  const summary = {
+    version: 1 as const,
+    property: inspection.property.name,
+    area: inspection.roomName,
+    type: inspection.templateName,
+    walkedBy: inspection.inspector,
+    startedAt: inspection.startedAt,
+    completedAt: inspection.completedAt,
+    amendedAt: inspection.amendedAt,
+    checked: inspection.checks.length,
+    flagged: findings.length,
+    raised: findings.filter((c) => c.issueId).length,
+    findings: findings.map((c) => ({
+      section: c.section,
+      label: c.label,
+      area: c.area,
+      severity: c.severity,
+      note: c.note,
+      category: c.category,
+      issueId: c.issueId,
+      photos: c.photos.length,
+      photosKept: c.issueId ? c.photos.length : 0,
+    })),
+  };
+
+  /**
+   * Only the photographs nothing else needs. A finding that became an issue had
+   * its photos moved onto that issue when it was raised, so what is left here is
+   * evidence for a finding nobody acted on — which the summary now records the
+   * existence of, in words.
+   */
+  const loose = inspection.checks.filter((c) => !c.issueId).flatMap((c) => c.photos);
+  let freed = 0;
+  for (const photo of loose) {
+    await fs.unlink(path.join(UPLOADS_DIR, photo.filename)).catch(() => {});
+    if (photo.thumbFilename) await fs.unlink(path.join(UPLOADS_DIR, photo.thumbFilename)).catch(() => {});
+    freed += 1;
+  }
+  if (loose.length) {
+    await prisma.photo.deleteMany({ where: { id: { in: loose.map((p) => p.id) } } });
+  }
+
+  const updated = await prisma.inspection.update({
+    where: { id: inspection.id },
+    data: { archivedAt: new Date(), summary: JSON.stringify(summary) },
+    include: INSPECTION_INCLUDE,
+  });
+
+  await logActivity(req, {
+    action: "inspection.archived",
+    entityType: "inspection",
+    entityId: inspection.id,
+    propertyId: inspection.propertyId,
+    summary: `Archived the inspection of ${inspection.roomName} — ${findings.length} finding${findings.length === 1 ? "" : "s"} kept, ${freed} photo${freed === 1 ? "" : "s"} released`,
+  });
+
+  res.json({ inspection: updated, photosReleased: freed });
+});
+
 inspectionsRouter.delete("/:id", requires("inspection.delete"), async (req, res) => {
   const inspection = await prisma.inspection.findUnique({ where: { id: req.params.id }, include: { checks: { include: { photos: true } } } });
   if (!inspection) return res.status(404).json({ error: "not found" });
@@ -467,8 +590,11 @@ inspectionsRouter.delete("/:id", requires("inspection.delete"), async (req, res)
 // ---------------------------------------------------------------------------
 
 inspectionsRouter.put("/checks/:checkId", requires("inspection.run"), async (req, res) => {
-  const existing = await prisma.inspectionCheck.findUnique({ where: { id: req.params.checkId }, include: { inspection: { select: { status: true } } } });
+  const existing = await prisma.inspectionCheck.findUnique({ where: { id: req.params.checkId }, include: { inspection: { select: { status: true, archivedAt: true } } } });
   if (!existing) return res.status(404).json({ error: "not found" });
+  if (existing.inspection.archivedAt) {
+    return res.status(400).json({ error: "That inspection is archived. It is kept as a record and cannot be changed." });
+  }
   if (existing.inspection.status !== "in_progress") {
     return res.status(400).json({ error: "That inspection is finished. Reopen it to change a line." });
   }
@@ -488,6 +614,12 @@ inspectionsRouter.put("/checks/:checkId", requires("inspection.run"), async (req
       data.label = label;
     }
     if (req.body.category !== undefined) data.category = parseCategory(req.body.category) ?? null;
+    /**
+     * Where this one finding is. A checklist walk is one room, so its findings
+     * inherit the walk's area; a general walk covers ground, so each finding
+     * says for itself and the report can group by it.
+     */
+    if (req.body.area !== undefined) data.area = parseOptionalString(req.body.area, "area", 160) ?? null;
 
     const check = await prisma.inspectionCheck.update({ where: { id: existing.id }, data, include: CHECK_INCLUDE });
     res.json(check);
@@ -495,6 +627,7 @@ inspectionsRouter.put("/checks/:checkId", requires("inspection.run"), async (req
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
     throw err;
   }
+
 });
 
 /** Something spotted that the template never asked about. */

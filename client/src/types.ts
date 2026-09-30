@@ -751,6 +751,10 @@ export interface InspectionTemplate {
   id: string;
   name: string;
   description: string | null;
+  /** "checklist" walks a fixed list; "general" is blank slots to fill in. */
+  kind?: "checklist" | "general";
+  /** What to suggest in the empty area field for this type of walk. */
+  areaHint?: string | null;
   propertyId: string | null;
   active: boolean;
   sortOrder: number;
@@ -769,6 +773,8 @@ export interface InspectionCheck {
   outcome: Outcome;
   severity: Severity | null;
   note: string | null;
+  /** Where this one finding is, on a general walk. */
+  area?: string | null;
   position: number;
   issueId: string | null;
   /** Photos move to the issue when a finding is raised, so the report reads them back from it. */
@@ -794,6 +800,10 @@ export interface Inspection {
   lat: number | null;
   lng: number | null;
   notes: string | null;
+  /** Set once the walk is closed off as a record and its loose photos released. */
+  archivedAt?: string | null;
+  /** The frozen record, as JSON, once archived. */
+  summary?: string | null;
   startedAt: string;
   completedAt: string | null;
   /** Set once a finished walk has been reopened to correct something. */
