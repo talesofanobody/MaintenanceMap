@@ -137,11 +137,47 @@ Addressed over three commits (`ad87b53`, `05c5222`, and the audit that preceded 
 - Passwords are bcrypt at 12 rounds. Sessions are server-side in the database, not in a
   cookie.
 
-**Not yet addressed:** GitHub reports **9 Dependabot advisories on `main`, one rated high.**
-These have not been looked at. A high-severity advisory in a transitive build dependency and
-one in session handling are very different problems, and the advisory list does not
-distinguish between reachable and unreachable code. This is the most significant open
-security item.
+### Open: dependency advisories, one of them reachable
+
+GitHub reports **11 advisories on `main` — 1 critical, 1 high, 9 moderate.** `npm audit` across
+both packages breaks down as 1 critical, 7 high and 7 moderate. These were triaged on
+19 October; the count had grown from 9 since the end of September.
+
+**The critical one is reachable on this deployment and should be treated as live.**
+`proxy-addr` ≤ 2.0.7 can be made to trust a forged client address through an IPv4-mapped IPv6
+subnet. It matters here because the app sets `trust proxy` when `TRUST_PROXY` is present, which
+production does, so `proxy-addr` is what resolves `req.ip`. All three rate limiters use the
+default key generator, which is `req.ip`:
+
+| Limiter | Cap | What a forged address bypasses |
+|---|---|---|
+| `authRouter` login | 10 per 15 min | brute-forcing an account password |
+| `intake` submit | 10 per hour | the guest-report flood cap |
+| `intake` open | 120 per 15 min | form-read throttling |
+
+So the practical effect is that the login throttle — the only thing standing between a guessable
+password and an unlimited number of attempts — can be stepped around. Nothing suggests this has
+been exploited; the point is that it is not theoretical on this configuration.
+
+A non-major fix is available for the critical and for all but one of the rest:
+
+| Package | Severity | Fix |
+|---|---|---|
+| `proxy-addr` (via `express`) | critical | available, non-major |
+| `sharp` (librsvg, CVE-2026-96889) | high | available, non-major |
+| `vite`, `source-map-js` | high | available |
+| `brace-expansion`, `braces`, `chokidar` | high | via `ts-node-dev` — **dev only** |
+| `express`/`body-parser`/`qs`, `multer` | moderate | available, non-major |
+| `react-router`, `esbuild` | moderate | available |
+| `ts-node-dev` | high | **none** — dev dependency, never in the container |
+
+`ts-node-dev` and the three transitive highs beneath it are development-only and do not ship in
+the production image, so they do not affect the deployment.
+
+**This has not been applied.** Upgrading `express`, `sharp` and `multer` on a live install needs
+the end-to-end suites run against it — `sharp` in particular is load-bearing for every
+photograph. It is a contained piece of work, not a risky one, and it is the next thing worth
+doing.
 
 ---
 
@@ -219,13 +255,16 @@ nullable columns and one index, no table rebuild.
 ## 7. Open items
 
 ### Security
-- **9 Dependabot advisories on `main`, one high.** Not yet triaged. See section 4.
+- **11 advisories on `main`, one critical and reachable.** Triaged, not fixed. The critical
+  (`proxy-addr`, forged client address) lets the login rate limiter be bypassed on this
+  configuration. A non-major fix exists. See section 4 — this is the top item.
 
 ### Operational risk
 - **No off-platform backup automation.** The Railway volume holds the only live copy. Nightly
   backups are written to `/data/backups` — on the same volume. If the volume is lost, the
   backups go with it. This has been raised repeatedly and not yet acted on; given that the
-  install has already been wiped once, it is the highest-value remaining item.
+  install has already been wiped once, it is the highest-value item after the critical advisory
+  above.
 - **The template top-up behaviour widened** in the last release: it now creates any template
   missing by name, where it previously only added sections to templates that already existed.
   If either shipped checklist has been renamed on the live install, the original name will read
