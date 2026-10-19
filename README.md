@@ -476,8 +476,8 @@ Three types come with the app, and they can be edited or replaced:
 
 - **Guest room** — 82 points across door and entry, bathroom, bedroom, air conditioning, windows and
   balcony, finishes, private pool or hot tub, and safety
-- **Public area** — 19 points across approach and entrance, floors and walls, lighting and signage,
-  seating and fittings, and washrooms
+- **Public area** — 19 points across floors and walls, lighting and power, lifts and stairs,
+  comfort and cleanliness, and safety
 - **General** — no checklist at all. Ten empty slots, each taking an issue name, an area of its own
   and a description, with the same camera and upload buttons as any other finding. For the walk
   where nobody knows in advance what they are looking for: go round, write down what is wrong, and
