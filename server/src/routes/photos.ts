@@ -44,18 +44,27 @@ photosRouter.post("/", requires("issue.write"), acceptPhoto, async (req, res) =>
 
   /**
    * A photo of equipment goes through here too, because it is the same pipeline:
-   * the same size limits, the same HEIC handling, the same EXIF read. What differs
-   * is who may add one and what it hangs off. Changing the record of what is
-   * installed on site is a property right, not a work-order right, so a technician
-   * who may photograph their own job may not re-document the plant room.
+   * the same size limits, the same HEIC handling, the same EXIF read.
+   *
+   * Adding one needs no more than the issue.write this route already requires, so
+   * technicians can photograph what they are standing in front of. That is where
+   * the manual actually gets filled in: the people who open the panels are the
+   * ones who see the nameplates, and a register nobody in the field can add to
+   * stays as thin as the day it was typed.
+   *
+   * Removing one is a different matter and stays with property.write — an extra
+   * photograph costs nothing, a missing one cannot be recovered. A technician who
+   * adds the wrong photo can say so; they cannot quietly delete somebody else's.
+   *
+   * Unlike an issue photo there is no crew check. Scoping this to equipment
+   * attached to a job they are on would miss the case it exists for: a plant room
+   * walked past on the way to something else.
    */
   if (assetId) {
     if (typeof assetId !== "string") return res.status(400).json({ error: "assetId must be a string" });
-    if (!can(req.user!.role, "property.write")) {
-      return res.status(403).json({ error: "You don't have permission to change the equipment records." });
-    }
-    const asset = await prisma.asset.findUnique({ where: { id: assetId }, select: { id: true, name: true, propertyId: true } });
+    const asset = await prisma.asset.findUnique({ where: { id: assetId }, select: { id: true, name: true, propertyId: true, active: true } });
     if (!asset) return res.status(404).json({ error: "asset not found" });
+    if (!asset.active) return res.status(400).json({ error: "That equipment is no longer in service." });
 
     const exifAsset = await readExif(file.buffer);
     let storedAsset;

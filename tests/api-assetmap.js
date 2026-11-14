@@ -131,6 +131,70 @@ const PNG = Buffer.from(
   r = await req('GET', `/assets/${cb15.id}`);
   ok(r.body.asset.photos.length === 1, 'a second photo is in place for the cascade check');
 
+  // ---- a technician in the field --------------------------------------
+  // The manual gets filled in by the people who open the panels, so adding a
+  // photograph is deliberately a lower bar than changing the record. Removing one
+  // is not: an extra photo costs nothing, a missing one cannot be recovered.
+  const techName = 'Fieldhand ' + stamp;
+  const tech = (await req('POST', '/technicians', { name: techName, trade: 'electrical' })).body;
+  const techUser = 'tech' + stamp;
+  const made = await req('POST', '/users', {
+    username: techUser, password: 'correcthorsebattery9', role: 'technician', technicianId: tech.id,
+  });
+  ok(made.status === 201 || made.status === 200, `a technician login can be created (${made.status}) ${made.body && made.body.error || ''}`);
+
+  const API = process.env.MM_API || 'http://127.0.0.1:4000';
+  const techState = { cookie: '', csrf: '' };
+  const asTech = async (method, pathname, body) => {
+    const headers = { 'Content-Type': 'application/json' };
+    if (techState.cookie) headers.Cookie = techState.cookie;
+    if (techState.csrf) headers['X-CSRF-Token'] = techState.csrf;
+    const r = await fetch(API + '/api' + pathname, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    const sc = r.headers.get('set-cookie');
+    if (sc) techState.cookie = sc.split(';')[0];
+    const t = r.headers.get('x-csrf-token');
+    if (t) techState.csrf = t;
+    return { status: r.status, body: await r.json().catch(() => null) };
+  };
+
+  const signIn = await asTech('POST', '/auth/login', { username: techUser, password: 'correcthorsebattery9' });
+  ok(signIn.status === 200, `the technician can sign in (${signIn.status})`);
+  await asTech('GET', '/auth/me');
+
+  const techUpload = async (fields) => {
+    const form = new FormData();
+    for (const [k, v] of Object.entries(fields)) form.append(k, v);
+    form.append('photo', new Blob([PNG], { type: 'image/png' }), 'nameplate.png');
+    const res = await fetch(API + '/api/photos', {
+      method: 'POST',
+      headers: { Cookie: techState.cookie, 'X-CSRF-Token': techState.csrf },
+      body: form,
+    });
+    return { status: res.status, body: await res.json().catch(() => null) };
+  };
+
+  let t = await techUpload({ assetId: board.id });
+  ok(t.status === 201, `a technician can photograph equipment (${t.status}) ${t.body && t.body.error || ''}`);
+  const techPhotoId = t.body && t.body.id;
+
+  // No crew check: the plant room walked past on the way to something else is
+  // exactly the case this exists for.
+  t = await techUpload({ assetId: gen.id });
+  ok(t.status === 201, 'including equipment they are not assigned to');
+
+  // But not removing one.
+  t = await asTech('DELETE', `/photos/${techPhotoId}`);
+  ok(t.status === 403, `a technician cannot remove one (${t.status})`);
+
+  r = await req('DELETE', `/photos/${techPhotoId}`);
+  ok(r.status === 200, 'while somebody who may change the records can');
+
+  // Nor photographing equipment taken out of service.
+  await req('PATCH', `/assets/${board.id}`, { active: false });
+  t = await techUpload({ assetId: board.id });
+  ok(t.status === 400, `equipment out of service takes no new photographs (${t.status})`);
+  await req('PATCH', `/assets/${board.id}`, { active: true });
+
   fs.unlinkSync(tmp);
   console.log(fail === 0 ? '\nAll api-assetmap checks passed.' : `\n${fail} FAILED`);
   process.exit(fail === 0 ? 0 : 1);

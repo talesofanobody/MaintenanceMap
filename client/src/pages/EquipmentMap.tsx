@@ -60,6 +60,12 @@ function label(a: { name: string; ref?: string | null }): string {
 export default function EquipmentMap() {
   const can = useCan();
   const mayEdit = can("property.write");
+  /**
+   * Photographing equipment is deliberately a lower bar than changing its record.
+   * The people who open the panels are the ones who see the nameplates, and a
+   * manual the field cannot add to stays as thin as the day it was typed.
+   */
+  const mayPhotograph = can("issue.write");
 
   const [properties, setProperties] = useState<Property[]>([]);
   const [propertyId, setPropertyId] = useState("");
@@ -454,8 +460,9 @@ export default function EquipmentMap() {
                 <div className="eqmap-pane">
                   {detail.asset.photos.length === 0 ? (
                     <p className="muted small">
-                      No photographs yet. A nameplate and a shot of where it actually is are worth
-                      more than most of the fields above.
+                      No photographs yet. {mayPhotograph
+                        ? "A nameplate and a shot of where it actually is are worth more than most of the fields above."
+                        : "Anyone who can log work can add one."}
                     </p>
                   ) : (
                     <div className="eqmap-photos">
@@ -467,7 +474,7 @@ export default function EquipmentMap() {
                     </div>
                   )}
 
-                  {mayEdit && (
+                  {mayPhotograph && (
                     <>
                       <input
                         ref={fileInput}

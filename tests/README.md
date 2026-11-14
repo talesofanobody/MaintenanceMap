@@ -24,7 +24,7 @@ running:
 | `api-utilities.js` | Rounds, tanks, invoices, site totals, retiring a meter | `server` on :4000 |
 | `api-spaces.js` | The tree, 40 rooms from a range, reconciling free text | `server` on :4000 |
 | `api-assets.js` | The register, relations, the blast radius, services, the due list | `server` on :4000 |
-| `api-assetmap.js` | Markers and anchoring, the unplaced list, photographs of equipment | `server` on :4000 |
+| `api-assetmap.js` | Markers and anchoring, the unplaced list, who may photograph equipment | `server` on :4000 |
 | `ui-governance.js` | The Gantt draws, blockers clear, roles stick | Both dev servers |
 | `ui-tree.js` | Phase dates roll up, progress shows, the refusal holds | Both dev servers |
 | `ui-calendar.js` | The editor works and the chart shades days nobody works | Both dev servers |
@@ -35,7 +35,7 @@ running:
 | `ui-assetmap.js` | Equipment on the map, the side tabs, following a chain, placing a pin | Both dev servers |
 | `smoke-pages.js` | Nothing else broke | Both dev servers |
 
-949 checks in total, plus the two migration drills below (38 more).
+956 checks in total, plus the two migration drills below (38 more).
 
 ```sh
 (cd server && npm run dev)    # :4000

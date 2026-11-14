@@ -499,7 +499,7 @@ the one that gets automation running this quarter instead of next.
 | ~~**3**~~ | ~~Daily readings: `MeterPoint`, `Reading`, `UtilityInvoice`, the nutshell dashboard~~ | **Done**. 623 checks in `tests/` |
 | ~~**4**~~ | ~~Location hierarchy: block → floor → space, coexisting with `roomName`~~ | **Done**. 731 checks in `tests/` |
 | ~~**5**~~ | ~~Assets and `AssetRelation`; AC and generator intervals on assets~~ | **Done**. 871 checks in `tests/` |
-| ~~**5b**~~ | ~~The manual as a map: equipment markers, photographs, the graph in a side tab~~ | **Done**. 949 checks in `tests/` |
+| ~~**5b**~~ | ~~The manual as a map: equipment markers, photographs, the graph in a side tab~~ | **Done**. 956 checks in `tests/` |
 | **6** | Floor plans: raster overlay, three-point georeference, the drawing map view | Depends on 4 and 5. Replaces the dashed, space-anchored markers from 5b with real indoor positions |
 | ~~**7**~~ | ~~Gantt and critical path~~ | **Pulled forward into 1b** |
 | **8** | Automation rail: `AgentRun`, `AgentProposal`, approval screen, threshold jobs | Needs 3 and 5 to have anything worth proposing |
