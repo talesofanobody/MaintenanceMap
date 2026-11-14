@@ -9553,3 +9553,53 @@ table th {
 
 .eq-relations, .eq-services, .eq-children, .eq-issues, .eq-fedby { margin-bottom: 14px; }
 .eq-relations h3, .eq-services h3, .eq-children h3, .eq-issues h3, .eq-fedby h3 { margin: 0 0 6px; font-size: 14px; }
+
+/* ---- Slice 5b: equipment on the map -------------------------------------
+   The map takes the room; the side tab is a fixed column so switching between
+   markers does not shift the layout under the pointer. */
+.equipment-map-page { display: flex; flex-direction: column; min-height: 0; }
+.eqmap { display: grid; grid-template-columns: 1fr minmax(300px, 380px); gap: 14px; align-items: stretch; min-height: 560px; }
+@media (max-width: 900px) { .eqmap { grid-template-columns: 1fr; } .eqmap-canvas { height: 46vh; } }
+
+.eqmap-canvas { position: relative; border-radius: 12px; overflow: hidden; min-height: 560px; }
+.eqmap-canvas .map { width: 100%; height: 100%; min-height: 560px; }
+/* In placement mode the map is a target, so say so with the cursor. */
+.eqmap-placing-mode .map { cursor: crosshair; }
+/* And the markers must not swallow the click. The spot somebody wants is often
+   right under the marker they are working from — after the map flies to a piece
+   of equipment, that marker sits dead centre, exactly where they will tap.
+   Done here rather than with Leaflet's `interactive` option, which is applied
+   when a marker is created and does not re-apply when the flag changes. */
+.eqmap-placing-mode .leaflet-marker-icon { pointer-events: none; }
+.eqmap-placing { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.asset-pin { background: none; border: 0; }
+
+.eqmap-side { background: var(--surface, #fff); border: 1px solid var(--line, #e7eaef); border-radius: 12px; padding: 14px; overflow-y: auto; max-height: 72vh; }
+.eqmap-side-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.eqmap-side-head h2 { margin: 0; font-size: 18px; }
+.eqmap-empty h2 { margin: 0 0 6px; font-size: 16px; }
+
+.eqmap-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line, #e7eaef); margin-bottom: 12px; }
+.eqmap-tab { flex: 1 1 auto; background: none; border: 0; border-bottom: 2px solid transparent; padding: 7px 4px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; }
+.eqmap-tab-on { color: var(--accent, #1a73e8); border-bottom-color: var(--accent, #1a73e8); font-weight: 600; }
+.eqmap-pane > h3 { font-size: 13px; margin: 14px 0 6px; }
+.eqmap-pane .eq-facts { margin-top: 10px; }
+.eqmap-source { margin: 8px 0 10px; }
+
+.eqmap-cluster-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.eqmap-cluster-list li { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line, #e7eaef); }
+.eqmap-cluster-btn { flex: 1 1 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; background: none; border: 0; padding: 8px 0; font: inherit; text-align: left; cursor: pointer; color: inherit; }
+.eqmap-cluster-btn:hover { color: var(--accent, #1a73e8); }
+
+.eq-affected-rail { list-style: none; margin: 0 0 10px; padding: 0; }
+.eq-affected-rail li { padding: 3px 0; border-top: 1px solid var(--line, #e7eaef); font-size: 14px; }
+
+.eqmap-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin-bottom: 10px; }
+.eqmap-photo { padding: 0; border: 0; background: none; cursor: pointer; border-radius: 8px; overflow: hidden; aspect-ratio: 1; }
+.eqmap-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.eqmap-unplaced { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line, #e7eaef); }
+.eqmap-unplaced h3 { font-size: 13px; margin: 0 0 4px; }
+.eqmap-unplaced ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.eqmap-unplaced li { padding: 2px 0; }

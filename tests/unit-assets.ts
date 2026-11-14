@@ -1,6 +1,7 @@
 import {
   downstream, upstream, isolationPoints, serviceStatus, parseInterval,
-  MAX_WALK_DEPTH, type RelationEdge,
+  placeAssets, mapMarkers, MAX_WALK_DEPTH,
+  type RelationEdge, type Placeable, type SpacePoint,
 } from "../server/src/lib/assets";
 
 let fail = 0;
@@ -145,6 +146,74 @@ ok(threw(() => parseInterval(0)), "zero days is refused");
 ok(threw(() => parseInterval(-5)), "and a negative");
 ok(threw(() => parseInterval(1.5)), "and a fraction of a day");
 ok(threw(() => parseInterval(5000)), "and an interval longer than ten years");
+
+// ---- where things sit on a map -------------------------------------------
+const A = (o: Partial<Placeable> & { id: string }): Placeable =>
+  ({ lat: null, lng: null, spaceId: null, parentId: null, ...o });
+const S = (o: Partial<SpacePoint> & { id: string }): SpacePoint =>
+  ({ parentId: null, lat: null, lng: null, ...o });
+
+/*
+ * A building with coordinates, a floor and a riser without, and a panel inside the
+ * riser with a breaker inside it. Which is the normal case: the site is surveyed,
+ * the cupboard on floor two is not.
+ */
+const places: SpacePoint[] = [
+  S({ id: "block", lat: 13.99, lng: -61.0 }),
+  S({ id: "floor2", parentId: "block" }),
+  S({ id: "riser", parentId: "floor2" }),
+  S({ id: "yard", lat: 13.98, lng: -61.01 }),
+];
+
+const kit: Placeable[] = [
+  A({ id: "gen", lat: 13.981, lng: -61.011, spaceId: "yard" }),
+  A({ id: "dbmain", spaceId: "riser" }),
+  A({ id: "cb14", parentId: "dbmain" }),
+  A({ id: "tank", lat: 13.979, lng: -61.012 }),
+  A({ id: "orphan" }),
+];
+const placed = placeAssets(kit, places);
+
+ok(placed.get("gen")!.source === "own", "a surveyed generator uses its own position");
+ok(placed.get("gen")!.lat === 13.981, "the one recorded against it, not its yard's");
+
+// The point of anchoring: a riser has no GPS worth trusting, the building does.
+ok(placed.get("dbmain")!.source === "space", "a board in an unplaced riser falls back to a space");
+ok(placed.get("dbmain")!.lat === 13.99, "the nearest ancestor that has been placed");
+ok(placed.get("dbmain")!.anchorId === "block", "and says which one it anchored to");
+
+ok(placed.get("cb14")!.source === "parent", "a breaker inside a board sits where the board does");
+ok(placed.get("cb14")!.lat === 13.99, "at the same point");
+ok(placed.get("cb14")!.anchorId === "block", "sharing the board\u2019s anchor rather than making its own");
+
+ok(placed.get("tank")!.source === "own", "equipment in no space at all is still placed by its own position");
+ok(placed.get("orphan")!.source === "none", "and one with neither is honestly unplaced");
+ok(placed.get("orphan")!.lat === null, "with no coordinate invented for it");
+
+// A containment loop in the records must not hang the walk.
+const looped = placeAssets([A({ id: "x", parentId: "y" }), A({ id: "y", parentId: "x" })], []);
+ok(looped.get("x")!.source === "none" && looped.get("y")!.source === "none",
+  "a containment loop resolves to unplaced rather than hanging");
+
+// ---- markers, not pins ----------------------------------------------------
+const { markers, unplaced } = mapMarkers(placed);
+ok(markers.length === 3, `four placed assets make three markers (${markers.length})`);
+ok(unplaced.join(",") === "orphan", "and the unplaced one is reported rather than dropped");
+
+const atBlock = markers.find((m) => m.anchorId === "block")!;
+ok(atBlock.assetIds.join(",") === "cb14,dbmain", "the board and its breaker share one marker");
+ok(atBlock.anchorKind === "space", "anchored to the building");
+
+const atGen = markers.find((m) => m.anchorId === "gen")!;
+ok(atGen.assetIds.join(",") === "gen", "the generator keeps its own");
+ok(markers.every((m) => m.lat !== null), "every marker has a position");
+
+// Eight breakers in one riser is the case this exists to prevent.
+const riserKit: Placeable[] = [A({ id: "board", spaceId: "riser" })];
+for (let i = 0; i < 8; i += 1) riserKit.push(A({ id: `cb${i}`, parentId: "board" }));
+const dense = mapMarkers(placeAssets(riserKit, places));
+ok(dense.markers.length === 1, `nine items in one riser draw one marker (${dense.markers.length})`);
+ok(dense.markers[0].assetIds.length === 9, "holding all nine");
 
 console.log(fail === 0 ? "\nAll unit-assets checks passed." : `\n${fail} FAILED`);
 process.exit(fail === 0 ? 0 : 1);

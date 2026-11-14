@@ -31,12 +31,63 @@ function acceptPhoto(req: Request, res: Response, next: NextFunction) {
 }
 
 photosRouter.post("/", requires("issue.write"), acceptPhoto, async (req, res) => {
-  const { issueId } = req.body;
+  const { issueId, assetId } = req.body;
   const file = req.file;
 
   if (!file) return res.status(400).json({ error: "photo file is required" });
-  if (!issueId || typeof issueId !== "string") {
-    return res.status(400).json({ error: "issueId is required" });
+  if (!issueId && !assetId) {
+    return res.status(400).json({ error: "issueId or assetId is required" });
+  }
+  if (issueId && assetId) {
+    return res.status(400).json({ error: "A photo belongs to one thing, not two." });
+  }
+
+  /**
+   * A photo of equipment goes through here too, because it is the same pipeline:
+   * the same size limits, the same HEIC handling, the same EXIF read. What differs
+   * is who may add one and what it hangs off. Changing the record of what is
+   * installed on site is a property right, not a work-order right, so a technician
+   * who may photograph their own job may not re-document the plant room.
+   */
+  if (assetId) {
+    if (typeof assetId !== "string") return res.status(400).json({ error: "assetId must be a string" });
+    if (!can(req.user!.role, "property.write")) {
+      return res.status(403).json({ error: "You don't have permission to change the equipment records." });
+    }
+    const asset = await prisma.asset.findUnique({ where: { id: assetId }, select: { id: true, name: true, propertyId: true } });
+    if (!asset) return res.status(404).json({ error: "asset not found" });
+
+    const exifAsset = await readExif(file.buffer);
+    let storedAsset;
+    try {
+      storedAsset = await storeImage(file.buffer, file.originalname);
+    } catch (err) {
+      console.error("image processing failed", err);
+      return res.status(400).json({ error: "Could not read that image. Try a JPEG, PNG or HEIC photo." });
+    }
+
+    const assetPhoto = await prisma.photo.create({
+      data: {
+        assetId: asset.id,
+        filename: storedAsset.filename,
+        thumbFilename: storedAsset.thumbFilename,
+        hasGps: exifAsset.hasGps,
+        gpsLat: exifAsset.gpsLat,
+        gpsLng: exifAsset.gpsLng,
+        gpsSource: exifAsset.hasGps ? "exif" : null,
+        takenAt: exifAsset.takenAt,
+      },
+    });
+
+    await logActivity(req, {
+      action: "photo.added", entityType: "photo", entityId: assetPhoto.id,
+      propertyId: asset.propertyId, summary: `Added a photo of ${asset.name}`,
+    });
+    return res.status(201).json(assetPhoto);
+  }
+
+  if (typeof issueId !== "string") {
+    return res.status(400).json({ error: "issueId must be a string" });
   }
 
   const issue = await prisma.issue.findUnique({ where: { id: issueId } });
@@ -99,6 +150,18 @@ photosRouter.delete("/:id", requires("issue.write"), async (req, res) => {
     },
   });
   if (!photo) return res.status(404).json({ error: "not found" });
+
+  if (photo.assetId) {
+    // Same rule as adding: the equipment record is a property right.
+    if (!can(req.user!.role, "property.write")) {
+      return res.status(403).json({ error: "You don't have permission to change the equipment records." });
+    }
+    await fs.unlink(path.join(UPLOADS_DIR, photo.filename)).catch(() => {});
+    if (photo.thumbFilename) await fs.unlink(path.join(UPLOADS_DIR, photo.thumbFilename)).catch(() => {});
+    await prisma.photo.delete({ where: { id: photo.id } });
+    await logActivity(req, { action: "photo.removed", entityType: "photo", entityId: photo.id, summary: "Removed a photo of equipment" });
+    return res.json({ ok: true });
+  }
 
   if (photo.check) {
     // Evidence on a finding. Follows the same rule as the finding itself: only

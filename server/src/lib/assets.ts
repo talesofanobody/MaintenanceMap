@@ -311,3 +311,140 @@ export function parseInterval(value: unknown): number | null | undefined {
   }
   return n;
 }
+
+// ---- Where a piece of equipment sits on a map -----------------------------
+
+export interface Placeable {
+  id: string;
+  lat: number | null;
+  lng: number | null;
+  spaceId: string | null;
+  parentId: string | null;
+}
+
+export interface SpacePoint {
+  id: string;
+  parentId: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+/**
+ * How a position was arrived at. Worth keeping, because "this is where it is"
+ * and "this is the building it is in" are different claims and the screen should
+ * not make them look alike.
+ */
+export type PositionSource = "own" | "space" | "parent" | "none";
+
+export interface Placed {
+  id: string;
+  lat: number | null;
+  lng: number | null;
+  source: PositionSource;
+  /**
+   * What the marker hangs off: itself, a space, or an ancestor that has a pin.
+   * Everything sharing an anchor shares one marker.
+   */
+  anchorKind: "asset" | "space" | null;
+  anchorId: string | null;
+}
+
+/**
+ * Resolve every asset to a point on the map.
+ *
+ * Own coordinates win. Failing that the space it is in, walking up the location
+ * tree to the nearest ancestor that has been placed — a panel in a riser on floor
+ * two has no GPS of its own worth trusting, but the building does. Failing that
+ * the asset that contains it, because a breaker inside a placed panel is at the
+ * panel.
+ *
+ * The alternative — demanding a coordinate for everything — puts three panels in
+ * one riser on the same spot and reads as noise. Anchoring them to the space says
+ * what is actually known, and is the shape the floor-plan overlay will replace
+ * when it lands.
+ */
+export function placeAssets(assets: Placeable[], spaces: SpacePoint[]): Map<string, Placed> {
+  const spaceById = new Map(spaces.map((s) => [s.id, s]));
+  const assetById = new Map(assets.map((a) => [a.id, a]));
+  const out = new Map<string, Placed>();
+
+  /** The nearest ancestor space with coordinates, itself included. */
+  const spaceAnchor = (startId: string): SpacePoint | null => {
+    const seen = new Set<string>();
+    let cursor: SpacePoint | undefined = spaceById.get(startId);
+    for (let depth = 0; cursor && depth < MAX_WALK_DEPTH; depth += 1) {
+      if (seen.has(cursor.id)) return null;
+      seen.add(cursor.id);
+      if (cursor.lat !== null && cursor.lng !== null) return cursor;
+      cursor = cursor.parentId ? spaceById.get(cursor.parentId) : undefined;
+    }
+    return null;
+  };
+
+  const resolve = (asset: Placeable, seen: Set<string>): Placed => {
+    const done = out.get(asset.id);
+    if (done) return done;
+
+    let result: Placed;
+    if (asset.lat !== null && asset.lng !== null) {
+      result = { id: asset.id, lat: asset.lat, lng: asset.lng, source: "own", anchorKind: "asset", anchorId: asset.id };
+    } else {
+      const space = asset.spaceId ? spaceAnchor(asset.spaceId) : null;
+      if (space) {
+        result = { id: asset.id, lat: space.lat, lng: space.lng, source: "space", anchorKind: "space", anchorId: space.id };
+      } else if (asset.parentId && !seen.has(asset.parentId)) {
+        // Guarded against a containment loop the database may already hold.
+        seen.add(asset.parentId);
+        const parent = assetById.get(asset.parentId);
+        const up = parent ? resolve(parent, seen) : null;
+        result = up && up.lat !== null
+          ? { id: asset.id, lat: up.lat, lng: up.lng, source: "parent", anchorKind: up.anchorKind, anchorId: up.anchorId }
+          : { id: asset.id, lat: null, lng: null, source: "none", anchorKind: null, anchorId: null };
+      } else {
+        result = { id: asset.id, lat: null, lng: null, source: "none", anchorKind: null, anchorId: null };
+      }
+    }
+
+    out.set(asset.id, result);
+    return result;
+  };
+
+  for (const a of assets) resolve(a, new Set([a.id]));
+  return out;
+}
+
+export interface MapMarker {
+  key: string;
+  anchorKind: "asset" | "space";
+  anchorId: string;
+  lat: number;
+  lng: number;
+  /** Every asset drawn at this point, the anchor itself included. */
+  assetIds: string[];
+}
+
+/**
+ * One marker per anchor, rather than one per asset.
+ *
+ * Without this a riser with eight breakers in it draws eight markers on one
+ * pixel, which looks like a map and reads like nothing.
+ */
+export function mapMarkers(placed: Map<string, Placed>): { markers: MapMarker[]; unplaced: string[] } {
+  const byAnchor = new Map<string, MapMarker>();
+  const unplaced: string[] = [];
+
+  for (const p of placed.values()) {
+    if (p.lat === null || p.lng === null || !p.anchorId || !p.anchorKind) {
+      unplaced.push(p.id);
+      continue;
+    }
+    const key = `${p.anchorKind}:${p.anchorId}`;
+    const marker = byAnchor.get(key)
+      ?? { key, anchorKind: p.anchorKind, anchorId: p.anchorId, lat: p.lat, lng: p.lng, assetIds: [] };
+    marker.assetIds.push(p.id);
+    byAnchor.set(key, marker);
+  }
+
+  for (const m of byAnchor.values()) m.assetIds.sort();
+  return { markers: [...byAnchor.values()].sort((a, b) => a.key.localeCompare(b.key)), unplaced: unplaced.sort() };
+}

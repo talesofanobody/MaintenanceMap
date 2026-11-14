@@ -63,7 +63,9 @@ const ok = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + m); if (!c)
   // ---- reachable from the menu ----------------------------------------
   await page.click('.nav-toggle');
   await page.waitForTimeout(400);
-  const link = page.locator('.app-nav a:has-text("Equipment")');
+  // Exact text: "Equipment map" is now also in the menu, and a substring match
+  // picks whichever comes first.
+  const link = page.locator('.app-nav a:text-is("Equipment")');
   ok((await link.count()) > 0, 'Equipment is in the menu');
   await link.first().click();
   await page.waitForSelector('.equipment-page', { timeout: 20000 });

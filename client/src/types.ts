@@ -1584,6 +1584,7 @@ export interface AssetDetail {
     relationsIn: AssetRelationIn[];
     services: AssetServiceEntry[];
     issues: { id: string; workOrderNumber: string | null; title: string; status: string; priority: string }[];
+    photos: AssetPhoto[];
   };
   /** The blast radius: what else goes dark. */
   affects: {
@@ -1600,4 +1601,57 @@ export interface SpaceTrace {
   fedBy: ReachedAsset[];
   isolateAt: ReachedAsset[];
   truncated: boolean;
+}
+
+// ---- Slice 5b: equipment on the map --------------------------------------
+
+/** How a position was arrived at — "here" and "in this building" differ. */
+export type PositionSource = "own" | "space" | "parent" | "none";
+
+export interface MapAssetSummary {
+  id: string;
+  name: string;
+  ref: string | null;
+  kind: AssetKind;
+  source: PositionSource;
+  photoCount: number;
+  service: ServiceStatus;
+}
+
+export interface AssetMapMarker {
+  key: string;
+  anchorKind: "asset" | "space";
+  anchorId: string;
+  lat: number;
+  lng: number;
+  assetIds: string[];
+  /** Set when the marker hangs off a space rather than a surveyed point. */
+  spacePath: string[] | null;
+  assets: MapAssetSummary[];
+}
+
+export interface AssetMapSpace {
+  id: string;
+  path: string[];
+  lat: number | null;
+  lng: number | null;
+  kind: SpaceKind;
+}
+
+export interface AssetMap {
+  markers: AssetMapMarker[];
+  /** Equipment the map cannot show, reported rather than silently dropped. */
+  unplaced: MapAssetSummary[];
+  spaces: AssetMapSpace[];
+}
+
+export interface AssetPhoto {
+  id: string;
+  filename: string;
+  thumbFilename: string | null;
+  hasGps: boolean;
+  gpsLat: number | null;
+  gpsLng: number | null;
+  takenAt: string | null;
+  createdAt: string;
 }

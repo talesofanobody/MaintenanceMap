@@ -1,4 +1,4 @@
-import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, ReadingSeries, MeterPoint, Reading, Slot, UtilityKind, EntryMode, UtilitySummary, UtilityInvoice, UnitCost, Space, SpaceKind, SellStatus, SellRollup, UnmatchedText, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary, Asset, AssetKind, AssetDetail, AssetRelationOut, AssetServiceEntry, RelationKind, ServiceKind, SpaceTrace} from "./types";
+import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, ReadingSeries, MeterPoint, Reading, Slot, UtilityKind, EntryMode, UtilitySummary, UtilityInvoice, UnitCost, Space, SpaceKind, SellStatus, SellRollup, UnmatchedText, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary, Asset, AssetKind, AssetDetail, AssetRelationOut, AssetServiceEntry, RelationKind, ServiceKind, SpaceTrace, AssetMap, AssetPhoto} from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -494,6 +494,14 @@ export const api = {
       relationKinds: RelationKind[]; relationLabels: Record<string, string>; serviceKinds: ServiceKind[];
     }>(`/assets?propertyId=${propertyId}${kind ? `&kind=${kind}` : ""}${all ? "&all=1" : ""}`),
   getAsset: (id: string) => request<AssetDetail>(`/assets/${id}`),
+  /** Markers rather than assets: a riser with eight breakers is one marker. */
+  assetMap: (propertyId: string) => request<AssetMap>(`/assets/map?propertyId=${propertyId}`),
+  uploadAssetPhoto: (assetId: string, file: File) => {
+    const form = new FormData();
+    form.append("assetId", assetId);
+    form.append("photo", file);
+    return request<AssetPhoto>("/photos", { method: "POST", body: form });
+  },
   /** Everything out of date, worst first — the ninety-day standard as a query. */
   assetsDue: (propertyId: string) =>
     request<{ due: Asset[]; counts: { overdue: number; never: number; dueSoon: number } }>(

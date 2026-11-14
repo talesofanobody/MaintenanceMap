@@ -59,7 +59,14 @@ const ok = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + m); if (!c)
   const genWithIssues = await p.asset.findUnique({ where: { id: gen.id }, include: { issues: true } });
   ok(genWithIssues.issues.length === 1, 'and the equipment reads back its own faults');
 
-  // 5. Deleting equipment must not take the work history with it.
+  // 5. Photographs of equipment.
+  const shot = await p.photo.create({ data: { assetId: gen.id, filename: 'gen1.jpg', thumbFilename: 'gen1-t.jpg' } });
+  ok(shot.assetId === gen.id, 'a photo can be filed against equipment');
+  ok(shot.issueId === null && shot.checkId === null, 'without claiming any other owner');
+  const genShots = await p.asset.findUnique({ where: { id: gen.id }, include: { photos: true } });
+  ok(genShots.photos.length === 1, 'and reads back from the equipment');
+
+  // 6. Deleting equipment must not take the work history with it.
   await p.asset.delete({ where: { id: board.id } });
   const survivor = await p.issue.findUnique({ where: { id: 'iss2' } });
   ok(!!survivor, 'deleting equipment leaves the issues alone');
@@ -67,6 +74,13 @@ const ok = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + m); if (!c)
   ok(!!stillThere, 'and leaves the space it fed alone');
   const orphanRels = await p.assetRelation.findMany({ where: { fromAssetId: board.id } });
   ok(orphanRels.length === 0, 'while its own relations go with it');
+
+  // Its photographs go with it too — they document that unit and nothing else.
+  await p.photo.create({ data: { assetId: gen.id, filename: 'plate.jpg' } });
+  const before = await p.photo.count();
+  await p.asset.delete({ where: { id: gen.id } });
+  ok((await p.photo.count()) === before - 2, 'deleting equipment takes its photographs with it');
+  ok(!!(await p.issue.findUnique({ where: { id: 'iss2' } })), 'and still leaves the issue that named it');
 
   await p.$disconnect();
   console.log(fail === 0 ? '\nAll migration-assets checks passed.' : `\n${fail} FAILED`);

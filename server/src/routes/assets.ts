@@ -8,6 +8,7 @@ import { withPaths } from "../lib/spaces";
 import {
   ASSET_KINDS, ASSET_KIND_LABELS, RELATION_KINDS, RELATION_LABELS, SERVICE_KINDS,
   downstream, upstream, isolationPoints, serviceStatus, parseInterval,
+  placeAssets, mapMarkers,
   type RelationEdge,
 } from "../lib/assets";
 
@@ -163,6 +164,76 @@ assetsRouter.get("/trace", async (req, res) => {
   });
 });
 
+/**
+ * Everything placed on the map, as markers rather than as assets.
+ *
+ * Declared before "/:id". A marker is an anchor, not a piece of equipment: a riser
+ * with eight breakers in it is one marker holding eight, because eight pins on one
+ * pixel looks like a map and reads like nothing.
+ *
+ * Assets that resolve nowhere come back in `unplaced` rather than being dropped.
+ * Equipment the map cannot show is exactly what somebody needs to be told about —
+ * silently omitting it makes an incomplete map look finished.
+ */
+assetsRouter.get("/map", async (req, res) => {
+  const propertyId = typeof req.query.propertyId === "string" ? req.query.propertyId : undefined;
+  if (!propertyId) return res.status(400).json({ error: "Which property?" });
+
+  const assets = await prisma.asset.findMany({
+    where: { propertyId, active: true },
+    select: {
+      id: true, name: true, ref: true, kind: true, lat: true, lng: true,
+      spaceId: true, parentId: true, serviceIntervalDays: true, lastServicedAt: true, installedAt: true,
+    },
+    take: 5000,
+  });
+
+  const spaceRows = await prisma.space.findMany({
+    where: { propertyId },
+    select: { id: true, parentId: true, name: true, code: true, kind: true, lat: true, lng: true, sellable: true, sellStatus: true, sortOrder: true, active: true },
+    take: 5000,
+  });
+
+  const placed = placeAssets(assets, spaceRows);
+  const { markers, unplaced } = mapMarkers(placed);
+
+  const withPath = withPaths(spaceRows);
+  const spaceName = new Map(withPath.map((s) => [s.id, s.path]));
+  const assetById = new Map(assets.map((a) => [a.id, a]));
+
+  // How many photographs each one carries, so the map can say which are documented.
+  const photoCounts = await prisma.photo.groupBy({
+    by: ["assetId"],
+    where: { assetId: { in: assets.map((a) => a.id) } },
+    _count: { _all: true },
+  });
+  const photos = new Map(photoCounts.map((p) => [p.assetId as string, p._count._all]));
+
+  const summarise = (id: string) => {
+    const a = assetById.get(id)!;
+    const p = placed.get(id)!;
+    return {
+      id: a.id, name: a.name, ref: a.ref, kind: a.kind,
+      source: p.source,
+      photoCount: photos.get(a.id) ?? 0,
+      service: serviceStatus(a),
+    };
+  };
+
+  res.json({
+    markers: markers.map((m) => ({
+      ...m,
+      spacePath: m.anchorKind === "space" ? spaceName.get(m.anchorId) ?? null : null,
+      assets: m.assetIds.map(summarise),
+    })),
+    unplaced: unplaced.map(summarise),
+    /** Spaces that could anchor equipment, for the "put it in a room" picker. */
+    spaces: spaceRows.map((s) => ({
+      id: s.id, path: spaceName.get(s.id) ?? [s.name], lat: s.lat, lng: s.lng, kind: s.kind,
+    })),
+  });
+});
+
 /** One asset, its relations, its service history, and both walks. */
 assetsRouter.get("/:id", async (req, res) => {
   const asset = await prisma.asset.findUnique({
@@ -191,6 +262,11 @@ assetsRouter.get("/:id", async (req, res) => {
         select: { id: true, workOrderNumber: true, title: true, status: true, priority: true },
         orderBy: { createdAt: "desc" },
         take: 20,
+      },
+      photos: {
+        select: { id: true, filename: true, thumbFilename: true, hasGps: true, gpsLat: true, gpsLng: true, takenAt: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+        take: 40,
       },
     },
   });

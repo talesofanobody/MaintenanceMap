@@ -24,6 +24,7 @@ running:
 | `api-utilities.js` | Rounds, tanks, invoices, site totals, retiring a meter | `server` on :4000 |
 | `api-spaces.js` | The tree, 40 rooms from a range, reconciling free text | `server` on :4000 |
 | `api-assets.js` | The register, relations, the blast radius, services, the due list | `server` on :4000 |
+| `api-assetmap.js` | Markers and anchoring, the unplaced list, photographs of equipment | `server` on :4000 |
 | `ui-governance.js` | The Gantt draws, blockers clear, roles stick | Both dev servers |
 | `ui-tree.js` | Phase dates roll up, progress shows, the refusal holds | Both dev servers |
 | `ui-calendar.js` | The editor works and the chart shades days nobody works | Both dev servers |
@@ -31,9 +32,10 @@ running:
 | `ui-utilities.js` | A round entered on screen converts and adds up | Both dev servers |
 | `ui-spaces.js` | A tree built from a range, then the text matched to it | Both dev servers |
 | `ui-assets.js` | A breaker's blast radius on screen, and a room traced back | Both dev servers |
+| `ui-assetmap.js` | Equipment on the map, the side tabs, following a chain, placing a pin | Both dev servers |
 | `smoke-pages.js` | Nothing else broke | Both dev servers |
 
-871 checks in total, plus the two migration drills below (33 more).
+949 checks in total, plus the two migration drills below (38 more).
 
 ```sh
 (cd server && npm run dev)    # :4000
@@ -110,19 +112,19 @@ cd server
 SCRATCH=$(mktemp -d)
 HOLD=$SCRATCH/held && mkdir -p "$HOLD"
 
-mv prisma/migrations/20261118090000_assets "$HOLD/"
+mv prisma/migrations/20261118090000_assets prisma/migrations/20261119090000_asset_photos "$HOLD/"
 DATABASE_URL="file:$SCRATCH/old.db" npx prisma migrate deploy
 DATABASE_URL="file:$SCRATCH/old.db" node ../tests/migration-seed-preassets.js
 
-mv "$HOLD/20261118090000_assets" prisma/migrations/
+mv "$HOLD/20261118090000_assets" "$HOLD/20261119090000_asset_photos" prisma/migrations/
 DATABASE_URL="file:$SCRATCH/old.db" npx prisma migrate deploy
 DATABASE_URL="file:$SCRATCH/old.db" node ../tests/migration-assets.js
 ```
 
 It proves the location tree and the issues already matched to it come through
 untouched, that an issue predating the migration points at no equipment, and that
-deleting a piece of equipment takes its own relations with it while leaving the work
-history and the spaces it fed alone.
+deleting a piece of equipment takes its own relations and photographs with it while
+leaving the work history and the spaces it fed alone.
 
 ## Fixtures use dates relative to today
 

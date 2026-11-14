@@ -58,6 +58,7 @@ case "${1:-all}" in
     run "api: utilities"          node "$HERE/api-utilities.js"
     run "api: spaces"             node "$HERE/api-spaces.js"
     run "api: assets"             node "$HERE/api-assets.js"
+    run "api: the asset map"      node "$HERE/api-assetmap.js"
     ;;
   ui)
     run "ui: the plan on screen" node "$HERE/ui-planning.js"
@@ -68,6 +69,7 @@ case "${1:-all}" in
     run "ui: utilities"            node "$HERE/ui-utilities.js"
     run "ui: spaces"               node "$HERE/ui-spaces.js"
     run "ui: assets"               node "$HERE/ui-assets.js"
+    run "ui: the asset map"        node "$HERE/ui-assetmap.js"
     ;;
   smoke)  run "smoke: every page"       node "$HERE/smoke-pages.js" ;;
   all)
@@ -85,6 +87,7 @@ case "${1:-all}" in
     run "api: utilities"           node "$HERE/api-utilities.js"
     run "api: spaces"              node "$HERE/api-spaces.js"
     run "api: assets"              node "$HERE/api-assets.js"
+    run "api: the asset map"       node "$HERE/api-assetmap.js"
     run "ui: the plan on screen"   node "$HERE/ui-planning.js"
     run "ui: gantt and governance" node "$HERE/ui-governance.js"
     run "ui: the tree"             node "$HERE/ui-tree.js"
@@ -93,6 +96,7 @@ case "${1:-all}" in
     run "ui: utilities"            node "$HERE/ui-utilities.js"
     run "ui: spaces"               node "$HERE/ui-spaces.js"
     run "ui: assets"               node "$HERE/ui-assets.js"
+    run "ui: the asset map"        node "$HERE/ui-assetmap.js"
     run "smoke: every page"        node "$HERE/smoke-pages.js"
     ;;
   *) echo "unknown target: $1"; exit 2 ;;

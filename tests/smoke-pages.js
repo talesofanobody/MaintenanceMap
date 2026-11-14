@@ -34,6 +34,7 @@ const ok = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + m); if (!c)
     ['/utilities', '.page'],
     ['/places', '.places-page'],
     ['/equipment', '.equipment-page'],
+    ['/equipment-map', '.equipment-map-page'],
     ['/crew-map', '.page'],
     ['/schedules', '.page'],
     ['/technicians', '.page'],

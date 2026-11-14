@@ -264,6 +264,12 @@ model Photo {
   /// Grouping moves it onto the issue, so at most one of these is ever set.
   walkthroughId String?
   walkthrough   Walkthrough?     @relation(fields: [walkthroughId], references: [id], onDelete: Cascade)
+  /// A photo OF a piece of equipment — the nameplate, the panel schedule, where
+  /// the valve actually is. Not a fault: a fault is an issue and its photos hang
+  /// off that. This is what the manual is for, and it is the difference between
+  /// a register entry and knowing what you are looking for when you get there.
+  assetId       String?
+  asset         Asset?           @relation(fields: [assetId], references: [id], onDelete: Cascade)
   filename      String
   thumbFilename String?
   hasGps        Boolean          @default(false)
@@ -279,6 +285,7 @@ model Photo {
   @@index([guestReportId])
   @@index([checkId])
   @@index([walkthroughId])
+  @@index([assetId])
 }
 
 // Organisation-wide settings (turnaround days per priority, escalation rules), one JSON row.
@@ -1119,6 +1126,7 @@ model Asset {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   issues     Issue[]
+  photos     Photo[]
   relationsOut AssetRelation[] @relation("RelationFrom")
   relationsIn  AssetRelation[] @relation("RelationTo")
   services   AssetService[]
