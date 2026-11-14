@@ -16,13 +16,14 @@ running:
 | `api-tree.js` | A phase finishes only when its tasks do; rolled dates | `server` on :4000 |
 | `api-calendar.js` | Opting in changes float; opting out puts it back | `server` on :4000 |
 | `api-readings.js` | A number flags its own line; the trend groups by point | `server` on :4000 |
+| `api-paging.js` | 230 real issues: pages reach each once, the ceiling holds | `server` on :4000 |
 | `ui-governance.js` | The Gantt draws, blockers clear, roles stick | Both dev servers |
 | `ui-tree.js` | Phase dates roll up, progress shows, the refusal holds | Both dev servers |
 | `ui-calendar.js` | The editor works and the chart shades days nobody works | Both dev servers |
 | `ui-readings.js` | A reading typed on a phone flags the line by itself | Both dev servers |
 | `smoke-pages.js` | Nothing else broke | Both dev servers |
 
-484 checks in total.
+509 checks in total.
 
 ```sh
 (cd server && npm run dev)    # :4000
@@ -127,8 +128,12 @@ or a phase would report done with live work inside.
 
 ## What is not covered
 
-- Pagination is untested because it does not exist. The issues route still makes
-  unbounded `findMany` calls, which is slice 0 and the first real ceiling.
+- The aggregate endpoints (`insights`, `export`, parts of `dashboard`) still read
+  broadly by design. The dashboard is capped; the others are not, and a CSV export of
+  everything is a legitimate thing to want. Worth revisiting if they get slow.
+- `GET /issues` returns the full relation set per row even in a list, which no list
+  screen needs. Paging makes that survivable rather than cheap; a lean list select
+  would be the next improvement.
 - The Gantt is not print-tested. It scrolls horizontally, which paper does not.
 - The suites from v1 (inspections, guest intake, roles, backups, security headers)
   were lost with the container and have not been rebuilt. `smoke-pages.js` checks only

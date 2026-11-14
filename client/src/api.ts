@@ -221,7 +221,35 @@ export const api = {
   ) => request<Property>(`/properties/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteProperty: (id: string) => request<void>(`/properties/${id}`, { method: "DELETE" }),
 
-  listIssues: (propertyId: string) => request<Issue[]>(`/issues?propertyId=${propertyId}`),
+  /**
+   * A page of issues, with the total alongside.
+   *
+   * Paged rather than all of them: at three hundred and forty rooms carrying up
+   * to forty findings each this was thirteen thousand rows with a dozen relations
+   * apiece in one response. The caller gets `total` so it can say what it is not
+   * showing, instead of quietly showing less.
+   */
+  listIssues: (propertyId: string, params: { limit?: number; offset?: number; open?: boolean } = {}) => {
+    const q = new URLSearchParams({ propertyId });
+    if (params.limit) q.set("limit", String(params.limit));
+    if (params.offset) q.set("offset", String(params.offset));
+    if (params.open) q.set("open", "1");
+    return request<{ items: Issue[]; total: number; limit: number; offset: number; hasMore: boolean }>(`/issues?${q}`);
+  },
+  /** Every issue at a property, fetched a page at a time. For the printable report. */
+  listAllIssues: async (propertyId: string, cap = 5000): Promise<{ items: Issue[]; total: number; truncated: boolean }> => {
+    const items: Issue[] = [];
+    let offset = 0;
+    let total = 0;
+    for (;;) {
+      const page = await api.listIssues(propertyId, { limit: 1000, offset });
+      total = page.total;
+      items.push(...page.items);
+      offset += page.items.length;
+      if (!page.hasMore || !page.items.length || items.length >= cap) break;
+    }
+    return { items, total, truncated: items.length < total };
+  },
   createIssue: (data: {
     propertyId: string;
     title: string;

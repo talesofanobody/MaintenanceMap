@@ -133,18 +133,50 @@ async function parseExtras(body: any): Promise<ParsedExtras> {
   };
 }
 
+/** The most this will return in one response, however large a limit is asked for. */
+const ISSUE_PAGE_MAX = 1000;
+const ISSUE_PAGE_DEFAULT = 200;
+
+/**
+ * Issues at a property, a page at a time.
+ *
+ * This used to return every issue with every relation — photographs, crew,
+ * checklist, tags, the whole message thread, costs, quotes, links and blockers —
+ * in one unbounded response. At a few dozen issues that is fine and it is how the
+ * app was built; at the scale this is heading for, three hundred and forty rooms
+ * carrying up to forty findings each, it is thirteen thousand rows each dragging a
+ * dozen relations behind it, serialised into one JSON body and handed to one React
+ * list. That does not degrade, it stops.
+ *
+ * So: a page, with the total alongside it, and a hard ceiling no caller can raise.
+ * A caller that wants everything says so a page at a time and can see from `total`
+ * how far it has to go, rather than discovering the limit as a blank screen.
+ */
 issuesRouter.get("/", async (req, res) => {
   const { propertyId, technicianId, open } = req.query;
-  const issues = await prisma.issue.findMany({
-    where: {
-      ...(propertyId ? { propertyId: String(propertyId) } : {}),
-      ...(technicianId ? { technicianId: String(technicianId) } : {}),
-      ...(open ? { status: { in: OPEN_STATUSES } } : {}),
-    },
-    include: ISSUE_INCLUDE,
-    orderBy: { createdAt: "desc" },
-  });
-  res.json(issues);
+  const where = {
+    ...(propertyId ? { propertyId: String(propertyId) } : {}),
+    ...(technicianId ? { technicianId: String(technicianId) } : {}),
+    ...(open ? { status: { in: OPEN_STATUSES } } : {}),
+  };
+
+  const asked = Number(req.query.limit);
+  const limit = Number.isFinite(asked) && asked > 0 ? Math.min(Math.floor(asked), ISSUE_PAGE_MAX) : ISSUE_PAGE_DEFAULT;
+  const offsetAsked = Number(req.query.offset);
+  const offset = Number.isFinite(offsetAsked) && offsetAsked > 0 ? Math.floor(offsetAsked) : 0;
+
+  const [items, total] = await Promise.all([
+    prisma.issue.findMany({
+      where,
+      include: ISSUE_INCLUDE,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
+    }),
+    prisma.issue.count({ where }),
+  ]);
+
+  res.json({ items, total, limit, offset, hasMore: offset + items.length < total });
 });
 
 issuesRouter.post("/", requires("issue.write"), async (req, res) => {

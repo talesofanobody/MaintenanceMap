@@ -1,5 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../db";
+
+/** The most issues one dashboard payload will carry. */
+const DASHBOARD_ISSUE_CAP = 1500;
 import { serializeTechnician } from "./technicians";
 import { OPEN_STATUSES } from "../lib/workflow";
 
@@ -15,7 +18,11 @@ dashboardRouter.get("/", async (_req, res) => {
       orderBy: { name: "asc" },
     }),
     prisma.technician.findMany({ orderBy: [{ active: "desc" }, { name: "asc" }] }),
+    // Capped rather than unbounded. A dashboard drawing thirteen thousand pins is
+    // not a dashboard, so it takes the most recent slice and the response says how
+    // many there are in total — degrading into an honest number beats melting.
     prisma.issue.findMany({
+      take: DASHBOARD_ISSUE_CAP,
       // Recently closed work still shows as "done today"; cancelled work was never
       // done, so it leaves the boards entirely.
       where: { OR: [{ status: { in: OPEN_STATUSES } }, { status: "completed", closedAt: { gte: since } }] },

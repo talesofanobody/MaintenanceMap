@@ -86,17 +86,23 @@ export default function PropertyWorkspace() {
   const [guideDismissed, setGuideDismissed] = useState(true);
 
   const [fromCache, setFromCache] = useState(false);
+  /** Everything at this property, so the page can say what it is not drawing. */
+  const [totalIssues, setTotalIssues] = useState(0);
 
   const load = useCallback(() => {
     if (!id) return;
-    Promise.all([api.getProperty(id), api.listIssues(id)])
-      .then(([p, i]) => {
+    // The map and the panel want everything at this property, so this pages
+    // through too — but it keeps the total, so the page can say what it is not
+    // drawing rather than losing pins without a word.
+    Promise.all([api.getProperty(id), api.listAllIssues(id)])
+      .then(([p, loaded]) => {
         setProperty(p);
-        setIssues(i);
+        setIssues(loaded.items);
+        setTotalIssues(loaded.total);
         setFromCache(false);
         setError(null);
         // Keep the last good copy so this property still opens with no connection.
-        writeCache(`property.${id}`, { property: p, issues: i });
+        writeCache(`property.${id}`, { property: p, issues: loaded.items });
       })
       .catch((e) => {
         const cached = isNetworkError(e) ? readCache<{ property: Property; issues: Issue[] }>(`property.${id}`) : null;
@@ -419,6 +425,14 @@ export default function PropertyWorkspace() {
             </div>
           )}
         </div>
+
+        {/* Said out loud when the page is drawing fewer pins than exist, rather
+            than losing them without a word. */}
+        {totalIssues > issues.length && (
+          <div className="banner banner-warn small no-print">
+            Showing {issues.length} of {totalIssues} issues at this property. Use Reports to work through the rest.
+          </div>
+        )}
 
         {showGuideCard && (
           <GettingStarted

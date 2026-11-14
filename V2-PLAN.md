@@ -508,13 +508,20 @@ checklist content is written in another conversation.
 
 ## 8. Things that must be dealt with on the way
 
-### Pagination — verified, and a real ceiling
+### ~~Pagination~~ — done
 
-The issues route makes eight unbounded `findMany` calls. There is no `take` or `skip` anywhere in
-it. At 340-plus rooms with up to 40 issues each — on the order of 13,000 open items — this
-returns the lot in one response and renders it in one list. The same is true of several other
-list endpoints. **This has to be fixed before the room tracker's volume reaches the app**, not
-after. It is unglamorous and it is slice 0.
+`GET /issues` returned every issue with every relation in one unbounded response. A page is now
+200 with a hard ceiling of 1000 no caller can raise, and the response carries the true total so
+a caller can say what it is not showing. The printable report and the property workspace page
+through and both say so on screen when they are showing fewer than exist. The dashboard is
+capped at 1500 rather than loading every open issue.
+
+Tested against 230 real issues: three pages at 100 reach each one exactly once, a limit of
+99,999 clamps to 1000, and a default page is 190KB.
+
+What is left here: the list still carries the full relation set per row, which no list screen
+needs. Paging makes that survivable rather than cheap, and a lean list select would be the next
+improvement. The aggregate endpoints (`insights`, `export`) still read broadly by design.
 
 ### Volume of readings
 

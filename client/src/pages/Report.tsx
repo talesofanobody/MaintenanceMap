@@ -39,13 +39,19 @@ export default function Report() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Set to the true total when the sheet is showing fewer than there are. */
+  const [truncated, setTruncated] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    Promise.all([api.getProperty(id), api.listIssues(id)])
+    // A printable report is inherently "all of them", so it pages through rather
+    // than taking the first page. Where there are more than it will carry, it says
+    // so on the sheet instead of quietly printing a subset.
+    Promise.all([api.getProperty(id), api.listAllIssues(id)])
       .then(([p, i]) => {
         setProperty(p);
-        setIssues(i);
+        setIssues(i.items);
+        setTruncated(i.truncated ? i.total : null);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -135,6 +141,13 @@ export default function Report() {
             <span>
               {issues.length} issue{issues.length === 1 ? "" : "s"} · {counts.open} open · {counts.byStatus.completed} completed
             </span>
+            {/* Said on the sheet, because a report that silently covers a subset is
+                worse than one that admits what it left out. */}
+            {truncated !== null && (
+              <span className="report-truncated">
+                Showing the most recent {issues.length} of {truncated}. Narrow the report by date to cover the rest.
+              </span>
+            )}
             {counts.avgResolveMs !== null && (
               <span>
                 Avg. time to resolve: {formatDurationMs(counts.avgResolveMs)} ({counts.resolvedCount} closed)

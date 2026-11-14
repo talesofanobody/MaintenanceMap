@@ -54,6 +54,7 @@ case "${1:-all}" in
     run "api: the tree"           node "$HERE/api-tree.js"
     run "api: the calendar"       node "$HERE/api-calendar.js"
     run "api: readings"           node "$HERE/api-readings.js"
+    run "api: paging"             node "$HERE/api-paging.js"
     ;;
   ui)
     run "ui: the plan on screen" node "$HERE/ui-planning.js"
@@ -74,6 +75,7 @@ case "${1:-all}" in
     run "api: the tree"            node "$HERE/api-tree.js"
     run "api: the calendar"        node "$HERE/api-calendar.js"
     run "api: readings"            node "$HERE/api-readings.js"
+    run "api: paging"              node "$HERE/api-paging.js"
     run "ui: the plan on screen"   node "$HERE/ui-planning.js"
     run "ui: gantt and governance" node "$HERE/ui-governance.js"
     run "ui: the tree"             node "$HERE/ui-tree.js"

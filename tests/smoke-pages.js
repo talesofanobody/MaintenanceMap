@@ -71,8 +71,10 @@ const ok = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + m); if (!c)
   });
   ok(!!issue.id, 'a fixture issue is created');
 
+  // The list is paged now: items plus the true total, rather than a bare array.
   const list = await (await page.request.fetch(`${API}/api/issues?propertyId=${prop.id}`)).json();
-  ok(Array.isArray(list) && list.length === 1, `the issue list reads it back (${list.length})`);
+  ok(Array.isArray(list.items) && list.items.length === 1, `the issue list reads it back (${list.items?.length})`);
+  ok(list.total === 1 && list.hasMore === false, `with the total and no more to come (${list.total})`);
 
   const one = await (await page.request.fetch(`${API}/api/issues/${issue.id}`)).json();
   ok(one.id === issue.id, 'and a single issue reads');
