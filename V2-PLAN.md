@@ -3,7 +3,12 @@
 **Drafted:** 14 November 2026
 **Scope:** project management, a property manual, daily utility logging with graphs, and the
 groundwork for automation.
-**Status:** plan. Nothing in sections 3–6 is built yet; section 7 is the build order.
+**Status:** slice 1 is built, tested and pushed (`632caa9`). Slices 2–8 are still plan.
+Section 7 is the build order and records what is done.
+
+**Decided since drafting.** The EAM stays the record of work orders; this app plans and
+feeds it. Slice 1 is therefore a planning layer, and nothing in it assumes otherwise —
+`workOrderNumber` and `workOrderUrl` are untouched and carried through every new read.
 
 ---
 
@@ -400,7 +405,7 @@ the one that gets automation running this quarter instead of next.
 
 | Slice | Contents | Why here |
 |---|---|---|
-| **1** | Work breakdown: `parentId`, `isMilestone`, baselines, `IssueLink`, project budget/owner/sign-off, `Quote` | Asked for first. Mostly additive to existing models |
+| ~~**1**~~ | ~~Work breakdown: `parentId`, `isMilestone`, baselines, `IssueLink`, project budget/owner/sign-off, `Quote`~~ | **Done** — `632caa9`. 128 checks in `tests/` |
 | **2** | Numeric readings on inspection checks (value, unit, acceptable range) | Blocks new checklist content; wanted by three subsystems |
 | **3** | Daily readings: `MeterPoint`, `Reading`, `UtilityInvoice`, the nutshell dashboard, one charting library | Smallest, pays back daily, replaces live spreadsheet work |
 | **4** | Location hierarchy: block → floor → space, coexisting with `roomName` | Foundation for the manual; touches a lot, so early |
@@ -441,6 +446,18 @@ v2 work starts, not after, and the reinstall this session needed is the natural 
 Unchanged and still the highest operational risk. v2 adds considerably more irreplaceable data —
 a property manual is months of surveying that cannot be reconstructed from memory. Off-platform
 backup should land before the manual is populated, not after.
+
+### Found while building slice 1
+
+**`projectId` was accepted nowhere on an issue.** An issue could only join a project
+through `POST /projects/:id/issues`, so building a breakdown took two calls per job and
+an issue could not be moved between projects at all. Fixed in slice 1.
+
+**The pool section does not use the `pool_spa` trade.** Recorded in `INSPECTIONS.md` and
+still open: the twelve-point private pool and hot tub section is categorised across
+`plumbing`, `general`, `fire_safety`, `hvac` and `electrical`, so a flagged pool pump
+proposes a plumber rather than the pool technician. It is a content fix, best done with
+whatever checklist rewrite comes out of slice 2.
 
 ### Smaller items from the project summary
 
