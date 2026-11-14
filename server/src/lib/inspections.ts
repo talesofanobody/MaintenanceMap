@@ -52,6 +52,10 @@ interface SeedPoint {
   label: string;
   hint?: string;
   category?: string;
+  /** Set where the point wants a number rather than a judgement. */
+  unit?: string;
+  minOk?: number;
+  maxOk?: number;
 }
 interface SeedSection {
   name: string;
@@ -115,6 +119,21 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
           { label: "Basin taps", hint: "Both temperatures, no drip, aerator not furred", category: "plumbing" },
           { label: "Basin drainage", hint: "Drains within seconds, plug seals, no smell", category: "plumbing" },
           { label: "Shower pressure and temperature", hint: "Reaches temperature within a minute and holds it", category: "plumbing" },
+          /**
+           * The reading the water-hygiene regime turns on.
+           *
+           * Below 50 °C at the outlet is the condition legionella needs, so this is
+           * not a comfort check — it is the control, and it is the number an
+           * inspector will ask to see a year of. Run for a full minute first: the
+           * first flush is whatever was standing in the pipe.
+           */
+          {
+            label: "Hot water outlet temperature",
+            hint: "After running a full minute. Below 50 °C is a legionella control failure, not a comfort complaint",
+            category: "plumbing",
+            unit: "°C",
+            minOk: 50,
+          },
           {
         label: "Shower controls and handle",
         hint: "Handle straight, turns without friction, trim plate flush and sealed",
@@ -243,18 +262,34 @@ export const DEFAULT_TEMPLATES: SeedTemplate[] = [
       {
         name: "Private pool or hot tub",
         points: [
-          { label: "Water clarity and level", hint: "Clear, no film or debris, level up to the skimmer", category: "plumbing" },
-          { label: "Pump and filtration", hint: "Runs without grinding or cavitating, no leaks at the unions", category: "plumbing" },
-          { label: "Heater and thermostat", hint: "Reaches the set temperature, controls readable and responding", category: "hvac" },
-          { label: "Jets, blower and controls", hint: "Every jet flows, controls respond, nothing airlocked", category: "plumbing" },
+          // The trade here is pool_spa, not plumbing. It was plumbing, which meant a
+          // flagged pool pump proposed a plumber rather than the pool technician —
+          // the category is what drives the assignment suggestion.
+          { label: "Water clarity and level", hint: "Clear, no film or debris, level up to the skimmer", category: "pool_spa" },
+          { label: "Pump and filtration", hint: "Runs without grinding or cavitating, no leaks at the unions", category: "pool_spa" },
+          { label: "Heater and thermostat", hint: "Reaches the set temperature, controls readable and responding", category: "pool_spa" },
+          { label: "Jets, blower and controls", hint: "Every jet flows, controls respond, nothing airlocked", category: "pool_spa" },
           { label: "Waterline tiles and grout", hint: "No loose or missing tiles, grout sound, no scale line", category: "general" },
           { label: "Coping, surround and decking", hint: "Level, no lifting or cracking, nothing sharp underfoot", category: "general" },
           { label: "Steps, handrail and grab bar", hint: "Firm, no movement, non-slip surface still doing its job", category: "fire_safety" },
-          { label: "Skimmer, drain and overflow", hint: "Covers present and secured, overflow running clear", category: "plumbing" },
+          { label: "Skimmer, drain and overflow", hint: "Covers present and secured, overflow running clear", category: "pool_spa" },
           { label: "Underwater and surround lighting", hint: "All lamps working, lenses sealed, no water in the fitting", category: "electrical" },
           { label: "Cover, lid and lifter", hint: "Sits properly, clips work, no tears or waterlogging", category: "general" },
           { label: "Depth marking and safety signage", hint: "Present, legible, correct for the depth", category: "fire_safety" },
           { label: "Chemical smell and skin feel", hint: "No sting or heavy chlorine smell — the first sign the balance is off", category: "general" },
+          // Readings rather than judgements. A smell test catches a problem that is
+          // already a problem; these catch it on the way there, and the series is
+          // what shows whether the dosing is actually holding.
+          {
+            label: "Free chlorine",
+            hint: "Taken at the far end from the return, not at the inlet",
+            category: "pool_spa",
+            unit: "mg/L",
+            minOk: 1,
+            maxOk: 3,
+          },
+          { label: "pH", hint: "Read after the chlorine, from the same sample", category: "pool_spa", unit: "pH", minOk: 7.2, maxOk: 7.8 },
+          { label: "Water temperature", hint: "Mid-depth, away from the heater return", category: "pool_spa", unit: "°C", minOk: 27, maxOk: 32 },
         ],
       },
       {
@@ -343,7 +378,7 @@ const GENERAL_TEMPLATE: SeedTemplate = {
   sections: [],
 };
 
-export const SEED_VERSION = 5;
+export const SEED_VERSION = 6;
 
 /**
  * Adds points that a later release decided were missing, to templates that were
@@ -389,6 +424,9 @@ export async function topUpTemplates(): Promise<number> {
                 label: point.label,
                 hint: point.hint ?? null,
                 category: point.category ?? null,
+                unit: point.unit ?? null,
+                minOk: point.minOk ?? null,
+                maxOk: point.maxOk ?? null,
                 position: pointIndex,
               })),
             },
@@ -446,6 +484,9 @@ export async function topUpTemplates(): Promise<number> {
                 label: point.label,
                 hint: point.hint ?? null,
                 category: point.category ?? null,
+                unit: point.unit ?? null,
+                minOk: point.minOk ?? null,
+                maxOk: point.maxOk ?? null,
                 position: i,
               })),
             },
@@ -465,6 +506,9 @@ export async function topUpTemplates(): Promise<number> {
             label: point.label,
             hint: point.hint ?? null,
             category: point.category ?? null,
+            unit: point.unit ?? null,
+            minOk: point.minOk ?? null,
+            maxOk: point.maxOk ?? null,
             position: ++position,
           },
         });
@@ -503,6 +547,9 @@ export async function seedTemplates(): Promise<number> {
                 label: point.label,
                 hint: point.hint ?? null,
                 category: point.category ?? null,
+                unit: point.unit ?? null,
+                minOk: point.minOk ?? null,
+                maxOk: point.maxOk ?? null,
                 position: pointIndex,
               })),
             },
@@ -517,4 +564,80 @@ export async function seedTemplates(): Promise<number> {
 /** How many points a template holds, which is what the picker wants to show. */
 export function countPoints(template: { sections: { points: unknown[] }[] }): number {
   return template.sections.reduce((sum, section) => sum + section.points.length, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Readings: the points that want a number rather than a judgement
+// ---------------------------------------------------------------------------
+
+/**
+ * The units that actually come up on this kind of work.
+ *
+ * A closed list rather than free text, because the whole value of a reading is
+ * being able to put it beside last month's. "°C" and "degC" and "C" in three
+ * different rounds is three series nobody can plot.
+ */
+export const READING_UNITS = ["°C", "mg/L", "ppm", "pH", "bar", "kPa", "%", "hours", "lux", "dB", "NTU"] as const;
+export type ReadingUnit = (typeof READING_UNITS)[number];
+const UNIT_SET = new Set<string>(READING_UNITS);
+
+export function parseUnit(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !UNIT_SET.has(value)) {
+    throw new ValidationError(`unit must be one of ${READING_UNITS.join(", ")}`);
+  }
+  return value;
+}
+
+export function parseReading(value: unknown, field = "value"): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) throw new ValidationError(`${field} must be a number`);
+  return n;
+}
+
+export type RangeVerdict = "ok" | "low" | "high" | "unknown";
+
+/**
+ * Where a reading sits against its range.
+ *
+ * Returns which side it failed on, not just pass or fail, because that is the
+ * difference between "add chlorine" and "stop dosing" — and a report that only
+ * says "out of range" makes the reader go and look up which.
+ *
+ * A reading with no range to judge it against is `unknown` rather than `ok`. The
+ * number is still worth recording for the trend; it just cannot be a verdict.
+ */
+export function judgeReading(
+  value: number | null | undefined,
+  minOk: number | null | undefined,
+  maxOk: number | null | undefined
+): RangeVerdict {
+  if (value === null || value === undefined) return "unknown";
+  if ((minOk === null || minOk === undefined) && (maxOk === null || maxOk === undefined)) return "unknown";
+  if (minOk !== null && minOk !== undefined && value < minOk) return "low";
+  if (maxOk !== null && maxOk !== undefined && value > maxOk) return "high";
+  return "ok";
+}
+
+/** Reads back the way somebody would say it: "48 °C, below 50". */
+export function describeReading(
+  value: number | null | undefined,
+  unit: string | null | undefined,
+  minOk: number | null | undefined,
+  maxOk: number | null | undefined
+): string | null {
+  if (value === null || value === undefined) return null;
+  const shown = `${value}${unit ? ` ${unit}` : ""}`;
+  const verdict = judgeReading(value, minOk, maxOk);
+  if (verdict === "low") return `${shown}, below ${minOk}`;
+  if (verdict === "high") return `${shown}, above ${maxOk}`;
+  if (verdict === "ok") {
+    if (minOk !== null && minOk !== undefined && maxOk !== null && maxOk !== undefined) return `${shown}, within ${minOk}–${maxOk}`;
+    if (minOk !== null && minOk !== undefined) return `${shown}, at or above ${minOk}`;
+    return `${shown}, at or below ${maxOk}`;
+  }
+  return shown;
 }

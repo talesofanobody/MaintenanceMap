@@ -75,12 +75,14 @@ Note that **`kitchen`, `laundry`, `pool_spa`, `grounds`, `pest_control` and `adm
 never used by any current point.** Six of the twenty-one trades the app knows about are not
 reached by any inspection. That is the clearest single indicator of where the coverage gap is.
 
-> **One of those six is a content bug, not a gap.** The Guest room checklist has a 12-point
-> *Private pool or hot tub* section, and not one of its points is categorised `pool_spa` — they
-> are spread across `plumbing` (4), `general` (4), `fire_safety` (2), `hvac` (1) and
-> `electrical` (1). Since the category is what proposes who gets the job, a flagged pool pump
-> currently suggests a plumber rather than the pool technician. Worth correcting whether or not
-> the checklist is rewritten.
+> **One of those six was a content bug, and is fixed.** The Guest room checklist's 12-point
+> *Private pool or hot tub* section had no point categorised `pool_spa` — they were spread across
+> `plumbing` (4), `general` (4), `fire_safety` (2), `hvac` (1) and `electrical` (1) — so a flagged
+> pool pump proposed a plumber rather than the pool technician. The five wrong ones now route to
+> `pool_spa`. Because the template top-up only ever *adds* points, by design, an install seeded
+> before the fix needed its rows corrected, which the `20261115140000_check_readings` migration
+> does: narrowly, only for those labels, only in a section of that name, and only where the
+> category is still the wrong value it shipped with.
 
 ---
 

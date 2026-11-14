@@ -506,6 +506,14 @@ model InspectionPoint {
   hint      String?
   /// The trade this usually belongs to, carried onto any issue raised from it.
   category  String?
+  /// When set, this point expects a number rather than only a judgement:
+  /// °C, mg/L, pH, bar, ppm, hours, %. The presence of a unit is what makes a
+  /// point a measurement.
+  unit      String?
+  /// The acceptable range. Either end may be open — a hot-water outlet has a
+  /// minimum and no useful maximum; a fridge has both.
+  minOk     Float?
+  maxOk     Float?
   position  Int               @default(0)
 
   @@index([sectionId, position])
@@ -577,6 +585,17 @@ model InspectionCheck {
   /// inspection, because the whole walk is one room; a general walk covers
   /// ground, so each finding carries its own.
   area         String?
+  /// The number that was read. Null means nobody took a reading, which is not
+  /// the same as a reading of zero — a chlorine level of 0 is a problem and an
+  /// unrecorded one is a gap in the round.
+  value        Float?
+  /// Snapshots of what the point expected, alongside the label and hint that are
+  /// already copied. A report from six months ago then shows the range that was
+  /// in force at the time rather than today's, which is the whole reason the
+  /// wording is snapshotted too.
+  unit         String?
+  minOk        Float?
+  maxOk        Float?
   position     Int        @default(0)
   /// Set once this finding has been turned into work.
   issueId      String?    @unique

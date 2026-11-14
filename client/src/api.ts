@@ -1,4 +1,4 @@
-import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
+import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, ReadingSeries, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -318,8 +318,25 @@ export const api = {
     request<Inspection>(`/inspections/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteInspection: (id: string) => request<void>(`/inspections/${id}`, { method: "DELETE" }),
 
-  updateCheck: (checkId: string, data: { outcome?: Outcome; severity?: Severity | null; note?: string | null; label?: string; area?: string | null; category?: string | null }) =>
-    request<InspectionCheck>(`/inspections/checks/${checkId}`, { method: "PUT", body: JSON.stringify(data) }),
+  updateCheck: (
+    checkId: string,
+    data: {
+      outcome?: Outcome;
+      severity?: Severity | null;
+      note?: string | null;
+      label?: string;
+      area?: string | null;
+      category?: string | null;
+      /**
+       * A reading. Out of its range it flags the line by itself, unless an
+       * outcome is sent in the same request, which wins.
+       */
+      value?: number | null;
+      unit?: string | null;
+      minOk?: number | null;
+      maxOk?: number | null;
+    }
+  ) => request<InspectionCheck>(`/inspections/checks/${checkId}`, { method: "PUT", body: JSON.stringify(data) }),
   /** Marks every untouched line in a section n/a — a room with no pool, say. */
   markSectionNa: (inspectionId: string, section: string, outcome: "na" | "ok" = "na") =>
     request<{ changed: number; inspection: Inspection }>(
@@ -432,6 +449,14 @@ export const api = {
       { method: "POST" }
     ),
   deleteQuote: (id: string) => request<void>(`/quotes/${id}`, { method: "DELETE" }),
+
+  // --- inspection readings -----------------------------------------------
+  /** Readings over time — the whole reason for recording numbers. */
+  listReadings: (params: { propertyId?: string; pointId?: string; from?: string; to?: string } = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
+    return request<{ series: ReadingSeries[]; units: string[] }>(`/inspections/readings${q.toString() ? `?${q}` : ""}`);
+  },
 
   // --- the working calendar ----------------------------------------------
   listCalendars: () => request<WorkCalendar[]>("/calendars"),

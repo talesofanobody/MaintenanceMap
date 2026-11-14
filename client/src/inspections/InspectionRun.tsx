@@ -7,6 +7,8 @@ import { describeFix, getFix, locationAllowedHere, locationAlreadyGranted, type 
 import PhotoLightbox from "../components/PhotoLightbox";
 import {
   categoryLabel,
+  describeRange,
+  judgeReading,
   OUTCOME_LABELS,
   OUTCOMES,
   SEVERITIES,
@@ -108,6 +110,50 @@ function CheckRow({
           )}
           {check.hint && <p className="insp-hint">{check.hint}</p>}
           {check.category && <span className="insp-cat">{categoryLabel(check.category)}</span>}
+
+          {/*
+           * A reading, where the point asks for one.
+           *
+           * Sits with the line rather than behind the flag, because the number is
+           * what decides whether the line is flagged at all — an outlet at 48 °C
+           * against a 50 °C minimum is a finding whether or not anybody pressed
+           * "flag it". So the inspector types the number and the outcome follows,
+           * which is also one fewer tap on a round of eighty lines.
+           */}
+          {check.unit !== null && (
+            <div className="insp-reading">
+              <label>
+                <span className="muted small">{describeRange(check.unit, check.minOk, check.maxOk) ?? "Reading"}</span>
+                <span className="insp-reading-input">
+                  <input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    defaultValue={check.value ?? ""}
+                    disabled={!editable}
+                    onBlur={(e) => {
+                      const raw = e.target.value.trim();
+                      const next = raw === "" ? null : Number(raw);
+                      if (next !== (check.value ?? null) && (next === null || Number.isFinite(next))) {
+                        onChange({ value: next });
+                      }
+                    }}
+                    aria-label={`Reading for ${check.label}${check.unit ? ` in ${check.unit}` : ""}`}
+                  />
+                  <em>{check.unit}</em>
+                </span>
+              </label>
+              {(() => {
+                const verdict = judgeReading(check.value, check.minOk, check.maxOk);
+                if (verdict === "unknown") return null;
+                return (
+                  <span className={`insp-reading-verdict v-${verdict}`}>
+                    {verdict === "ok" ? "within range" : verdict === "low" ? `below ${check.minOk}` : `above ${check.maxOk}`}
+                  </span>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         {editable ? (

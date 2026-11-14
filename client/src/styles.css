@@ -9038,3 +9038,58 @@ table th {
 .gantt-key-off {
   background: color-mix(in srgb, var(--ink, #1d1d1f) 12%, transparent);
 }
+
+/* A reading on an inspection line.
+   Sits with the line rather than behind the flag, because the number is what
+   decides whether the line is flagged at all. */
+.insp-reading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.insp-reading label {
+  display: grid;
+  gap: 3px;
+}
+
+.insp-reading-input {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.insp-reading-input input {
+  width: 92px;
+  font-variant-numeric: tabular-nums;
+  font-size: 16px; /* 16px stops iOS zooming the page on focus */
+}
+
+.insp-reading-input em {
+  font-style: normal;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.insp-reading-verdict {
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+
+.insp-reading-verdict.v-ok {
+  background: color-mix(in srgb, var(--ok, #0a7d33) 12%, transparent);
+  color: var(--ok, #0a7d33);
+}
+
+/* Which way it failed, not just that it did: adding chlorine and stopping
+   dosing are different jobs. */
+.insp-reading-verdict.v-low,
+.insp-reading-verdict.v-high {
+  background: color-mix(in srgb, var(--danger, #b4121f) 11%, transparent);
+  color: var(--danger, #b4121f);
+}

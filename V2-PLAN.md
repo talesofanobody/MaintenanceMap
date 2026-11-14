@@ -493,7 +493,7 @@ the one that gets automation running this quarter instead of next.
 | ~~**1c**~~ | ~~Tree semantics: a phase finishes only when its tasks do, dates and progress roll up, start-to-start and finish-to-finish, per cent complete~~ | **Done**. 334 checks in `tests/` |
 | ~~**1d**~~ | ~~A working-day calendar, with two-way exceptions~~ | **Done**. 423 checks in `tests/` |
 | **1e** | Earned value (PV/EV/AC, SPI/CPI) | Inputs now exist; small |
-| **2** | Numeric readings on inspection checks (value, unit, acceptable range) | Blocks new checklist content; wanted by three subsystems |
+| ~~**2**~~ | ~~Numeric readings on inspection checks (value, unit, acceptable range, trend)~~ | **Done**. 484 checks in `tests/` |
 | **3** | Daily readings: `MeterPoint`, `Reading`, `UtilityInvoice`, the nutshell dashboard, one charting library | Smallest, pays back daily, replaces live spreadsheet work |
 | **4** | Location hierarchy: block → floor → space, coexisting with `roomName` | Foundation for the manual; touches a lot, so early |
 | **5** | Assets and `AssetRelation`; AC and generator intervals on assets | The manual's substance |

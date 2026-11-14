@@ -4,12 +4,12 @@ import path from "path";
 import { prisma } from "../db";
 import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
-import { DATE_ONLY, parseOptionalString, ValidationError } from "../lib/validation";
+import { DATE_ONLY, parseOptionalDay, parseOptionalString, ValidationError } from "../lib/validation";
 import { parseCategory } from "../lib/taxonomy";
 import { upload, UPLOADS_DIR } from "../lib/upload";
 import { readExif } from "../lib/exif";
 import { storeImage } from "../lib/images";
-import { countPoints, GENERAL_SLOTS, parseOutcome, parseSeverity, SEVERITY_PRIORITY, type Severity } from "../lib/inspections";
+import { countPoints, GENERAL_SLOTS, parseOutcome, parseSeverity, SEVERITY_PRIORITY, type Severity, judgeReading, parseReading, parseUnit, READING_UNITS } from "../lib/inspections";
 import { can } from "../lib/permissions";
 
 /**
@@ -291,6 +291,113 @@ inspectionsRouter.get("/report", async (req, res) => {
   });
 });
 
+// Declared before "/:id" on purpose: Express matches in order, so a literal
+// path defined after a parameter route is unreachable — "/readings" would be
+// read as an inspection with the id "readings" and 404.
+/**
+ * Readings over time, which is the point of recording numbers at all.
+ *
+ * A single chlorine level tells you whether to dose this morning. A fortnight of
+ * them tells you whether the dosing is working, and that is the question a
+ * Legionella matrix, a pool log and a cold-chain record all actually ask. One
+ * reading cannot answer it; the series can.
+ *
+ * Grouped by the template point rather than by the line's wording, because the
+ * wording is a snapshot and gets revised while the point stays the same. Readings
+ * from general walks, which have no point, are grouped under their label instead —
+ * less reliable, and better than dropping them.
+ */
+inspectionsRouter.get("/readings", async (req, res) => {
+  const propertyId = typeof req.query.propertyId === "string" ? req.query.propertyId : undefined;
+  const pointId = typeof req.query.pointId === "string" ? req.query.pointId : undefined;
+  const from = parseOptionalDay(req.query.from, "from") ?? undefined;
+  const to = parseOptionalDay(req.query.to, "to") ?? undefined;
+
+  const rows = await prisma.inspectionCheck.findMany({
+    where: {
+      value: { not: null },
+      ...(pointId ? { pointId } : {}),
+      inspection: {
+        ...(propertyId ? { propertyId } : {}),
+        ...(from || to
+          ? {
+              startedAt: {
+                ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+                ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+              },
+            }
+          : {}),
+      },
+    },
+    select: {
+      id: true,
+      pointId: true,
+      section: true,
+      label: true,
+      unit: true,
+      minOk: true,
+      maxOk: true,
+      value: true,
+      outcome: true,
+      area: true,
+      inspection: {
+        select: { id: true, startedAt: true, roomName: true, inspector: true, property: { select: { id: true, name: true } } },
+      },
+    },
+    orderBy: { inspection: { startedAt: "asc" } },
+    take: 2000,
+  });
+
+  // One series per point, each carrying the range so a chart can draw the band.
+  const series = new Map<string, any>();
+  for (const row of rows) {
+    const key = row.pointId ?? `label:${row.section}/${row.label}`;
+    let entry = series.get(key);
+    if (!entry) {
+      entry = {
+        key,
+        pointId: row.pointId,
+        section: row.section,
+        label: row.label,
+        unit: row.unit,
+        minOk: row.minOk,
+        maxOk: row.maxOk,
+        readings: [] as any[],
+      };
+      series.set(key, entry);
+    }
+    entry.readings.push({
+      checkId: row.id,
+      at: row.inspection.startedAt,
+      value: row.value,
+      outcome: row.outcome,
+      area: row.area ?? row.inspection.roomName,
+      inspector: row.inspection.inspector,
+      inspectionId: row.inspection.id,
+      property: row.inspection.property,
+      // The verdict against the range that applied at the time, not today's.
+      verdict: judgeReading(row.value, row.minOk, row.maxOk),
+    });
+  }
+
+  const out = [...series.values()].map((entry) => {
+    const values = entry.readings.map((r: any) => r.value as number);
+    const outOfRange = entry.readings.filter((r: any) => r.verdict === "low" || r.verdict === "high").length;
+    return {
+      ...entry,
+      count: values.length,
+      latest: entry.readings[entry.readings.length - 1] ?? null,
+      min: Math.min(...values),
+      max: Math.max(...values),
+      mean: Math.round((values.reduce((a: number, b: number) => a + b, 0) / values.length) * 100) / 100,
+      outOfRange,
+    };
+  });
+  // Worst first: the series with most failures is the one worth looking at.
+  out.sort((a, b) => b.outOfRange - a.outOfRange || b.count - a.count);
+  res.json({ series: out, units: READING_UNITS });
+});
+
 inspectionsRouter.get("/:id", async (req, res) => {
   const inspection = await prisma.inspection.findUnique({ where: { id: req.params.id }, include: INSPECTION_INCLUDE });
   if (!inspection) return res.status(404).json({ error: "not found" });
@@ -312,7 +419,18 @@ inspectionsRouter.post("/", requires("inspection.run"), async (req, res) => {
   if (!property) return res.status(404).json({ error: "property not found" });
 
   let templateName = "Ad-hoc inspection";
-  let lines: { section: string; label: string; hint: string | null; category: string | null; pointId: string | null; position: number }[] = [];
+  let lines: {
+    section: string;
+    label: string;
+    hint: string | null;
+    category: string | null;
+    pointId: string | null;
+    position: number;
+    // Carried from the template point, where it declares a measurement.
+    unit?: string | null;
+    minOk?: number | null;
+    maxOk?: number | null;
+  }[] = [];
   if (templateId) {
     const template = await prisma.inspectionTemplate.findUnique({ where: { id: templateId }, include: TEMPLATE_INCLUDE });
     if (!template) return res.status(404).json({ error: "template not found" });
@@ -340,7 +458,20 @@ inspectionsRouter.post("/", requires("inspection.run"), async (req, res) => {
       let position = 0;
       for (const section of template.sections) {
         for (const point of section.points) {
-          lines.push({ section: section.name, label: point.label, hint: point.hint, category: point.category, pointId: point.id, position: position++ });
+          lines.push({
+            section: section.name,
+            label: point.label,
+            hint: point.hint,
+            category: point.category,
+            pointId: point.id,
+            // The expected unit and range are snapshotted alongside the wording,
+            // for the same reason: a report from six months ago should show the
+            // range that was in force then, not today's.
+            unit: point.unit,
+            minOk: point.minOk,
+            maxOk: point.maxOk,
+            position: position++,
+          });
         }
       }
     }
@@ -621,6 +752,37 @@ inspectionsRouter.put("/checks/:checkId", requires("inspection.run"), async (req
      */
     if (req.body.area !== undefined) data.area = parseOptionalString(req.body.area, "area", 160) ?? null;
 
+    /**
+     * A reading, where the point asks for one.
+     *
+     * The number decides the outcome unless the caller said otherwise in the same
+     * request. An outlet at 48 °C against a 50 °C minimum is a finding whether or
+     * not anybody remembered to press "flag it", and a reading recorded as fine
+     * while sitting outside its own range is the kind of record that makes a whole
+     * logbook worthless. Where the range is open at both ends there is nothing to
+     * judge, so the outcome is left alone and the number is kept for the trend.
+     */
+    const unit = parseUnit(req.body.unit);
+    const minOkIncoming = parseReading(req.body.minOk, "minOk");
+    const maxOkIncoming = parseReading(req.body.maxOk, "maxOk");
+    if (unit !== undefined) data.unit = unit;
+    if (minOkIncoming !== undefined) data.minOk = minOkIncoming;
+    if (maxOkIncoming !== undefined) data.maxOk = maxOkIncoming;
+
+    const reading = parseReading(req.body.value);
+    if (reading !== undefined) {
+      data.value = reading;
+      // The range may be arriving in this same request — a blank slot on a
+      // general walk is given its label, unit and range all at once — so the
+      // incoming values win over what is stored.
+      const min = minOkIncoming !== undefined ? minOkIncoming : existing.minOk;
+      const max = maxOkIncoming !== undefined ? maxOkIncoming : existing.maxOk;
+      const verdict = judgeReading(reading, min, max);
+      if (req.body.outcome === undefined && verdict !== "unknown") {
+        data.outcome = verdict === "ok" ? "ok" : "flagged";
+        if (verdict === "ok") data.severity = null;
+      }
+    }
     const check = await prisma.inspectionCheck.update({ where: { id: existing.id }, data, include: CHECK_INCLUDE });
     res.json(check);
   } catch (err) {

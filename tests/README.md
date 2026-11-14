@@ -15,12 +15,14 @@ running:
 | `ui-planning.js` | A person can reach and use the plan | Both dev servers |
 | `api-tree.js` | A phase finishes only when its tasks do; rolled dates | `server` on :4000 |
 | `api-calendar.js` | Opting in changes float; opting out puts it back | `server` on :4000 |
+| `api-readings.js` | A number flags its own line; the trend groups by point | `server` on :4000 |
 | `ui-governance.js` | The Gantt draws, blockers clear, roles stick | Both dev servers |
 | `ui-tree.js` | Phase dates roll up, progress shows, the refusal holds | Both dev servers |
 | `ui-calendar.js` | The editor works and the chart shades days nobody works | Both dev servers |
+| `ui-readings.js` | A reading typed on a phone flags the line by itself | Both dev servers |
 | `smoke-pages.js` | Nothing else broke | Both dev servers |
 
-423 checks in total.
+484 checks in total.
 
 ```sh
 (cd server && npm run dev)    # :4000

@@ -737,6 +737,10 @@ export interface InspectionPoint {
   hint: string | null;
   category: string | null;
   position: number;
+  /** Set where this point wants a number rather than a judgement. */
+  unit: string | null;
+  minOk: number | null;
+  maxOk: number | null;
 }
 
 export interface InspectionSection {
@@ -781,6 +785,12 @@ export interface InspectionCheck {
   issue: { id: string; title: string; status: Status; priority: Priority; projectId: string | null; photos: Photo[] } | null;
   photos: Photo[];
   createdAt: string;
+  /** The number that was read. Null means nobody took one, which is not zero. */
+  value: number | null;
+  /** What the point expected, snapshotted at the time of the walk. */
+  unit: string | null;
+  minOk: number | null;
+  maxOk: number | null;
 }
 
 export interface Inspection {
@@ -1174,4 +1184,66 @@ export interface Walkthrough extends WalkthroughSummary {
   /** Only the photos not yet grouped: grouping moves them onto their issue. */
   photos: Photo[];
   issues: WalkthroughIssue[];
+}
+
+
+/** The units a reading may use. A closed list, so a series stays one series. */
+export const READING_UNITS = ["°C", "mg/L", "ppm", "pH", "bar", "kPa", "%", "hours", "lux", "dB", "NTU"] as const;
+export type ReadingUnit = (typeof READING_UNITS)[number];
+
+export type RangeVerdict = "ok" | "low" | "high" | "unknown";
+
+/**
+ * Where a reading sits against its range — which side it failed on, not just
+ * whether it did. "Add chlorine" and "stop dosing" are different jobs.
+ */
+export function judgeReading(
+  value: number | null | undefined,
+  minOk: number | null | undefined,
+  maxOk: number | null | undefined
+): RangeVerdict {
+  if (value === null || value === undefined) return "unknown";
+  if ((minOk === null || minOk === undefined) && (maxOk === null || maxOk === undefined)) return "unknown";
+  if (minOk !== null && minOk !== undefined && value < minOk) return "low";
+  if (maxOk !== null && maxOk !== undefined && value > maxOk) return "high";
+  return "ok";
+}
+
+/** How the range reads to somebody: "50 °C or above", "1–3 mg/L". */
+export function describeRange(unit: string | null, minOk: number | null, maxOk: number | null): string | null {
+  const u = unit ? ` ${unit}` : "";
+  if (minOk !== null && maxOk !== null) return `${minOk}–${maxOk}${u}`;
+  if (minOk !== null) return `${minOk}${u} or above`;
+  if (maxOk !== null) return `${maxOk}${u} or below`;
+  return null;
+}
+
+export interface ReadingPoint {
+  checkId: string;
+  at: string;
+  value: number;
+  outcome: Outcome;
+  area: string | null;
+  inspector: string;
+  inspectionId: string;
+  property: { id: string; name: string } | null;
+  verdict: RangeVerdict;
+}
+
+export interface ReadingSeries {
+  key: string;
+  pointId: string | null;
+  section: string;
+  label: string;
+  unit: string | null;
+  minOk: number | null;
+  maxOk: number | null;
+  readings: ReadingPoint[];
+  count: number;
+  latest: ReadingPoint | null;
+  min: number;
+  max: number;
+  mean: number;
+  /** How many of the readings fell outside the range that applied at the time. */
+  outOfRange: number;
 }
