@@ -1,4 +1,4 @@
-import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, ReadingSeries, MeterPoint, Reading, Slot, UtilityKind, EntryMode, UtilitySummary, UtilityInvoice, UnitCost, Space, SpaceKind, SellStatus, SellRollup, UnmatchedText, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
+import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, ReadingSeries, MeterPoint, Reading, Slot, UtilityKind, EntryMode, UtilitySummary, UtilityInvoice, UnitCost, Space, SpaceKind, SellStatus, SellRollup, UnmatchedText, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary, Asset, AssetKind, AssetDetail, AssetRelationOut, AssetServiceEntry, RelationKind, ServiceKind, SpaceTrace} from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -487,6 +487,30 @@ export const api = {
   },
 
   // --- spaces: where things are ------------------------------------------
+  // ---- Slice 5: the equipment register and the relation graph -------------
+  listAssets: (propertyId: string, kind?: string, all = false) =>
+    request<{
+      assets: Asset[]; kinds: AssetKind[]; kindLabels: Record<string, string>;
+      relationKinds: RelationKind[]; relationLabels: Record<string, string>; serviceKinds: ServiceKind[];
+    }>(`/assets?propertyId=${propertyId}${kind ? `&kind=${kind}` : ""}${all ? "&all=1" : ""}`),
+  getAsset: (id: string) => request<AssetDetail>(`/assets/${id}`),
+  /** Everything out of date, worst first — the ninety-day standard as a query. */
+  assetsDue: (propertyId: string) =>
+    request<{ due: Asset[]; counts: { overdue: number; never: number; dueSoon: number } }>(
+      `/assets/due?propertyId=${propertyId}`
+    ),
+  /** What feeds a room, and where to shut it off. */
+  traceSpace: (spaceId: string) => request<SpaceTrace>(`/assets/trace?spaceId=${spaceId}`),
+  createAsset: (data: Record<string, unknown>) =>
+    request<{ asset: Asset }>("/assets", { method: "POST", body: JSON.stringify(data) }),
+  updateAsset: (id: string, data: Record<string, unknown>) =>
+    request<{ asset: Asset }>(`/assets/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  addRelation: (assetId: string, data: Record<string, unknown>) =>
+    request<{ relation: AssetRelationOut }>(`/assets/${assetId}/relations`, { method: "POST", body: JSON.stringify(data) }),
+  removeRelation: (assetId: string, relationId: string) =>
+    request<{ ok: boolean }>(`/assets/${assetId}/relations/${relationId}`, { method: "DELETE" }),
+  logService: (assetId: string, data: Record<string, unknown>) =>
+    request<{ service: AssetServiceEntry; asset: Asset | null }>(`/assets/${assetId}/services`, { method: "POST", body: JSON.stringify(data) }),
   listSpaces: (propertyId: string, all = false) =>
     request<{ spaces: Space[]; sell: SellRollup; kinds: string[]; sellStatuses: string[] }>(
       `/spaces?propertyId=${propertyId}${all ? "&all=1" : ""}`

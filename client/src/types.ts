@@ -1442,3 +1442,162 @@ export interface UnmatchedText {
   /** Set only where a single exact match makes it safe to apply unasked. */
   certain: string | null;
 }
+
+// ---- Slice 5: equipment, and what it does to everything else --------------
+
+export const ASSET_KINDS = [
+  "panel", "breaker", "valve", "generator", "tank", "pump", "ahu", "fcu",
+  "ice_machine", "lift", "meter", "grease_trap", "calorifier", "chiller", "other",
+] as const;
+export type AssetKind = (typeof ASSET_KINDS)[number];
+
+export const ASSET_KIND_LABELS: Record<AssetKind, string> = {
+  panel: "Distribution panel",
+  breaker: "Breaker",
+  valve: "Valve",
+  generator: "Generator",
+  tank: "Tank",
+  pump: "Pump",
+  ahu: "Air handling unit",
+  fcu: "Fan coil unit",
+  ice_machine: "Ice machine",
+  lift: "Lift",
+  meter: "Meter",
+  grease_trap: "Grease trap",
+  calorifier: "Calorifier",
+  chiller: "Chiller",
+  other: "Other",
+};
+
+export const RELATION_KINDS = ["feeds", "isolates", "serves", "drains", "vents"] as const;
+export type RelationKind = (typeof RELATION_KINDS)[number];
+
+/** Phrased to read as a sentence: "DB-3 feeds Room 101". */
+export const RELATION_LABELS: Record<RelationKind, string> = {
+  feeds: "feeds",
+  isolates: "isolates",
+  serves: "serves",
+  drains: "drains from",
+  vents: "extracts from",
+};
+
+export const SERVICE_KINDS = ["service", "test", "repair", "replacement", "inspection"] as const;
+export type ServiceKind = (typeof SERVICE_KINDS)[number];
+
+export const SERVICE_KIND_LABELS: Record<ServiceKind, string> = {
+  service: "Service",
+  test: "Test",
+  repair: "Repair",
+  replacement: "Replacement",
+  inspection: "Inspection",
+};
+
+export type ServiceState = "ok" | "due" | "overdue" | "never" | "unknown";
+
+export const SERVICE_STATE_LABELS: Record<ServiceState, string> = {
+  ok: "In date",
+  due: "Due soon",
+  overdue: "Overdue",
+  never: "Never serviced",
+  unknown: "No interval set",
+};
+
+export interface ServiceStatus {
+  state: ServiceState;
+  dueOn: string | null;
+  daysOverdue: number | null;
+}
+
+export interface Asset {
+  id: string;
+  propertyId: string;
+  spaceId: string | null;
+  /** Containment, not supply: a breaker lives inside a panel. */
+  parentId: string | null;
+  kind: AssetKind;
+  /** What people say out loud: "DB-3", "CB-14", "V-207". */
+  ref: string | null;
+  name: string;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  rating: string | null;
+  installedAt: string | null;
+  lat: number | null;
+  lng: number | null;
+  serviceIntervalDays: number | null;
+  lastServicedAt: string | null;
+  notes: string | null;
+  active: boolean;
+  /** The readable path of the space it sits in, where it has one. */
+  spaceName?: string[] | null;
+  service: ServiceStatus;
+}
+
+export interface AssetRelationOut {
+  id: string;
+  kind: RelationKind;
+  notes: string | null;
+  to: { id: string; name: string; kind: AssetKind; ref: string | null } | null;
+  toSpace: { id: string; name: string; code: string | null } | null;
+}
+
+export interface AssetRelationIn {
+  id: string;
+  kind: RelationKind;
+  notes: string | null;
+  from: { id: string; name: string; kind: AssetKind; ref: string | null } | null;
+}
+
+export interface AssetServiceEntry {
+  id: string;
+  kind: ServiceKind;
+  performedAt: string;
+  performedBy: string | null;
+  summary: string;
+  reading: number | null;
+  unit: string | null;
+  passed: boolean | null;
+}
+
+/** One hop in a graph walk, hydrated with whatever it points at. */
+export interface ReachedAsset {
+  id: string;
+  depth: number;
+  via: RelationKind;
+  asset: { id: string; name: string; kind: AssetKind; ref: string | null } | null;
+}
+
+export interface ReachedSpace {
+  id: string;
+  depth: number;
+  via: RelationKind;
+  space: (Space & { path: string[]; depth: number }) | null;
+}
+
+export interface AssetDetail {
+  asset: Asset & {
+    parent: { id: string; name: string; kind: AssetKind } | null;
+    children: { id: string; name: string; kind: AssetKind; ref: string | null }[];
+    space: { id: string; name: string; code: string | null } | null;
+    relationsOut: AssetRelationOut[];
+    relationsIn: AssetRelationIn[];
+    services: AssetServiceEntry[];
+    issues: { id: string; workOrderNumber: string | null; title: string; status: string; priority: string }[];
+  };
+  /** The blast radius: what else goes dark. */
+  affects: {
+    spaces: ReachedSpace[];
+    assets: ReachedAsset[];
+    sellableCount: number;
+    truncated: boolean;
+  };
+  fedBy: ReachedAsset[];
+}
+
+export interface SpaceTrace {
+  space: { id: string; name: string; code: string | null; propertyId: string };
+  fedBy: ReachedAsset[];
+  isolateAt: ReachedAsset[];
+  truncated: boolean;
+}

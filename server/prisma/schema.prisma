@@ -124,6 +124,7 @@ model Property {
   meterPoints   MeterPoint[]
   utilityInvoices UtilityInvoice[]
   spaces        Space[]
+  assets        Asset[]
 }
 
 model Issue {
@@ -146,6 +147,10 @@ model Issue {
   roomName         String?
   spaceId          String?
   space            Space?           @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  /// The thing that is faulty, where it is a known piece of equipment rather than
+  /// a place. A pump has a service history; "the plant room" does not.
+  assetId          String?
+  asset            Asset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
   workOrderCreated Boolean          @default(false)
   workOrderNumber  String?
   workOrderUrl     String?
@@ -224,6 +229,7 @@ model Issue {
   @@index([projectId])
   @@index([parentId])
   @@index([spaceId])
+  @@index([assetId])
 }
 
 // One stretch of work on an issue, recorded by clocking in and out. A technician has
@@ -1052,9 +1058,131 @@ model Space {
   updatedAt  DateTime @updatedAt
   issues     Issue[]
   inspections Inspection[]
+  assets     Asset[]
+  servedBy   AssetRelation[]
 
   @@unique([propertyId, parentId, name])
   @@index([propertyId, kind])
   @@index([parentId, sortOrder])
   @@index([propertyId, sellable, sellStatus])
+}
+
+/// A piece of equipment, in a place, with a service history.
+///
+/// Every other part of this app helps record a problem. This is the part that helps
+/// act on one, and the questions it exists to answer are the ones that cost the
+/// most time standing in a corridor at two in the morning:
+///
+///   - which breaker isolates room 214, and which panel is it in
+///   - which valve shuts this pipe without dropping the whole block
+///   - what else goes dark if I open this breaker
+///
+/// The last one is why this cannot be a list of equipment with photographs. It
+/// needs the connections, and they are a graph rather than a tree — see
+/// AssetRelation.
+model Asset {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  /// Where it is. A breaker is in a panel which is in a riser; the riser is the
+  /// space, the panel is the parent.
+  spaceId    String?
+  space      Space?   @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  /// Containment, not supply. A breaker lives inside a panel; a pump sits in a
+  /// plant room. What it FEEDS is a relation, which is a different thing entirely
+  /// and the distinction is the whole point of having both.
+  parentId   String?
+  parent     Asset?   @relation("AssetTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children   Asset[]  @relation("AssetTree")
+  /// panel | breaker | valve | generator | tank | pump | ahu | fcu | ice_machine
+  /// lift | meter | grease_trap | calorifier | chiller | other
+  kind       String
+  /// What people actually say: "DB-3", "CB-14", "V-207", "GEN-1".
+  ref        String?
+  name       String
+  manufacturer String?
+  model      String?
+  serialNumber String?
+  /// Free text, because a rating is "80A" for a breaker and "250 kVA" for a
+  /// generator and nobody wins by forcing those into one number.
+  rating     String?
+  installedAt DateTime?
+  lat        Float?
+  lng        Float?
+  /// Service interval in days. The 90-day air-conditioning standard lives here, on
+  /// the equipment, rather than as a column in a tracker — which is what makes
+  /// "everything overdue" a query over the whole site rather than a spreadsheet.
+  serviceIntervalDays Int?
+  lastServicedAt DateTime?
+  notes      String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  issues     Issue[]
+  relationsOut AssetRelation[] @relation("RelationFrom")
+  relationsIn  AssetRelation[] @relation("RelationTo")
+  services   AssetService[]
+
+  @@index([propertyId, kind])
+  @@index([spaceId])
+  @@index([parentId])
+  @@index([propertyId, lastServicedAt])
+}
+
+/// What one thing does to another, or to a place.
+///
+/// A directed graph, deliberately, and not a tree. One room is fed by a breaker
+/// and served by a valve and conditioned by an air handler, and each of those has
+/// its own upstream. Modelling it as a tree would be simpler and would be wrong:
+/// the question people actually ask is the inverse — "what feeds this room" — and
+/// a tree can only answer it in one direction.
+///
+/// The target is either another asset or a space, because both are real: a breaker
+/// feeds a sub-panel (asset) and also feeds room 214 (space).
+model AssetRelation {
+  id          String  @id @default(cuid())
+  fromAssetId String
+  from        Asset   @relation("RelationFrom", fields: [fromAssetId], references: [id], onDelete: Cascade)
+  /// Exactly one of these. Enforced in the route; SQLite cannot say it here.
+  toAssetId   String?
+  to          Asset?  @relation("RelationTo", fields: [toAssetId], references: [id], onDelete: Cascade)
+  toSpaceId   String?
+  toSpace     Space?  @relation(fields: [toSpaceId], references: [id], onDelete: Cascade)
+  /// feeds    — electrical supply
+  /// isolates — a valve or switch that cuts it off
+  /// serves   — supplies something that is not electricity: water, air, gas
+  /// drains   — takes waste away from it
+  /// vents    — extracts air from it
+  kind        String  @default("feeds")
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([fromAssetId])
+  @@index([toAssetId])
+  @@index([toSpaceId])
+}
+
+/// A service or a test, recorded against the equipment it was done to.
+///
+/// Separate from the issue that may have prompted it. The weekly generator no-load
+/// test and the monthly load test are not faults and do not belong in a fault log,
+/// but the record of them is exactly what an insurer asks for.
+model AssetService {
+  id        String   @id @default(cuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  /// service | test | repair | replacement | inspection
+  kind      String   @default("service")
+  performedAt DateTime
+  performedBy String?
+  /// What was done, and anything measured while doing it — run hours, a load
+  /// reading, an insulation value.
+  summary   String
+  reading   Float?
+  unit      String?
+  /// Whether the equipment passed. Null for work with no pass or fail about it.
+  passed    Boolean?
+  createdAt DateTime @default(now())
+
+  @@index([assetId, performedAt])
 }

@@ -14,7 +14,7 @@ import { messagesRouter } from "./messages";
 import { LINK_KINDS as SCHEDULE_LINK_KINDS, ORDERING_KINDS, wouldCycleInHierarchy, wouldCycleInLinks } from "../lib/planning";
 
 // Fields a technician may change on an issue assigned to them.
-const TECHNICIAN_FIELDS = ["status", "actualHours", "closedAt", "description", "actionNeeded", "category", "roomName", "tagIds"] as const;
+const TECHNICIAN_FIELDS = ["status", "actualHours", "closedAt", "description", "actionNeeded", "category", "roomName", "spaceId", "assetId", "tagIds"] as const;
 
 async function technicianName(id: string | null): Promise<string | null> {
   if (!id) return null;
@@ -103,6 +103,16 @@ async function parseTechnicianId(value: unknown): Promise<string | null | undefi
 interface ParsedExtras {
   category: string | null | undefined;
   roomName: string | null | undefined;
+  /**
+   * Where it is on the location tree, and what equipment it is about.
+   *
+   * Both sit alongside `roomName` rather than replacing it. The free text is what
+   * a reporter types and what years of history already holds; these are what the
+   * tree and the register can be queried by. Reconciling the two is a job for
+   * somebody looking at it, not for a migration that guessed.
+   */
+  spaceId: string | null | undefined;
+  assetId: string | null | undefined;
   tagIds: string[] | undefined;
   url: string | null | undefined;
   closed: Date | null | undefined;
@@ -111,6 +121,23 @@ interface ParsedExtras {
   actualHours: number | null | undefined;
   scheduledFor: string | null | undefined;
   dueDate: string | null | undefined;
+}
+
+/**
+ * A space and an asset must both belong to the property the issue is on.
+ *
+ * Without this an issue can be filed against a room at another resort, which reads
+ * as a complete record and makes every count taken from the tree quietly wrong.
+ */
+async function checkPlacement(propertyId: string, spaceId?: string | null, assetId?: string | null): Promise<void> {
+  if (spaceId) {
+    const space = await prisma.space.findFirst({ where: { id: spaceId, propertyId }, select: { id: true } });
+    if (!space) throw new ValidationError("that space is not in this property");
+  }
+  if (assetId) {
+    const asset = await prisma.asset.findFirst({ where: { id: assetId, propertyId }, select: { id: true } });
+    if (!asset) throw new ValidationError("that asset is not in this property");
+  }
 }
 
 async function parseExtras(body: any): Promise<ParsedExtras> {
@@ -122,6 +149,8 @@ async function parseExtras(body: any): Promise<ParsedExtras> {
   return {
     category: parseCategory(body.category),
     roomName: parseOptionalString(body.roomName, "roomName", 120),
+    spaceId: parseOptionalString(body.spaceId, "spaceId", 40),
+    assetId: parseOptionalString(body.assetId, "assetId", 40),
     tagIds: await resolveTagIds(body.tagIds),
     url: normalizeUrl(body.workOrderUrl),
     closed: parseDate(body.closedAt, "closedAt"),
@@ -221,6 +250,13 @@ issuesRouter.post("/", requires("issue.write"), async (req, res) => {
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
   if (!property) return res.status(404).json({ error: "property not found" });
 
+  try {
+    await checkPlacement(propertyId, extras.spaceId, extras.assetId);
+  } catch (err) {
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+
   let newProjectId: string | null | undefined;
   try {
     newProjectId = await parseProjectId(req.body.projectId, propertyId);
@@ -274,6 +310,8 @@ issuesRouter.post("/", requires("issue.write"), async (req, res) => {
       workOrderUrl: extras.url ?? null,
       category: extras.category ?? null,
       roomName: extras.roomName ?? null,
+      spaceId: extras.spaceId ?? null,
+      assetId: extras.assetId ?? null,
       lat,
       lng,
       closedAt: closesNow ? extras.closed ?? new Date() : null,
@@ -504,6 +542,7 @@ issuesRouter.put("/:id", requires("issue.write"), async (req, res) => {
   let extras: ParsedExtras;
   try {
     extras = await parseExtras(req.body);
+    await checkPlacement(existing.propertyId, extras.spaceId, extras.assetId);
   } catch (err) {
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
     throw err;
@@ -562,6 +601,8 @@ issuesRouter.put("/:id", requires("issue.write"), async (req, res) => {
       ...(extras.url !== undefined ? { workOrderUrl: extras.url } : {}),
       ...(extras.category !== undefined ? { category: extras.category } : {}),
       ...(extras.roomName !== undefined ? { roomName: extras.roomName } : {}),
+      ...(extras.spaceId !== undefined ? { spaceId: extras.spaceId } : {}),
+      ...(extras.assetId !== undefined ? { assetId: extras.assetId } : {}),
       ...(lat !== undefined ? { lat } : {}),
       ...(lng !== undefined ? { lng } : {}),
       ...(crew !== undefined ? { technicianId: crew[0] ?? null } : extras.technicianId !== undefined ? { technicianId: extras.technicianId } : {}),
@@ -644,6 +685,8 @@ issuesRouter.put("/:id", requires("issue.write"), async (req, res) => {
       workOrderNumber: "Work order",
       category: "Category",
       roomName: "Room",
+      spaceId: "Location",
+      assetId: "Equipment",
     }
   );
   if (changes.length > 0 || description !== undefined || actionNeeded !== undefined) {
