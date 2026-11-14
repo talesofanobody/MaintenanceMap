@@ -6,10 +6,15 @@ running:
 | File | What it proves | Needs |
 |---|---|---|
 | `unit-planning.ts` | The rollup and cycle arithmetic | Nothing |
+| `unit-schedule.ts` | Critical path, float, blocker ages, progress curve | Nothing |
 | `migration-planning.js` | A live database survives the migration | A database at the previous schema |
-| `api-planning.js` | The endpoints behave | `server` on :4000 |
-| `ui-planning.js` | A person can reach and use it | Both dev servers |
+| `api-planning.js` | The planning endpoints behave | `server` on :4000 |
+| `api-governance.js` | Project dependencies, blockers, stakeholders | `server` on :4000 |
+| `ui-planning.js` | A person can reach and use the plan | Both dev servers |
+| `ui-governance.js` | The Gantt draws, blockers clear, roles stick | Both dev servers |
 | `smoke-pages.js` | Nothing else broke | Both dev servers |
+
+254 checks in total.
 
 ```sh
 (cd server && npm run dev)    # :4000
@@ -64,11 +69,24 @@ dependency links and quotes all then function. It also checks the referential ru
 that are easy to get wrong — deleting a parent clears its children's parent rather
 than cascading onto the work, and a contractor holding a quote cannot be deleted.
 
+## Two things the schedule tests pin down deliberately
+
+**Float includes calendar gaps.** Everything carries dates somebody typed, so float
+measures the gap to the next constraint — a weekend included, because a job genuinely
+can slide into one. On a plan laid out Monday to Friday that leaves very little
+"critical", which is why `longestChain` is reported separately: computed from
+durations alone, it is the stable answer to where the end date comes from. There is
+no working-day calendar; durations are counted in calendar days.
+
+**Summary rows take no part in the analysis.** A parent's dates are an envelope
+around its children. The test fixes the case that caught this: a phase spanning two
+months beat the eighteen-day chain of dependent work inside it.
+
 ## What is not covered
 
-- No Gantt or critical path yet; slice 7 in `V2-PLAN.md`.
 - Pagination is untested because it does not exist. The issues route still makes
   unbounded `findMany` calls, which is slice 0 and the first real ceiling.
+- The Gantt is not print-tested. It scrolls horizontally, which paper does not.
 - The suites from v1 (inspections, guest intake, roles, backups, security headers)
   were lost with the container and have not been rebuilt. `smoke-pages.js` checks only
   that each page renders without an error, which is much weaker than what those did.

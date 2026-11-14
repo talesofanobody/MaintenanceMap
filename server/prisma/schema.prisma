@@ -95,6 +95,8 @@ model Technician {
   timeOff     TimeOff[]
   walkthroughs Walkthrough[]
   ownedProjects Project[]
+  stakeholderIn Stakeholder[]
+  blockersOwned Blocker[]
 }
 
 model Property {
@@ -185,6 +187,7 @@ model Issue {
   linksOut         IssueLink[]      @relation("LinkFrom")
   linksIn          IssueLink[]      @relation("LinkTo")
   quotes           Quote[]
+  blockers         Blocker[]
   // Set when a recurring maintenance schedule created this issue.
   scheduleId       String?
   schedule         Schedule?        @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
@@ -613,6 +616,10 @@ model Project {
   approvedBy  String?
   approvedAt  DateTime?
   quotes      Quote[]
+  linksOut    ProjectLink[] @relation("ProjectLinkFrom")
+  linksIn     ProjectLink[] @relation("ProjectLinkTo")
+  blockers    Blocker[]
+  stakeholders Stakeholder[]
 
   @@index([status, createdAt])
   @@index([ownerId])
@@ -712,4 +719,101 @@ model Quote {
   @@index([issueId])
   @@index([projectId])
   @@index([contractorId])
+}
+
+/// A dependency between two whole projects.
+///
+/// Separate from IssueLink rather than generalised over both. A link between two
+/// jobs and a link between two programmes are read by different people for
+/// different reasons, and a single polymorphic edge table would make every query
+/// filter on a discriminator to get either. The two graphs are also walked
+/// independently — project order does not constrain job order within a project.
+model ProjectLink {
+  id            String   @id @default(cuid())
+  fromProjectId String
+  from          Project  @relation("ProjectLinkFrom", fields: [fromProjectId], references: [id], onDelete: Cascade)
+  toProjectId   String
+  to            Project  @relation("ProjectLinkTo", fields: [toProjectId], references: [id], onDelete: Cascade)
+  /// precedes — from finishes before to starts
+  /// blocks    — from stops to proceeding, no date arithmetic implied
+  /// relates   — worth reading together, no constraint
+  kind          String   @default("precedes")
+  lagDays       Int?
+  createdAt     DateTime @default(now())
+
+  @@unique([fromProjectId, toProjectId, kind])
+  @@index([toProjectId])
+}
+
+/// Something stopping work that is nobody's fault in particular.
+///
+/// Deliberately not the same thing as a dependency. A dependency says "this comes
+/// after that" and resolves itself when that finishes. A blocker says "this cannot
+/// proceed and somebody has to go and do something about it" — it has an owner, a
+/// reason, an age, and an explicit moment it was cleared. Those are the two
+/// questions a stand-up actually asks, and a link kind cannot answer either.
+///
+/// The age is the point. A blocker open for three weeks is a different problem from
+/// one raised this morning, and nothing in a dependency graph can tell you which
+/// you have.
+model Blocker {
+  id           String      @id @default(cuid())
+  /// Exactly one target. Enforced in the route; SQLite cannot express it here.
+  issueId      String?
+  issue        Issue?      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  projectId    String?
+  project      Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// What kind of thing is in the way. These are the ones that actually recur:
+  /// parts | approval | access | contractor | information | weather | budget | other
+  kind         String      @default("other")
+  summary      String
+  /// Who is chasing it. The roster where it is one of ours, free text where it is
+  /// a supplier, a head office or an inspector.
+  ownerId      String?
+  owner        Technician? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerName    String?
+  raisedBy     String?
+  raisedAt     DateTime    @default(now())
+  /// A blocker is cleared, not deleted — how long things sit in the way is the
+  /// most useful thing this table knows, and deleting them throws it away.
+  clearedAt    DateTime?
+  clearedBy    String?
+  resolution   String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([issueId])
+  @@index([projectId])
+  @@index([clearedAt])
+  @@index([ownerId])
+}
+
+/// Someone with an interest in a project, and what kind of interest it is.
+///
+/// Roles follow the usual responsibility split rather than inventing a vocabulary:
+/// a sponsor pays for it, an approver signs it off, the accountable one answers for
+/// it, the consulted are asked before decisions, the informed are told afterwards.
+/// Getting these written down is most of what stakeholder management is — the
+/// common failure is not disagreement, it is somebody finding out late.
+///
+/// External people are first-class. An insurer's auditor, a regional engineer and a
+/// public-health lab are all stakeholders and none of them will ever have a login
+/// here, so a name and an organisation are enough.
+model Stakeholder {
+  id           String      @id @default(cuid())
+  projectId    String
+  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// One of the roster, or a name and an organisation for anyone outside it.
+  technicianId String?
+  technician   Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  name         String?
+  organisation String?
+  /// sponsor | approver | accountable | consulted | informed
+  role         String      @default("informed")
+  notes        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([projectId])
+  @@index([technicianId])
 }

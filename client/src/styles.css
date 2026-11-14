@@ -8483,3 +8483,403 @@ table th {
     row-gap: 2px;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Governance and the Gantt (v2 slice 1b)                             */
+/* ------------------------------------------------------------------ */
+.proj-gov {
+  display: grid;
+  gap: 16px;
+  margin: 4px 0 12px;
+}
+
+.proj-gov-block {
+  display: grid;
+  gap: 8px;
+}
+
+.proj-gov-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.proj-gov-head h4 {
+  margin: 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.proj-gov-new {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  align-items: end;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.proj-gov-new label {
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.proj-gov-new label.is-wide {
+  grid-column: span 2;
+}
+
+.blocker-list,
+.stake-list,
+.dep-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--hairline);
+}
+
+.blocker,
+.stake,
+.dep {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  background: var(--surface, #fff);
+}
+
+.blocker {
+  grid-template-columns: 84px 1fr auto auto;
+}
+
+/* An open blocker gets a left edge; a cleared one recedes. */
+.blocker.is-open {
+  box-shadow: inset 2px 0 0 var(--danger, #b4121f);
+  padding-left: 8px;
+}
+
+.blocker.is-cleared {
+  opacity: 0.6;
+}
+
+.blocker-kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.blocker-what em,
+.stake-who em,
+.blocker-what .muted {
+  font-style: normal;
+}
+
+.blocker-more {
+  background: var(--surface, #fff);
+  padding: 4px 2px;
+}
+
+.stake {
+  grid-template-columns: 1fr auto auto;
+}
+
+.stake-role {
+  font-size: 12.5px;
+  padding: 2px 6px;
+}
+
+/* The two roles that carry authority read slightly stronger. */
+.stake.role-sponsor .stake-who,
+.stake.role-approver .stake-who {
+  font-weight: 500;
+}
+
+.dep {
+  grid-template-columns: 56px 1fr auto;
+}
+
+.dep-dir {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+
+.proj-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 8px;
+  flex-wrap: wrap;
+}
+
+/* ---- the chart --------------------------------------------------- */
+.gantt {
+  display: grid;
+  gap: 8px;
+}
+
+.gantt-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.gantt-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gantt-key {
+  width: 18px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.gantt-key-bar {
+  background: var(--accent, #0071e3);
+}
+
+.gantt-key-base {
+  background: transparent;
+  border: 1px dashed var(--ink-faint, #a1a1a6);
+  height: 6px;
+}
+
+.gantt-key-chain {
+  background: #9a6700;
+}
+
+.gantt-key-done {
+  background: var(--ok, #0a7d33);
+}
+
+.gantt-frame {
+  display: flex;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface, #fff);
+}
+
+.gantt-labels {
+  flex: 0 0 auto;
+  border-right: 1px solid var(--hairline);
+  background: var(--surface, #fff);
+  z-index: 1;
+}
+
+.gantt-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink, #1d1d1f);
+  cursor: pointer;
+  padding-right: 8px;
+}
+
+.gantt-label:hover {
+  background: color-mix(in srgb, var(--accent, #0071e3) 7%, transparent);
+}
+
+.gantt-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gantt-label.is-milestone {
+  font-weight: 500;
+}
+
+.gantt-label.is-violated {
+  color: var(--danger, #b4121f);
+}
+
+.gantt-dot {
+  font-size: 9px;
+  color: var(--accent, #0071e3);
+}
+
+.gantt-scroll {
+  flex: 1 1 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.gantt-canvas {
+  position: relative;
+}
+
+.gantt-months {
+  position: absolute;
+  inset: 0 0 auto 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.gantt-month {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--ink-soft);
+  border-left: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+
+.gantt-today {
+  position: absolute;
+  width: 2px;
+  background: color-mix(in srgb, var(--danger, #b4121f) 55%, transparent);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.gantt-arrows {
+  position: absolute;
+  left: 0;
+  pointer-events: none;
+}
+
+.gantt-arrow {
+  stroke: var(--ink-faint, #a1a1a6);
+  stroke-width: 1;
+}
+
+.gantt-arrow.is-chain {
+  stroke: #9a6700;
+  stroke-width: 1.5;
+}
+
+.gantt-rows {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.gantt-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.gantt-bar {
+  position: absolute;
+  top: 8px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--accent, #0071e3);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.gantt-bar.status-completed {
+  background: var(--ok, #0a7d33);
+}
+
+.gantt-bar.status-on_hold,
+.gantt-bar.status-needs_parts {
+  background: #9a6700;
+}
+
+.gantt-bar.is-chain {
+  box-shadow: 0 0 0 1.5px #9a6700;
+}
+
+.gantt-bar.is-violated {
+  background: var(--danger, #b4121f);
+}
+
+/* The agreed plan, ghosted behind the current one. */
+.gantt-base {
+  position: absolute;
+  top: 3px;
+  height: 5px;
+  border: 1px dashed var(--ink-faint, #a1a1a6);
+  border-radius: 2px;
+}
+
+.gantt-ms {
+  position: absolute;
+  top: 9px;
+  width: 11px;
+  height: 11px;
+  background: var(--accent, #0071e3);
+  transform: rotate(45deg);
+}
+
+.gantt-ms.is-done {
+  background: var(--ok, #0a7d33);
+}
+
+.gantt-ms.is-chain {
+  box-shadow: 0 0 0 1.5px #9a6700;
+}
+
+.gantt-blocked {
+  width: 6px;
+  height: 6px;
+  margin-right: 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1.5px var(--danger, #b4121f);
+}
+
+.gantt-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+}
+
+@media (max-width: 620px) {
+  .blocker {
+    grid-template-columns: 1fr auto;
+    row-gap: 2px;
+  }
+  .blocker-kind {
+    grid-column: 1 / -1;
+  }
+  .proj-gov-new label.is-wide {
+    grid-column: span 1;
+  }
+  /* Names take less room than the bars on a phone. */
+  .gantt-labels {
+    width: 130px !important;
+  }
+}
+
+/* A summary row is the envelope around its children, not work of its own, so it
+   reads as a bracket rather than a bar. It has no float and no chain membership
+   for the same reason. */
+.gantt-bar.is-summary {
+  background: transparent;
+  border-top: 3px solid var(--ink, #1d1d1f);
+  border-left: 3px solid var(--ink, #1d1d1f);
+  border-right: 3px solid var(--ink, #1d1d1f);
+  border-radius: 2px 2px 0 0;
+  height: 8px;
+  top: 10px;
+  opacity: 0.45;
+}

@@ -44,6 +44,7 @@ import { inspectionsRouter } from "./routes/inspections";
 import { walkthroughsRouter } from "./routes/walkthroughs";
 import { projectsRouter } from "./routes/projects";
 import { quotesRouter } from "./routes/quotes";
+import { blockersRouter } from "./routes/blockers";
 import { guestReportsRouter } from "./routes/guestReports";
 
 if (!asyncRouteErrorsCaught) {
@@ -122,6 +123,7 @@ app.use("/api/inspections", requireAuth, inspectionsRouter);
 app.use("/api/walkthroughs", requireAuth, walkthroughsRouter);
 app.use("/api/projects", requireAuth, projectsRouter);
 app.use("/api/quotes", requireAuth, quotesRouter);
+app.use("/api/blockers", requireAuth, blockersRouter);
 // Not behind requireAuth: the secret token in the feed URL is what authorises it, so a
 // calendar app can subscribe. The router guards its own session-only endpoints.
 app.use("/api/calendar", calendarRouter);

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { formatDate } from "../lib/dates";
 import { categoryLabel, PRIORITY_LABELS, STATUS_LABELS, type Project, type ProjectIssue, type ProjectStatus } from "../types";
 import ProjectPlan from "./ProjectPlan";
+import ProjectGovernance from "./ProjectGovernance";
+import Gantt from "./Gantt";
 
 const TABS: { key: ProjectStatus | ""; label: string }[] = [
   { key: "planning", label: "Planning" },
@@ -52,11 +54,15 @@ function asTree(issues: ProjectIssue[]): { issue: ProjectIssue; depth: number }[
  * and when; the work order it becomes still lives over there.
  */
 export default function Projects() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<ProjectStatus | "">("open");
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
+  // Which view each expanded project is showing. The list is the default because
+  // it is the one that works on a phone.
+  const [view, setView] = useState<Record<string, "list" | "timeline">>({});
 
   const [showNew, setShowNew] = useState(false);
   const [name, setName] = useState("");
@@ -231,6 +237,15 @@ export default function Projects() {
                   {project.property ? `${project.property.name} · ` : ""}
                   started {formatDate(project.createdAt)}
                   {project.createdBy ? ` by ${project.createdBy}` : ""}
+                  {project.owner ? ` · ${project.owner.name}` : ""}
+                  {/* Worth seeing without expanding: what is stuck, and whether the
+                      plan disagrees with itself. */}
+                  {project.openBlockers > 0 && (
+                    <strong className="is-late"> · {project.openBlockers} blocked</strong>
+                  )}
+                  {project.analysis?.violations?.length > 0 && (
+                    <strong className="is-late"> · plan contradicts itself</strong>
+                  )}
                 </p>
                 {project.description && <p className="proj-desc">{project.description}</p>}
 
@@ -240,9 +255,58 @@ export default function Projects() {
                       project={project}
                       onChange={(updated) => setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))}
                     />
+                    <ProjectGovernance
+                      project={project}
+                      allProjects={projects.map((p) => ({ id: p.id, name: p.name }))}
+                      onChange={(updated) => setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))}
+                    />
+
                     {project.issues.length === 0 ? (
                       <p className="empty-state small">Nothing in this project yet.</p>
                     ) : (
+                      <>
+                        <div className="proj-view-switch" role="tablist">
+                          <button
+                            type="button"
+                            role="tab"
+                            aria-selected={(view[project.id] ?? "list") === "list"}
+                            className={`tab ${(view[project.id] ?? "list") === "list" ? "selected" : ""}`}
+                            onClick={() => setView((v) => ({ ...v, [project.id]: "list" }))}
+                          >
+                            The work
+                          </button>
+                          <button
+                            type="button"
+                            role="tab"
+                            aria-selected={view[project.id] === "timeline"}
+                            className={`tab ${view[project.id] === "timeline" ? "selected" : ""}`}
+                            onClick={() => setView((v) => ({ ...v, [project.id]: "timeline" }))}
+                          >
+                            Timeline
+                          </button>
+                          {project.analysis?.longestChainDays > 0 && (
+                            <span className="muted small">
+                              longest chain {project.analysis.longestChainDays} days
+                              {project.analysis.violations.length > 0 && (
+                                <strong className="is-late">
+                                  {" "}
+                                  · {project.analysis.violations.length} cannot start as planned
+                                </strong>
+                              )}
+                            </span>
+                          )}
+                        </div>
+
+                        {view[project.id] === "timeline" ? (
+                          <Gantt
+                            rows={asTree(project.issues)}
+                            analysis={project.analysis}
+                            onPick={(issueId) => {
+                              const issue = project.issues.find((i) => i.id === issueId);
+                              if (issue) navigate(`/properties/${issue.propertyId}?issue=${issue.id}`);
+                            }}
+                          />
+                        ) : (
                       <ul className="proj-issues">
                         {asTree(project.issues).map(({ issue, depth }) => (
                           <li
@@ -273,6 +337,8 @@ export default function Projects() {
                           </li>
                         ))}
                       </ul>
+                        )}
+                      </>
                     )}
                   </>
                 )}

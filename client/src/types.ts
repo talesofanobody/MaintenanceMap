@@ -858,7 +858,10 @@ export interface ProjectIssue {
   /** The EAM remains the record of work orders; this app plans and feeds it. */
   workOrderNumber: string | null;
   workOrderUrl: string | null;
+  closedAt: string | null;
   costs: { amount: number; quantity: number }[];
+  blockers: { id: string; summary: string; kind: BlockerKind; raisedAt: string; clearedAt: string | null }[];
+  linksOut: { id: string; toIssueId: string; kind: LinkKind; lagDays: number | null }[];
 }
 
 export type QuoteStatus = "requested" | "received" | "declined" | "awarded";
@@ -923,6 +926,118 @@ export interface ProjectSchedule {
   baselined: boolean;
 }
 
+export type BlockerKind = "parts" | "approval" | "access" | "contractor" | "information" | "weather" | "budget" | "other";
+
+export const BLOCKER_KIND_LABELS: Record<BlockerKind, string> = {
+  parts: "Parts",
+  approval: "Approval",
+  access: "Access",
+  contractor: "Contractor",
+  information: "Information",
+  weather: "Weather",
+  budget: "Budget",
+  other: "Other",
+};
+
+/**
+ * Something in the way. Not a dependency: a dependency resolves itself when the
+ * thing in front finishes, a blocker needs somebody to go and sort it out.
+ */
+export interface Blocker {
+  id: string;
+  issueId: string | null;
+  projectId: string | null;
+  kind: BlockerKind;
+  summary: string;
+  ownerId: string | null;
+  owner: TechnicianRef | null;
+  ownerName: string | null;
+  raisedBy: string | null;
+  raisedAt: string;
+  clearedAt: string | null;
+  clearedBy: string | null;
+  resolution: string | null;
+}
+
+export interface BlockerState {
+  open: number;
+  cleared: number;
+  /** Age in days of the oldest thing still in the way. */
+  oldestOpenDays: number | null;
+  /** Mean days a cleared blocker sat there. */
+  meanDaysToClear: number | null;
+}
+
+export type StakeholderRole = "sponsor" | "approver" | "accountable" | "consulted" | "informed";
+
+export const STAKEHOLDER_ROLE_LABELS: Record<StakeholderRole, string> = {
+  sponsor: "Sponsor",
+  approver: "Approver",
+  accountable: "Accountable",
+  consulted: "Consulted",
+  informed: "Informed",
+};
+
+export interface Stakeholder {
+  id: string;
+  projectId: string;
+  technicianId: string | null;
+  technician: TechnicianRef | null;
+  name: string | null;
+  organisation: string | null;
+  role: StakeholderRole;
+  notes: string | null;
+}
+
+export interface ProjectLinkRef {
+  id: string;
+  kind: LinkKind;
+  lagDays: number | null;
+  to?: { id: string; name: string; status: ProjectStatus; plannedEnd: string | null };
+  from?: { id: string; name: string; status: ProjectStatus; plannedEnd: string | null };
+}
+
+export interface ScheduledItem {
+  id: string;
+  earliestStart: number;
+  earliestFinish: number;
+  latestStart: number;
+  latestFinish: number;
+  /** Days this can slip before it moves the end of the project. */
+  floatDays: number;
+  critical: boolean;
+}
+
+/** A planned start its own dependencies do not permit. */
+export interface ScheduleViolation {
+  id: string;
+  plannedStart: string;
+  earliestStart: string;
+  tooEarlyByDays: number;
+}
+
+export interface ScheduleAnalysis {
+  items: Record<string, ScheduledItem>;
+  /** No slack against the plan as typed. */
+  criticalPath: string[];
+  /** The longest chain of dependent work by duration — where the end date comes from. */
+  longestChain: string[];
+  longestChainDays: number;
+  violations: ScheduleViolation[];
+  projectStart: string | null;
+  projectEnd: string | null;
+  unscheduled: string[];
+  /** Summary rows, excluded deliberately rather than for want of dates. */
+  summaries: string[];
+  cyclic: boolean;
+}
+
+export interface CurvePoint {
+  day: string;
+  done: number;
+  percent: number;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -944,6 +1059,17 @@ export interface Project {
   approved: boolean;
   approvedBy: string | null;
   approvedAt: string | null;
+  stakeholders: Stakeholder[];
+  blockers: Blocker[];
+  linksOut: ProjectLinkRef[];
+  linksIn: ProjectLinkRef[];
+  /** The forward/backward pass behind the chart. */
+  analysis: ScheduleAnalysis;
+  /** Work completed over time, from the dates things closed. */
+  curve: CurvePoint[];
+  blockerState: BlockerState;
+  /** The project's own blockers plus the ones on its work. */
+  openBlockers: number;
 }
 
 export type LinkKind = "precedes" | "blocks" | "relates";

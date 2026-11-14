@@ -217,3 +217,388 @@ export async function wouldCycleInLinks(
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
+
+// ---------------------------------------------------------------------------
+// Blockers and stakeholders: the vocabulary, kept here with the rest of the
+// planning domain so the routes and the client agree on one list.
+// ---------------------------------------------------------------------------
+
+/** The kinds of thing that actually recur as impediments. */
+export const BLOCKER_KINDS = ["parts", "approval", "access", "contractor", "information", "weather", "budget", "other"] as const;
+export type BlockerKind = (typeof BLOCKER_KINDS)[number];
+
+/**
+ * Stakeholder roles, following the usual responsibility split rather than a
+ * vocabulary of our own. The common failure in a maintenance programme is not
+ * disagreement — it is somebody finding out late — so the useful thing is simply
+ * writing down who is in which group.
+ */
+export const STAKEHOLDER_ROLES = ["sponsor", "approver", "accountable", "consulted", "informed"] as const;
+export type StakeholderRole = (typeof STAKEHOLDER_ROLES)[number];
+
+export interface BlockerRow {
+  raisedAt: Date | string;
+  clearedAt: Date | string | null;
+}
+
+export interface BlockerSummary {
+  open: number;
+  cleared: number;
+  /** Age in days of the oldest thing still in the way. */
+  oldestOpenDays: number | null;
+  /** Mean days a cleared blocker sat there — how long things take to shift. */
+  meanDaysToClear: number | null;
+}
+
+/**
+ * How bad the blocking situation is, in two numbers people can act on.
+ *
+ * The age of the oldest open blocker is the one that matters: a stand-up can
+ * absorb three raised this morning and cannot absorb one that has been sitting
+ * for a month. Mean time to clear is the honest counterweight — it says whether
+ * this place actually clears things or merely records them.
+ */
+export function blockerSummary(rows: BlockerRow[], now = new Date()): BlockerSummary {
+  const ms = (v: Date | string) => (v instanceof Date ? v.getTime() : Date.parse(v));
+  const open = rows.filter((b) => !b.clearedAt);
+  const cleared = rows.filter((b) => b.clearedAt);
+
+  const oldest = open.reduce<number | null>((worst, b) => {
+    const days = Math.floor((now.getTime() - ms(b.raisedAt)) / 86400000);
+    return worst === null || days > worst ? days : worst;
+  }, null);
+
+  const clearDays = cleared.map((b) => Math.max(0, (ms(b.clearedAt!) - ms(b.raisedAt)) / 86400000));
+  return {
+    open: open.length,
+    cleared: cleared.length,
+    oldestOpenDays: oldest,
+    meanDaysToClear: clearDays.length ? round2(clearDays.reduce((a, b) => a + b, 0) / clearDays.length) : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Critical path
+// ---------------------------------------------------------------------------
+
+export interface ScheduleItem {
+  id: string;
+  /** YYYY-MM-DD. Both are needed; an item missing either cannot be scheduled. */
+  start: string | null;
+  end: string | null;
+  isMilestone: boolean;
+  /**
+   * True when this item has children. A summary row's dates are an envelope around
+   * its children rather than work in its own right, so it takes no part in the
+   * analysis — see the note on `analyseSchedule`.
+   */
+  isSummary?: boolean;
+}
+
+export interface ScheduleLink {
+  fromId: string;
+  toId: string;
+  kind: string;
+  lagDays: number | null;
+}
+
+export interface ScheduledItem {
+  id: string;
+  /** Day numbers, inclusive, counted from the epoch. */
+  earliestStart: number;
+  earliestFinish: number;
+  latestStart: number;
+  latestFinish: number;
+  /** Days this can slip before it moves the end of the project. */
+  floatDays: number;
+  critical: boolean;
+}
+
+/** A planned start that its own dependencies do not permit. */
+export interface ScheduleViolation {
+  id: string;
+  plannedStart: string;
+  earliestStart: string;
+  /** How many days too early the plan has it starting. */
+  tooEarlyByDays: number;
+}
+
+export interface ScheduleAnalysis {
+  items: Record<string, ScheduledItem>;
+  /** The ids with no slack against the plan as typed, in date order. */
+  criticalPath: string[];
+  /**
+   * The longest chain of dependent work by duration alone, which is where the end
+   * date comes from. Reported separately from `criticalPath` because the two
+   * answer different questions — see the note on `analyseSchedule`.
+   */
+  longestChain: string[];
+  longestChainDays: number;
+  /**
+   * Plans that contradict their own dependencies: a job typed to start before the
+   * thing it follows can possibly finish. Usually the most actionable output here.
+   */
+  violations: ScheduleViolation[];
+  projectStart: string | null;
+  projectEnd: string | null;
+  /** Items left out because they have no dates. Reported, never silently dropped. */
+  unscheduled: string[];
+  /** Summary rows, excluded deliberately rather than for want of dates. */
+  summaries: string[];
+  /**
+   * True when the ordering links contain a loop. The routes refuse to create one,
+   * so this should not happen — but a schedule pass must not hang on data that
+   * already has one, and saying so beats looping or lying.
+   */
+  cyclic: boolean;
+}
+
+const DAY = 86400000;
+const toDay = (iso: string): number => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY);
+const fromDay = (day: number): string => new Date(day * DAY).toISOString().slice(0, 10);
+
+/**
+ * Forward and backward pass over the dependency graph, producing three different
+ * answers because people keep asking three different questions.
+ *
+ * **Float, and `criticalPath`.** Slack against the plan *as typed*. Everything here
+ * has dates somebody chose, so a planned start acts as a "not before this" and
+ * float measures the gap to whatever comes next. That makes it operationally true —
+ * how long can this slip before something else has to move — but it also means any
+ * gap left in the plan reads as slack, a weekend included, because it genuinely is
+ * slack: the job can slide into it. On a plan laid out Monday to Friday, almost
+ * everything therefore has a couple of days of float and very little is "critical".
+ * That is not a defect in the sum; it is what fixed dates mean. (It matters less
+ * here than in an office, because this department works Monday to Saturday with
+ * Sunday covered.) There is no working-day calendar, so durations are counted in
+ * calendar days throughout.
+ *
+ * **`longestChain`.** The chain of dependent work with the greatest total duration,
+ * computed from durations alone and ignoring the typed starts. This is the classic
+ * sense of a critical path — where the end date comes from — and unlike float it is
+ * stable against gaps somebody left in the calendar. It is what a chart should
+ * highlight.
+ *
+ * **`violations`.** Jobs the plan has starting earlier than their own dependencies
+ * permit. This tends to be the most useful output of the three, because it finds
+ * plans that contradict themselves rather than merely describing one.
+ *
+ * **Summary rows take no part in any of it.** A parent's dates are an envelope
+ * around its children, so letting it compete is how a phase spanning two months
+ * comes out as "the longest chain" while the actual chain of dependent work inside
+ * it is ignored. It is the same reason the progress rollup counts leaves only: a
+ * parent restates its children rather than adding to them.
+ *
+ * A milestone is treated as occupying the single day it falls on rather than zero
+ * days. Classic CPM gives it zero duration, which makes finish fall before start
+ * and needs a special case in every expression; one day is consistent, reads
+ * correctly on a chart, and shifts nothing by more than a day.
+ *
+ * Only `precedes` constrains. `blocks` deliberately carries no date arithmetic —
+ * it says a thing cannot proceed, not when it would — and `relates` asserts
+ * nothing at all.
+ */
+export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): ScheduleAnalysis {
+  const summaries = items.filter((i) => i.isSummary).map((i) => i.id);
+  const work = items.filter((i) => !i.isSummary);
+  const schedulable = work.filter((i) => i.start && i.end);
+  const unscheduled = work.filter((i) => !i.start || !i.end).map((i) => i.id);
+  const ids = new Set(schedulable.map((i) => i.id));
+
+  if (!schedulable.length) {
+    return { items: {}, criticalPath: [], longestChain: [], longestChainDays: 0, violations: [], projectStart: null, projectEnd: null, unscheduled, summaries, cyclic: false };
+  }
+
+  const ordering = links.filter((l) => l.kind === "precedes" && ids.has(l.fromId) && ids.has(l.toId));
+  const succ = new Map<string, ScheduleLink[]>();
+  const pred = new Map<string, ScheduleLink[]>();
+  for (const l of ordering) {
+    (succ.get(l.fromId) ?? succ.set(l.fromId, []).get(l.fromId)!).push(l);
+    (pred.get(l.toId) ?? pred.set(l.toId, []).get(l.toId)!).push(l);
+  }
+
+  const dur = new Map<string, number>();
+  const ownStart = new Map<string, number>();
+  for (const i of schedulable) {
+    const s = toDay(i.start!);
+    const e = toDay(i.end!);
+    ownStart.set(i.id, s);
+    // Inclusive, and never less than a day, so a same-day job still occupies one.
+    dur.set(i.id, Math.max(1, e - s + 1));
+  }
+
+  // Topological order by Kahn's algorithm. If it cannot consume every node the
+  // graph has a loop, and no amount of passing over it will help.
+  const indegree = new Map<string, number>();
+  for (const id of ids) indegree.set(id, (pred.get(id) ?? []).length);
+  const queue = [...ids].filter((id) => (indegree.get(id) ?? 0) === 0);
+  const order: string[] = [];
+  while (queue.length) {
+    const id = queue.shift()!;
+    order.push(id);
+    for (const l of succ.get(id) ?? []) {
+      const left = (indegree.get(l.toId) ?? 0) - 1;
+      indegree.set(l.toId, left);
+      if (left === 0) queue.push(l.toId);
+    }
+  }
+  const cyclic = order.length !== ids.size;
+  if (cyclic) {
+    return { items: {}, criticalPath: [], longestChain: [], longestChainDays: 0, violations: [], projectStart: null, projectEnd: null, unscheduled, summaries, cyclic: true };
+  }
+
+  // Forward pass: the earliest anything can happen, respecting both the date
+  // somebody chose and what has to finish first.
+  const es = new Map<string, number>();
+  const ef = new Map<string, number>();
+  const violations: ScheduleViolation[] = [];
+  for (const id of order) {
+    const planned = ownStart.get(id)!;
+    let start = planned;
+    for (const l of pred.get(id) ?? []) {
+      const after = ef.get(l.fromId)! + (l.lagDays ?? 0) + 1;
+      if (after > start) start = after;
+    }
+    // The plan asks for something its own dependencies do not allow.
+    if (start > planned) {
+      violations.push({
+        id,
+        plannedStart: fromDay(planned),
+        earliestStart: fromDay(start),
+        tooEarlyByDays: start - planned,
+      });
+    }
+    es.set(id, start);
+    ef.set(id, start + dur.get(id)! - 1);
+  }
+
+  // The longest chain by duration alone. Ignores the typed starts deliberately:
+  // this is the answer to "where does the end date come from", and a gap someone
+  // left in the calendar should not change it.
+  const chainDays = new Map<string, number>();
+  const chainPrev = new Map<string, string | null>();
+  for (const id of order) {
+    let best = 0;
+    let via: string | null = null;
+    for (const l of pred.get(id) ?? []) {
+      const through = chainDays.get(l.fromId)! + (l.lagDays ?? 0);
+      if (through > best) {
+        best = through;
+        via = l.fromId;
+      }
+    }
+    chainDays.set(id, best + dur.get(id)!);
+    chainPrev.set(id, via);
+  }
+  let chainTail: string | null = null;
+  let longestChainDays = 0;
+  for (const id of order) {
+    if (chainDays.get(id)! > longestChainDays) {
+      longestChainDays = chainDays.get(id)!;
+      chainTail = id;
+    }
+  }
+  const longestChain: string[] = [];
+  for (let cursor = chainTail; cursor; cursor = chainPrev.get(cursor) ?? null) longestChain.unshift(cursor);
+
+  const projectEnd = Math.max(...[...ef.values()]);
+  const projectStart = Math.min(...[...es.values()]);
+
+  // Backward pass: the latest anything can happen without moving the end.
+  const lf = new Map<string, number>();
+  const ls = new Map<string, number>();
+  for (const id of [...order].reverse()) {
+    const outgoing = succ.get(id) ?? [];
+    let finish = outgoing.length ? Infinity : projectEnd;
+    for (const l of outgoing) {
+      const before = ls.get(l.toId)! - (l.lagDays ?? 0) - 1;
+      if (before < finish) finish = before;
+    }
+    lf.set(id, finish);
+    ls.set(id, finish - dur.get(id)! + 1);
+  }
+
+  const out: Record<string, ScheduledItem> = {};
+  for (const id of ids) {
+    const slack = ls.get(id)! - es.get(id)!;
+    out[id] = {
+      id,
+      earliestStart: es.get(id)!,
+      earliestFinish: ef.get(id)!,
+      latestStart: ls.get(id)!,
+      latestFinish: lf.get(id)!,
+      floatDays: slack,
+      critical: slack <= 0,
+    };
+  }
+
+  const criticalPath = [...ids]
+    .filter((id) => out[id].critical)
+    .sort((a, b) => out[a].earliestStart - out[b].earliestStart || a.localeCompare(b));
+
+  return {
+    items: out,
+    criticalPath,
+    longestChain,
+    longestChainDays,
+    violations,
+    projectStart: fromDay(projectStart),
+    projectEnd: fromDay(projectEnd),
+    unscheduled,
+    summaries,
+    cyclic: false,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Progress over time
+// ---------------------------------------------------------------------------
+
+export interface CurvePoint {
+  day: string;
+  /** Jobs finished by the end of this day. */
+  done: number;
+  /** As a percentage of the work in scope. */
+  percent: number;
+}
+
+/**
+ * Work actually completed over time, taken from the dates things closed.
+ *
+ * Derived from `closedAt` rather than from stored snapshots, which this app does
+ * not keep. That is a real limitation and worth being plain about: the curve
+ * reflects the plan *as it stands now*, so work added later appears to have been
+ * in scope all along and the early part of the curve reads slightly pessimistic.
+ * It is still the honest version — the alternative is an S-curve drawn from a
+ * formula, which would look better and mean nothing.
+ */
+export function progressCurve(
+  items: { closedAt: Date | string | null; isMilestone: boolean; parentId: string | null; id: string }[]
+): CurvePoint[] {
+  const parentIds = new Set(items.map((i) => i.parentId).filter((v): v is string => !!v));
+  const leaves = items.filter((i) => !parentIds.has(i.id) && !i.isMilestone);
+  if (!leaves.length) return [];
+
+  const closed = leaves
+    .map((i) => i.closedAt)
+    .filter((v): v is Date | string => !!v)
+    .map((v) => (v instanceof Date ? v : new Date(v)).toISOString().slice(0, 10))
+    .sort();
+  if (!closed.length) return [];
+
+  const points: CurvePoint[] = [];
+  let done = 0;
+  for (const day of closed) {
+    done += 1;
+    const last = points[points.length - 1];
+    // One point per day, carrying the running total — not one per job, or a day
+    // on which three things finished would draw three points at the same x.
+    if (last && last.day === day) {
+      last.done = done;
+      last.percent = Math.round((done / leaves.length) * 100);
+    } else {
+      points.push({ day, done, percent: Math.round((done / leaves.length) * 100) });
+    }
+  }
+  return points;
+}

@@ -3,7 +3,7 @@
 **Drafted:** 14 November 2026
 **Scope:** project management, a property manual, daily utility logging with graphs, and the
 groundwork for automation.
-**Status:** slice 1 is built, tested and pushed (`632caa9`). Slices 2–8 are still plan.
+**Status:** slices 1 and 1b are built, tested and pushed. Slices 2–8 are still plan.
 Section 7 is the build order and records what is done.
 
 **Decided since drafting.** The EAM stays the record of work orders; this app plans and
@@ -405,13 +405,14 @@ the one that gets automation running this quarter instead of next.
 
 | Slice | Contents | Why here |
 |---|---|---|
-| ~~**1**~~ | ~~Work breakdown: `parentId`, `isMilestone`, baselines, `IssueLink`, project budget/owner/sign-off, `Quote`~~ | **Done** — `632caa9`. 128 checks in `tests/` |
+| ~~**1**~~ | ~~Work breakdown: `parentId`, `isMilestone`, baselines, `IssueLink`, project budget/owner/sign-off, `Quote`~~ | **Done** — `632caa9` |
+| ~~**1b**~~ | ~~`ProjectLink`, `Blocker`, `Stakeholder`, critical path and float, Gantt with dependencies and baselines, progress curve~~ | **Done**. 254 checks in `tests/` |
 | **2** | Numeric readings on inspection checks (value, unit, acceptable range) | Blocks new checklist content; wanted by three subsystems |
 | **3** | Daily readings: `MeterPoint`, `Reading`, `UtilityInvoice`, the nutshell dashboard, one charting library | Smallest, pays back daily, replaces live spreadsheet work |
 | **4** | Location hierarchy: block → floor → space, coexisting with `roomName` | Foundation for the manual; touches a lot, so early |
 | **5** | Assets and `AssetRelation`; AC and generator intervals on assets | The manual's substance |
 | **6** | Floor plans: raster overlay, three-point georeference, the drawing map view | Depends on 4 and 5 |
-| **7** | Gantt and critical path over slice 1 | A view; needs the graph to exist first |
+| ~~**7**~~ | ~~Gantt and critical path~~ | **Pulled forward into 1b** |
 | **8** | Automation rail: `AgentRun`, `AgentProposal`, approval screen, threshold jobs | Needs 3 and 5 to have anything worth proposing |
 
 Slices 1 and 3 are independent and can run in parallel. Slice 2 should go in before any new
@@ -446,6 +447,36 @@ v2 work starts, not after, and the reinstall this session needed is the natural 
 Unchanged and still the highest operational risk. v2 adds considerably more irreplaceable data —
 a property manual is months of surveying that cannot be reconstructed from memory. Off-platform
 backup should land before the manual is populated, not after.
+
+### Found while building slice 1b
+
+**Float against typed dates is not the critical path.** Every item here carries dates
+somebody chose, so float measures the gap to the next constraint — weekends included,
+because a job can genuinely slide into one. On a Monday-to-Friday plan that leaves
+almost nothing "critical", which is accurate and useless. So the analysis reports
+three things instead of one: float against the plan as typed, the **longest chain** by
+duration alone (where the end date actually comes from, and stable against calendar
+gaps), and **violations** — jobs planned to start before their own dependencies allow.
+The third is usually the most actionable: it finds plans that contradict themselves.
+
+There is no working-day calendar, so durations are counted in calendar days. That
+matters less here than in an office, because this department works Monday to Saturday
+with Sunday covered.
+
+**A summary row must take no part in the schedule.** Caught by a failing test rather
+than by reasoning: a phase spanning two months came out as "the longest chain",
+beating the eighteen-day chain of dependent work inside it. A parent's dates are an
+envelope around its children, so it is excluded from the analysis entirely — the same
+reason the progress rollup counts leaves only — and drawn as a bracket rather than a
+bar.
+
+**A blocker is not a dependency**, and conflating them loses the thing that matters. A
+dependency resolves itself when the work in front finishes; nobody has to do anything.
+A blocker needs somebody to go and sort it out, and its *age* is the management signal
+— one raised this morning and one sitting for a month are different problems, and no
+dependency graph can tell them apart. So blockers carry an owner, a kind, a resolution
+and a cleared-at, and are cleared rather than deleted: how long work sat waiting is the
+figure the table exists to produce.
 
 ### Found while building slice 1
 

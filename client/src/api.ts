@@ -1,4 +1,4 @@
-import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
+import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -432,6 +432,43 @@ export const api = {
       { method: "POST" }
     ),
   deleteQuote: (id: string) => request<void>(`/quotes/${id}`, { method: "DELETE" }),
+
+  // --- governance: blockers, stakeholders, project dependencies ----------
+  listBlockers: (target: { issueId?: string; projectId?: string; open?: boolean }) => {
+    const q = new URLSearchParams();
+    if (target.issueId) q.set("issueId", target.issueId);
+    if (target.projectId) q.set("projectId", target.projectId);
+    if (target.open) q.set("open", "1");
+    return request<{ blockers: Blocker[]; state: BlockerState; kinds: BlockerKind[] }>(`/blockers?${q}`);
+  },
+  createBlocker: (data: {
+    issueId?: string;
+    projectId?: string;
+    kind?: BlockerKind;
+    summary: string;
+    ownerId?: string;
+    ownerName?: string;
+  }) => request<Blocker>("/blockers", { method: "POST", body: JSON.stringify(data) }),
+  updateBlocker: (id: string, data: { summary?: string; kind?: BlockerKind; ownerId?: string | null; ownerName?: string | null }) =>
+    request<Blocker>(`/blockers/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  /** Clears it with what was done, or reopens it with `{ cleared: false }`. */
+  clearBlocker: (id: string, data: { resolution?: string; cleared?: boolean } = {}) =>
+    request<Blocker>(`/blockers/${id}/clear`, { method: "POST", body: JSON.stringify(data) }),
+  /** Only for one raised in error — a cleared blocker is the record of the wait. */
+  deleteBlocker: (id: string) => request<void>(`/blockers/${id}`, { method: "DELETE" }),
+
+  addStakeholder: (
+    projectId: string,
+    data: { technicianId?: string; name?: string; organisation?: string; role?: StakeholderRole; notes?: string }
+  ) => request<Project>(`/projects/${projectId}/stakeholders`, { method: "POST", body: JSON.stringify(data) }),
+  updateStakeholder: (projectId: string, id: string, data: { role?: StakeholderRole; organisation?: string | null; notes?: string | null }) =>
+    request<Project>(`/projects/${projectId}/stakeholders/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  removeStakeholder: (projectId: string, id: string) =>
+    request<Project>(`/projects/${projectId}/stakeholders/${id}`, { method: "DELETE" }),
+
+  linkProjects: (id: string, data: { toProjectId: string; kind?: LinkKind; lagDays?: number | null }) =>
+    request<Project>(`/projects/${id}/links`, { method: "POST", body: JSON.stringify(data) }),
+  unlinkProjects: (id: string, linkId: string) => request<Project>(`/projects/${id}/links/${linkId}`, { method: "DELETE" }),
 
   // --- work breakdown and dependencies -----------------------------------
   linkIssues: (id: string, data: { toIssueId: string; kind?: LinkKind; lagDays?: number | null }) =>

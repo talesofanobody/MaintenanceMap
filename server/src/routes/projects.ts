@@ -4,7 +4,18 @@ import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { parseOptionalDay, parseOptionalString, ValidationError } from "../lib/validation";
 import { isClosed } from "../lib/workflow";
-import { budgetView, quoteState, rollUp, slippageDays } from "../lib/planning";
+import {
+  analyseSchedule,
+  BLOCKER_KINDS,
+  blockerSummary,
+  budgetView,
+  progressCurve,
+  quoteState,
+  rollUp,
+  slippageDays,
+  STAKEHOLDER_ROLES,
+  wouldCycleInLinks,
+} from "../lib/planning";
 
 /**
  * A project is a plan over work that is being done together — a room refurbishment,
@@ -37,6 +48,16 @@ function parseAmount(value: unknown): number | null | undefined {
 const PROJECT_INCLUDE = {
   property: { select: { id: true, name: true } },
   owner: { select: { id: true, name: true, color: true, trade: true } },
+  stakeholders: {
+    include: { technician: { select: { id: true, name: true, color: true, trade: true } } },
+    orderBy: { createdAt: "asc" as const },
+  },
+  blockers: {
+    include: { owner: { select: { id: true, name: true, color: true } } },
+    orderBy: { raisedAt: "asc" as const },
+  },
+  linksOut: { include: { to: { select: { id: true, name: true, status: true, plannedEnd: true } } } },
+  linksIn: { include: { from: { select: { id: true, name: true, status: true, plannedEnd: true } } } },
   quotes: {
     include: { contractor: { select: { id: true, name: true, trade: true } } },
     orderBy: { requestedAt: "asc" as const },
@@ -63,8 +84,11 @@ const PROJECT_INCLUDE = {
       actualHours: true,
       workOrderNumber: true,
       workOrderUrl: true,
+      closedAt: true,
       costs: { select: { amount: true, quantity: true } },
       technician: { select: { id: true, name: true, color: true } },
+      blockers: { select: { id: true, summary: true, kind: true, raisedAt: true, clearedAt: true } },
+      linksOut: { select: { id: true, toIssueId: true, kind: true, lagDays: true } },
     },
     orderBy: { createdAt: "asc" as const },
   },
@@ -79,9 +103,33 @@ const PROJECT_INCLUDE = {
 function summarise(project: any) {
   const counts = rollUp(project.issues, isClosed);
   const awarded = (project.quotes ?? []).filter((q: any) => q.status === "awarded" && q.amount != null).map((q: any) => q.amount as number);
+  // Every blocker in scope: the project's own, plus the ones on its work. A
+  // supervisor wants one number for "what is in the way here", not two lists.
+  const allBlockers = [...(project.blockers ?? []), ...(project.issues ?? []).flatMap((i: any) => i.blockers ?? [])];
+
+  // The schedule, from the work's own dates and the dependencies between it.
+  // A parent is an envelope around its children, not work of its own.
+  const hasChildren = new Set((project.issues ?? []).map((i: any) => i.parentId).filter(Boolean));
+  const schedule = analyseSchedule(
+    (project.issues ?? []).map((i: any) => ({
+      id: i.id,
+      start: i.scheduledFor ?? null,
+      end: i.dueDate ?? i.scheduledFor ?? null,
+      isMilestone: !!i.isMilestone,
+      isSummary: hasChildren.has(i.id),
+    })),
+    (project.issues ?? []).flatMap((i: any) =>
+      (i.linksOut ?? []).map((l: any) => ({ fromId: i.id, toId: l.toIssueId, kind: l.kind, lagDays: l.lagDays }))
+    )
+  );
+
   return {
     ...project,
     counts,
+    analysis: schedule,
+    curve: progressCurve(project.issues ?? []),
+    blockerState: blockerSummary(allBlockers),
+    openBlockers: allBlockers.filter((b: any) => !b.clearedAt).length,
     budget: budgetView(project.budgetAmount ?? null, awarded, counts.actualCost),
     schedule: {
       plannedStart: project.plannedStart ?? null,
@@ -285,6 +333,173 @@ projectsRouter.post("/:id/approve", requires("project.write"), async (req, res) 
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
     throw err;
   }
+});
+
+// ---------------------------------------------------------------------------
+// Dependencies between projects
+// ---------------------------------------------------------------------------
+
+const PROJECT_LINK_KINDS = ["precedes", "blocks", "relates"];
+
+/**
+ * Make one project depend on another.
+ *
+ * The same three kinds as between jobs, and the same loop check on the ordering
+ * ones: two programmes each waiting for the other is a plan nobody can start.
+ */
+projectsRouter.post("/:id/links", requires("project.write"), async (req, res) => {
+  const from = await prisma.project.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, propertyId: true } });
+  if (!from) return res.status(404).json({ error: "not found" });
+
+  const toProjectId = typeof req.body.toProjectId === "string" ? req.body.toProjectId : "";
+  const kind = typeof req.body.kind === "string" ? req.body.kind : "precedes";
+  if (!PROJECT_LINK_KINDS.includes(kind)) return res.status(400).json({ error: "invalid link kind" });
+  if (!toProjectId) return res.status(400).json({ error: "Which project does this one depend on?" });
+  if (toProjectId === from.id) return res.status(400).json({ error: "A project cannot depend on itself." });
+
+  const to = await prisma.project.findUnique({ where: { id: toProjectId }, select: { id: true, name: true } });
+  if (!to) return res.status(400).json({ error: "That project does not exist." });
+
+  let lagDays: number | null = null;
+  if (req.body.lagDays !== undefined && req.body.lagDays !== null && req.body.lagDays !== "") {
+    const n = Number(req.body.lagDays);
+    if (!Number.isInteger(n) || n < 0 || n > 365) return res.status(400).json({ error: "Lag must be a whole number of days, 0 to 365." });
+    lagDays = n;
+  }
+
+  if (kind !== "relates") {
+    const loops = await wouldCycleInLinks(from.id, to.id, async (id) => {
+      const rows = await prisma.projectLink.findMany({
+        where: { fromProjectId: id, kind: { in: ["precedes", "blocks"] } },
+        select: { toProjectId: true },
+      });
+      return rows.map((r) => r.toProjectId);
+    });
+    if (loops) {
+      return res.status(400).json({ error: "That would make the two projects wait for each other, so neither could ever start." });
+    }
+  }
+
+  try {
+    await prisma.projectLink.create({ data: { fromProjectId: from.id, toProjectId: to.id, kind, lagDays } });
+  } catch {
+    return res.status(400).json({ error: "That link already exists." });
+  }
+
+  await logActivity(req, {
+    action: "project.linked",
+    entityType: "system",
+    entityId: from.id,
+    propertyId: from.propertyId,
+    summary: `"${from.name}" ${kind} "${to.name}"`,
+  });
+  const fresh = await prisma.project.findUnique({ where: { id: from.id }, include: PROJECT_INCLUDE });
+  res.status(201).json(summarise(fresh!));
+});
+
+projectsRouter.delete("/:id/links/:linkId", requires("project.write"), async (req, res) => {
+  const link = await prisma.projectLink.findUnique({
+    where: { id: req.params.linkId },
+    include: { from: { select: { id: true, name: true, propertyId: true } }, to: { select: { name: true } } },
+  });
+  if (!link) return res.status(404).json({ error: "not found" });
+  if (link.fromProjectId !== req.params.id && link.toProjectId !== req.params.id) {
+    return res.status(404).json({ error: "not found" });
+  }
+  await prisma.projectLink.delete({ where: { id: link.id } });
+  await logActivity(req, {
+    action: "project.unlinked",
+    entityType: "system",
+    entityId: link.from.id,
+    propertyId: link.from.propertyId,
+    summary: `Removed "${link.from.name}" ${link.kind} "${link.to.name}"`,
+  });
+  const fresh = await prisma.project.findUnique({ where: { id: req.params.id }, include: PROJECT_INCLUDE });
+  res.json(summarise(fresh!));
+});
+
+// ---------------------------------------------------------------------------
+// Stakeholders
+// ---------------------------------------------------------------------------
+
+/**
+ * Add somebody with an interest, and say what kind of interest it is.
+ *
+ * Either one of the roster or a name and an organisation. External people are not
+ * an afterthought: an insurer's auditor, a regional engineer and a public-health
+ * lab are all stakeholders on this kind of work and none of them will ever have a
+ * login here.
+ */
+projectsRouter.post("/:id/stakeholders", requires("project.write"), async (req, res) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, propertyId: true } });
+  if (!project) return res.status(404).json({ error: "not found" });
+
+  try {
+    const role = typeof req.body.role === "string" ? req.body.role : "informed";
+    if (!(STAKEHOLDER_ROLES as readonly string[]).includes(role)) return res.status(400).json({ error: "invalid stakeholder role" });
+
+    const technicianId = typeof req.body.technicianId === "string" && req.body.technicianId ? req.body.technicianId : null;
+    const name = parseOptionalString(req.body.name, "name", 120) ?? null;
+    if (!technicianId && !name) return res.status(400).json({ error: "A stakeholder needs either somebody from the team or a name." });
+    if (technicianId) {
+      const tech = await prisma.technician.findUnique({ where: { id: technicianId }, select: { id: true } });
+      if (!tech) return res.status(400).json({ error: "That team member does not exist." });
+    }
+
+    const stakeholder = await prisma.stakeholder.create({
+      data: {
+        projectId: project.id,
+        technicianId,
+        name: technicianId ? null : name,
+        organisation: parseOptionalString(req.body.organisation, "organisation", 120) ?? null,
+        role,
+        notes: parseOptionalString(req.body.notes, "notes", 1000) ?? null,
+      },
+      include: { technician: { select: { name: true } } },
+    });
+
+    await logActivity(req, {
+      action: "project.stakeholder_added",
+      entityType: "system",
+      entityId: project.id,
+      propertyId: project.propertyId,
+      summary: `${stakeholder.technician?.name ?? stakeholder.name} added to "${project.name}" as ${role}`,
+    });
+    const fresh = await prisma.project.findUnique({ where: { id: project.id }, include: PROJECT_INCLUDE });
+    res.status(201).json(summarise(fresh!));
+  } catch (err) {
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+});
+
+projectsRouter.put("/:id/stakeholders/:stakeholderId", requires("project.write"), async (req, res) => {
+  const existing = await prisma.stakeholder.findUnique({ where: { id: req.params.stakeholderId } });
+  if (!existing || existing.projectId !== req.params.id) return res.status(404).json({ error: "not found" });
+  try {
+    const data: Record<string, unknown> = {};
+    if (req.body.role !== undefined) {
+      const role = String(req.body.role);
+      if (!(STAKEHOLDER_ROLES as readonly string[]).includes(role)) return res.status(400).json({ error: "invalid stakeholder role" });
+      data.role = role;
+    }
+    if (req.body.organisation !== undefined) data.organisation = parseOptionalString(req.body.organisation, "organisation", 120) ?? null;
+    if (req.body.notes !== undefined) data.notes = parseOptionalString(req.body.notes, "notes", 1000) ?? null;
+    await prisma.stakeholder.update({ where: { id: existing.id }, data });
+    const fresh = await prisma.project.findUnique({ where: { id: req.params.id }, include: PROJECT_INCLUDE });
+    res.json(summarise(fresh!));
+  } catch (err) {
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+});
+
+projectsRouter.delete("/:id/stakeholders/:stakeholderId", requires("project.write"), async (req, res) => {
+  const existing = await prisma.stakeholder.findUnique({ where: { id: req.params.stakeholderId } });
+  if (!existing || existing.projectId !== req.params.id) return res.status(404).json({ error: "not found" });
+  await prisma.stakeholder.delete({ where: { id: existing.id } });
+  const fresh = await prisma.project.findUnique({ where: { id: req.params.id }, include: PROJECT_INCLUDE });
+  res.json(summarise(fresh!));
 });
 
 /** Deleting a project releases its issues rather than taking them with it. */

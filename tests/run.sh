@@ -6,7 +6,7 @@
 # every one of them was lost, leaving the application without the harness that
 # proved it worked. Tests that only exist on one machine are not tests.
 #
-#   ./tests/run.sh unit        — the rollup and cycle arithmetic, no database
+#   ./tests/run.sh unit        — the arithmetic: rollups, cycles, critical path
 #   ./tests/run.sh migration   — old schema -> populate -> migrate -> assert
 #   ./tests/run.sh api         — the endpoints, against a running dev server
 #   ./tests/run.sh ui          — the screens, in a real browser
@@ -37,25 +37,37 @@ run() { echo "================ $1 ================"; shift; "$@"; local r=$?; [ 
 
 case "${1:-all}" in
   unit)
-    run "unit: planning arithmetic" npx --prefix "$ROOT/server" ts-node --transpile-only \
-      --compiler-options '{"module":"commonjs","target":"es2020","ignoreDeprecations":"6.0","moduleResolution":"node"}' \
-      "$HERE/unit-planning.ts"
+    for f in unit-planning unit-schedule; do
+      run "unit: $f" npx --prefix "$ROOT/server" ts-node --transpile-only \
+        --compiler-options '{"module":"commonjs","target":"es2020","ignoreDeprecations":"6.0","moduleResolution":"node"}' \
+        "$HERE/$f.ts"
+    done
     ;;
   migration)
     echo "The migration drill needs a database built at the PREVIOUS schema."
     echo "See the recipe in tests/README.md — it is deliberately manual, because it"
     echo "moves a migration directory aside and should not be run by accident."
     ;;
-  api)    run "api: planning endpoints" node "$HERE/api-planning.js" ;;
-  ui)     run "ui: the plan on screen"  node "$HERE/ui-planning.js" ;;
+  api)
+    run "api: planning endpoints" node "$HERE/api-planning.js"
+    run "api: governance"         node "$HERE/api-governance.js"
+    ;;
+  ui)
+    run "ui: the plan on screen" node "$HERE/ui-planning.js"
+    run "ui: gantt and governance" node "$HERE/ui-governance.js"
+    ;;
   smoke)  run "smoke: every page"       node "$HERE/smoke-pages.js" ;;
   all)
-    run "unit: planning arithmetic" npx --prefix "$ROOT/server" ts-node --transpile-only \
-      --compiler-options '{"module":"commonjs","target":"es2020","ignoreDeprecations":"6.0","moduleResolution":"node"}' \
-      "$HERE/unit-planning.ts"
-    run "api: planning endpoints" node "$HERE/api-planning.js"
-    run "ui: the plan on screen"  node "$HERE/ui-planning.js"
-    run "smoke: every page"       node "$HERE/smoke-pages.js"
+    for f in unit-planning unit-schedule; do
+      run "unit: $f" npx --prefix "$ROOT/server" ts-node --transpile-only \
+        --compiler-options '{"module":"commonjs","target":"es2020","ignoreDeprecations":"6.0","moduleResolution":"node"}' \
+        "$HERE/$f.ts"
+    done
+    run "api: planning endpoints"  node "$HERE/api-planning.js"
+    run "api: governance"          node "$HERE/api-governance.js"
+    run "ui: the plan on screen"   node "$HERE/ui-planning.js"
+    run "ui: gantt and governance" node "$HERE/ui-governance.js"
+    run "smoke: every page"        node "$HERE/smoke-pages.js"
     ;;
   *) echo "unknown target: $1"; exit 2 ;;
 esac
