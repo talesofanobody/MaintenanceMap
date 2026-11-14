@@ -1247,3 +1247,131 @@ export interface ReadingSeries {
   /** How many of the readings fell outside the range that applied at the time. */
   outOfRange: number;
 }
+
+
+// ---------------------------------------------------------------------------
+// Utilities: the daily round
+// ---------------------------------------------------------------------------
+
+export const UTILITY_KINDS = ["electricity", "water", "propane", "diesel"] as const;
+export type UtilityKind = (typeof UTILITY_KINDS)[number];
+
+export const UTILITY_LABELS: Record<UtilityKind, string> = {
+  electricity: "Electricity",
+  water: "Water",
+  propane: "Propane",
+  diesel: "Diesel",
+};
+
+export const ENTRY_MODES = ["direct", "percentage", "tank_height"] as const;
+export type EntryMode = (typeof ENTRY_MODES)[number];
+
+export const ENTRY_MODE_LABELS: Record<EntryMode, string> = {
+  direct: "Reads in the unit",
+  percentage: "Per cent of the tank",
+  tank_height: "Height in the tank",
+};
+
+/** The two rounds. A day runs from one 05:00 to the next. */
+export const SLOTS = ["0200", "0500"] as const;
+export type Slot = (typeof SLOTS)[number];
+export const SLOT_LABELS: Record<Slot, string> = { "0200": "02:00", "0500": "05:00" };
+
+export const READING_UNIT_OPTIONS = ["kWh", "litre", "m3", "gal"] as const;
+
+export interface MeterPoint {
+  id: string;
+  propertyId: string;
+  property?: { id: string; name: string } | null;
+  name: string;
+  kind: UtilityKind;
+  entryMode: EntryMode;
+  unit: string;
+  capacityLitres: number | null;
+  tankMaxHeightMm: number | null;
+  /** Whether this rolls into the site total, or is a submeter beneath one. */
+  includeInSiteTotal: boolean;
+  /** A running total that climbs, versus a level that goes up and down. */
+  cumulative: boolean;
+  active: boolean;
+  notes: string | null;
+  sortOrder: number;
+}
+
+export interface Reading {
+  id: string;
+  meterPointId: string;
+  takenAt: string;
+  slot: Slot;
+  readingDay: string;
+  /** Exactly what was read, before conversion. */
+  rawValue: number;
+  /** The same reading in the meter's unit. */
+  value: number;
+  takenBy: string | null;
+  notes: string | null;
+}
+
+export interface DayConsumption {
+  day: string;
+  opening: number | null;
+  twoAm: number | null;
+  closing: number | null;
+  used: number | null;
+  /** 02:00 to 05:00 — the quiet hours. */
+  usedOvernight: number | null;
+  /** 05:00 to 02:00 — while the hotel was open. */
+  usedTrading: number | null;
+  incomplete: boolean;
+}
+
+export interface PeriodTotals {
+  wtd: number;
+  mtd: number;
+  /** From 1 July, the financial year this operation runs on. */
+  ytd: number;
+  /** Days that actually contributed, so a total can be judged. */
+  days: { wtd: number; mtd: number; ytd: number };
+}
+
+export interface MeterSummary {
+  meter: MeterPoint;
+  days: DayConsumption[];
+  totals: PeriodTotals;
+  /** Rounds not taken, never reaching back before the meter's first reading. */
+  missing: { day: string; missing: Slot[] }[];
+  latest: DayConsumption | null;
+}
+
+export interface UnitCost {
+  periodStart: string;
+  periodEnd: string;
+  amount: number;
+  quantity: number;
+  unit: string;
+  /** Amount divided by quantity — derived from the bill, never typed in. */
+  costPerUnit: number;
+  changePercent: number | null;
+}
+
+export interface UtilityInvoice {
+  id: string;
+  propertyId: string;
+  kind: UtilityKind;
+  periodStart: string;
+  periodEnd: string;
+  amount: number;
+  quantity: number;
+  unit: string;
+  reference: string | null;
+  notes: string | null;
+}
+
+export interface UtilitySummary {
+  today: string;
+  from: string;
+  meters: MeterSummary[];
+  siteTotals: Record<string, { wtd: number; mtd: number; ytd: number; meters: number }>;
+  costs: Record<string, UnitCost[]>;
+  kinds: readonly string[];
+}

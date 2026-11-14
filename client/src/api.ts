@@ -1,4 +1,4 @@
-import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, ReadingSeries, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
+import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, ReadingSeries, MeterPoint, Reading, Slot, UtilityKind, EntryMode, UtilitySummary, UtilityInvoice, UnitCost, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -485,6 +485,64 @@ export const api = {
     for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
     return request<{ series: ReadingSeries[]; units: string[] }>(`/inspections/readings${q.toString() ? `?${q}` : ""}`);
   },
+
+  // --- utilities: the daily round ----------------------------------------
+  listMeters: (propertyId: string, all = false) =>
+    request<{ meters: MeterPoint[]; kinds: string[]; entryModes: string[]; units: string[]; slots: string[] }>(
+      `/utilities/meters?propertyId=${propertyId}${all ? "&all=1" : ""}`
+    ),
+  createMeter: (data: {
+    propertyId: string;
+    name: string;
+    kind: UtilityKind;
+    entryMode?: EntryMode;
+    unit: string;
+    capacityLitres?: number | null;
+    tankMaxHeightMm?: number | null;
+    includeInSiteTotal?: boolean;
+    cumulative?: boolean;
+    notes?: string | null;
+  }) => request<MeterPoint>("/utilities/meters", { method: "POST", body: JSON.stringify(data) }),
+  updateMeter: (id: string, data: Partial<Omit<MeterPoint, "id" | "propertyId" | "property">>) =>
+    request<MeterPoint>(`/utilities/meters/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  /** A meter with readings is taken out of use rather than deleted. */
+  retireMeter: (id: string) =>
+    request<{ deactivated?: boolean; readings?: number; message?: string }>(`/utilities/meters/${id}`, { method: "DELETE" }),
+
+  /** One day's round across every meter, for the screen that enters them. */
+  readingsForDay: (propertyId: string, day?: string) =>
+    request<{ day: string; rows: { meter: MeterPoint; readings: Partial<Record<Slot, Reading>> }[]; slots: Slot[] }>(
+      `/utilities/readings?propertyId=${propertyId}${day ? `&day=${day}` : ""}`
+    ),
+  /** Records a round. Re-recording the same one corrects it rather than adding another. */
+  recordReading: (data: { meterPointId: string; slot: Slot; rawValue: number; readingDay?: string; takenAt?: string; notes?: string }) =>
+    request<Reading>("/utilities/readings", { method: "POST", body: JSON.stringify(data) }),
+  deleteReading: (id: string) => request<void>(`/utilities/readings/${id}`, { method: "DELETE" }),
+
+  /** The property in a nutshell: series, totals, missed rounds, cost per unit. */
+  utilitySummary: (propertyId: string, params: { today?: string; from?: string } = {}) => {
+    const q = new URLSearchParams({ propertyId });
+    if (params.today) q.set("today", params.today);
+    if (params.from) q.set("from", params.from);
+    return request<UtilitySummary>(`/utilities/summary?${q}`);
+  },
+
+  listUtilityInvoices: (propertyId: string, kind?: string) =>
+    request<{ invoices: UtilityInvoice[]; costs: Record<string, UnitCost[]> }>(
+      `/utilities/invoices?propertyId=${propertyId}${kind ? `&kind=${kind}` : ""}`
+    ),
+  /** The bill, so cost per unit is derived rather than claimed. */
+  recordUtilityInvoice: (data: {
+    propertyId: string;
+    kind: UtilityKind;
+    periodStart: string;
+    periodEnd: string;
+    amount: number;
+    quantity: number;
+    unit: string;
+    reference?: string;
+  }) => request<UtilityInvoice>("/utilities/invoices", { method: "POST", body: JSON.stringify(data) }),
+  deleteUtilityInvoice: (id: string) => request<void>(`/utilities/invoices/${id}`, { method: "DELETE" }),
 
   // --- the working calendar ----------------------------------------------
   listCalendars: () => request<WorkCalendar[]>("/calendars"),

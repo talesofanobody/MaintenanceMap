@@ -37,7 +37,7 @@ run() { echo "================ $1 ================"; shift; "$@"; local r=$?; [ 
 
 case "${1:-all}" in
   unit)
-    for f in unit-planning unit-schedule unit-tree unit-calendar; do
+    for f in unit-planning unit-schedule unit-tree unit-calendar unit-utilities; do
       run "unit: $f" npx --prefix "$ROOT/server" ts-node --transpile-only \
         --compiler-options '{"module":"commonjs","target":"es2020","ignoreDeprecations":"6.0","moduleResolution":"node"}' \
         "$HERE/$f.ts"
@@ -55,6 +55,7 @@ case "${1:-all}" in
     run "api: the calendar"       node "$HERE/api-calendar.js"
     run "api: readings"           node "$HERE/api-readings.js"
     run "api: paging"             node "$HERE/api-paging.js"
+    run "api: utilities"          node "$HERE/api-utilities.js"
     ;;
   ui)
     run "ui: the plan on screen" node "$HERE/ui-planning.js"
@@ -62,10 +63,11 @@ case "${1:-all}" in
     run "ui: the tree"             node "$HERE/ui-tree.js"
     run "ui: the calendar"         node "$HERE/ui-calendar.js"
     run "ui: readings"             node "$HERE/ui-readings.js"
+    run "ui: utilities"            node "$HERE/ui-utilities.js"
     ;;
   smoke)  run "smoke: every page"       node "$HERE/smoke-pages.js" ;;
   all)
-    for f in unit-planning unit-schedule unit-tree unit-calendar; do
+    for f in unit-planning unit-schedule unit-tree unit-calendar unit-utilities; do
       run "unit: $f" npx --prefix "$ROOT/server" ts-node --transpile-only \
         --compiler-options '{"module":"commonjs","target":"es2020","ignoreDeprecations":"6.0","moduleResolution":"node"}' \
         "$HERE/$f.ts"
@@ -76,11 +78,13 @@ case "${1:-all}" in
     run "api: the calendar"        node "$HERE/api-calendar.js"
     run "api: readings"            node "$HERE/api-readings.js"
     run "api: paging"              node "$HERE/api-paging.js"
+    run "api: utilities"           node "$HERE/api-utilities.js"
     run "ui: the plan on screen"   node "$HERE/ui-planning.js"
     run "ui: gantt and governance" node "$HERE/ui-governance.js"
     run "ui: the tree"             node "$HERE/ui-tree.js"
     run "ui: the calendar"         node "$HERE/ui-calendar.js"
     run "ui: readings"             node "$HERE/ui-readings.js"
+    run "ui: utilities"            node "$HERE/ui-utilities.js"
     run "smoke: every page"        node "$HERE/smoke-pages.js"
     ;;
   *) echo "unknown target: $1"; exit 2 ;;

@@ -121,6 +121,8 @@ model Property {
   projects      Project[]
   walkthroughs Walkthrough[]
   calendars     WorkCalendar[]
+  meterPoints   MeterPoint[]
+  utilityInvoices UtilityInvoice[]
 }
 
 model Issue {
@@ -889,4 +891,106 @@ model CalendarException {
 
   @@unique([calendarId, day])
   @@index([calendarId])
+}
+
+/// Something that gets read twice a day.
+///
+/// A meter, a bulk tank, a water tank. What makes this worth a table rather than a
+/// column is that the three are read in completely different ways and all end up
+/// as the same thing: an electricity meter gives a running total in kWh, a propane
+/// tank gives a percentage of its own capacity, and a water tank gives a height
+/// that is a fraction of its maximum. The entry mode says which, and the raw value
+/// is always kept beside the converted one so a conversion can be checked, or
+/// corrected later, without losing what somebody actually wrote down.
+model MeterPoint {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name       String
+  /// electricity | water | propane | diesel
+  kind       String
+  /// direct      — the gauge reads in the unit, as a running total or a level
+  /// percentage  — a percentage of capacity; litres come from capacityLitres
+  /// tank_height — a height; litres come from the fraction of tankMaxHeightMm
+  entryMode  String   @default("direct")
+  /// The unit the stored value is in. Never assumed: a water meter read in US
+  /// gallons is recorded in gallons and converted once, visibly, rather than the
+  /// whole app guessing. This is what stops the litres-or-gallons question from
+  /// being a global one.
+  unit       String
+  capacityLitres  Float?
+  tankMaxHeightMm Float?
+  /// Whether this rolls into the site total. The incoming line and the submeters
+  /// beneath it would otherwise be counted twice.
+  includeInSiteTotal Boolean @default(true)
+  /// A running total that only goes up (an electricity meter) versus a level that
+  /// goes up and down (a tank). Consumption is the difference for the first and
+  /// the drop for the second, and getting it wrong inverts the number.
+  cumulative Boolean  @default(true)
+  active     Boolean  @default(true)
+  notes      String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  readings   Reading[]
+
+  @@index([propertyId, kind])
+}
+
+/// One reading, at one of the two times of day it is taken.
+model Reading {
+  id           String     @id @default(cuid())
+  meterPointId String
+  meterPoint   MeterPoint @relation(fields: [meterPointId], references: [id], onDelete: Cascade)
+  takenAt      DateTime
+  /// "0200" or "0500" — the two rounds. Stored rather than derived from takenAt,
+  /// because a round taken late is still that round's reading.
+  slot         String
+  /// The 05:00-to-05:00 day this belongs to, as YYYY-MM-DD, worked out on write.
+  /// A reading at 02:00 belongs to the day that began at 05:00 the morning before,
+  /// which is the whole reason this is stored rather than taken from the date.
+  readingDay   String
+  /// Exactly what was read: 47 (per cent), 1320 (mm), 918273 (kWh).
+  rawValue     Float
+  /// The same reading in the meter point's unit, after conversion.
+  value        Float
+  takenBy      String?
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  /// One reading per point per round per day. A second one is a correction to the
+  /// first, not another data point.
+  @@unique([meterPointId, readingDay, slot])
+  @@index([meterPointId, readingDay])
+  @@index([readingDay])
+}
+
+/// What a utility actually cost for a period, with the bill behind it.
+///
+/// Here because a claim that electricity rose thirty per cent is not something an
+/// app should accept as input. Store the invoice — the amount, the quantity billed,
+/// the period — and cost per unit is derived, which means any trend the app states
+/// it can show its working for. That is the difference between a figure that can go
+/// into a monthly report and one that cannot.
+model UtilityInvoice {
+  id          String   @id @default(cuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  kind        String
+  /// YYYY-MM-DD, inclusive.
+  periodStart String
+  periodEnd   String
+  /// Bare amount, like Cost.amount — this app is single-currency.
+  amount      Float
+  /// How much was billed, and in what. Cost per unit is amount / quantity.
+  quantity    Float
+  unit        String
+  reference   String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([propertyId, kind, periodStart, periodEnd])
+  @@index([propertyId, kind, periodStart])
 }

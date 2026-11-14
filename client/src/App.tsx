@@ -36,6 +36,7 @@ import InspectionReport from "./inspections/InspectionReport";
 import InspectionsReport from "./inspections/InspectionsReport";
 import Projects from "./inspections/Projects";
 import Walkthrough from "./inspections/Walkthrough";
+import Utilities from "./pages/Utilities";
 import { useEffect, useRef, useState } from "react";
 
 export function BrandMark() {
@@ -161,6 +162,9 @@ function MainLayout({ user, onLogout }: { user: AuthUser; onLogout: () => void }
 
         <p className="nav-group-label">Places</p>
         <NavLink to="/properties">Properties</NavLink>
+        {/* The daily round sits under Places because it is about the site rather
+            than about a job. Anybody who can log an issue can enter a reading. */}
+        {can("issue.write") && <NavLink to="/utilities">Utilities</NavLink>}
         {can("issue.assign") && <NavLink to="/crew">Crew map</NavLink>}
         {can("schedule.write") && <NavLink to="/schedules">Schedules</NavLink>}
 
@@ -251,6 +255,7 @@ function AppRoutes() {
           <Route path="/inspections/:id" element={<InspectionRun />} />
           <Route path="/inspections/:id/report" element={<InspectionReport />} />
           {able("inspection.run") && <Route path="/walkthrough" element={<Walkthrough />} />}
+          {able("issue.write") && <Route path="/utilities" element={<Utilities />} />}
           {able("inspection.run") && <Route path="/walkthrough/:id" element={<Walkthrough />} />}
           {able("project.write") && <Route path="/projects" element={<Projects />} />}
           <Route path="/account" element={<Account />} />

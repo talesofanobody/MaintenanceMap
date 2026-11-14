@@ -276,15 +276,16 @@ model Reading {
 
 **Two open items from the project summary get answered by this design rather than deferred.**
 
-*Water in litres or US gallons (open item 3).* The unit lives on the meter point, so the
-ambiguity stops being global. A meter read in gallons is recorded in gallons and converted once,
-and the conversion is visible rather than assumed. Nothing has to be settled before building.
+*Water in litres or US gallons (open item 3).* **Settled by design, as planned.** The unit lives
+on the meter point, so a meter read in gallons is recorded in gallons and converted once,
+visibly. `gal` is in the unit list for exactly this reason: the right answer to an unresolved
+unit is to record which one was used, not to pick one and hope.
 
-*Electricity up "nearly 30%" (open item 4).* The app should not accept a claimed percentage. It
-should store the **invoice** per period — amount, kWh billed, period — and derive cost per kWh
-from it. Then the trend is a computed figure with a document behind it, which is what makes it
-safe to put in a monthly report. I would treat "verify against the invoice" as a feature, not a
-to-do.
+*Electricity up "nearly 30%" (open item 4).* **Settled by design, as planned.** The app will not
+accept a claimed percentage. The invoice goes in — amount, quantity billed, period — and cost
+per unit is divided out, with the change against the previous period computed from the two. The
+tests use exactly this case: 120,000 for 300,000 kWh then 156,000 for the same, and the app
+reports +30% because it worked it out, not because somebody said so.
 
 ```
 model UtilityInvoice {
@@ -306,9 +307,10 @@ separately, week-over-week, and WTD/MTD/YTD against the same period last year. A
 of cleaned data for anything the app has not thought of yet — which is what the spreadsheet is
 really providing today and should not be taken away.
 
-> **Charting is a dependency decision.** The app currently draws its trend charts by hand in
-> SVG. Six or seven utility charts with shared axes and tooltips is past the point where that is
-> sensible. This needs one small charting library, chosen once.
+> **Charting — decided, and no dependency added.** The app's existing `LineChart` already
+> takes `(number | null)[]`, so a day with no reading draws as a gap rather than a zero, which
+> was the only thing a library was actually needed for. Reusing it keeps the charts consistent
+> with the rest of the app and keeps a self-hosted install's dependency list shorter.
 
 ---
 
@@ -494,7 +496,7 @@ the one that gets automation running this quarter instead of next.
 | ~~**1d**~~ | ~~A working-day calendar, with two-way exceptions~~ | **Done**. 423 checks in `tests/` |
 | **1e** | Earned value (PV/EV/AC, SPI/CPI) | Inputs now exist; small |
 | ~~**2**~~ | ~~Numeric readings on inspection checks (value, unit, acceptable range, trend)~~ | **Done**. 484 checks in `tests/` |
-| **3** | Daily readings: `MeterPoint`, `Reading`, `UtilityInvoice`, the nutshell dashboard, one charting library | Smallest, pays back daily, replaces live spreadsheet work |
+| ~~**3**~~ | ~~Daily readings: `MeterPoint`, `Reading`, `UtilityInvoice`, the nutshell dashboard~~ | **Done**. 623 checks in `tests/` |
 | **4** | Location hierarchy: block → floor → space, coexisting with `roomName` | Foundation for the manual; touches a lot, so early |
 | **5** | Assets and `AssetRelation`; AC and generator intervals on assets | The manual's substance |
 | **6** | Floor plans: raster overlay, three-point georeference, the drawing map view | Depends on 4 and 5 |

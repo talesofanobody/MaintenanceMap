@@ -9,6 +9,7 @@ running:
 | `unit-schedule.ts` | Critical path, float, blocker ages, progress curve | Nothing |
 | `unit-tree.ts` | Summary rollup, weighted progress, start-to-start and finish-to-finish | Nothing |
 | `unit-calendar.ts` | Working days, two-way exceptions, float counted in them | Nothing |
+| `unit-utilities.ts` | The 05:00 day, tank conversions, WTD/MTD/YTD, cost per unit | Nothing |
 | `migration-planning.js` | A live database survives the migration | A database at the previous schema |
 | `api-planning.js` | The planning endpoints behave | `server` on :4000 |
 | `api-governance.js` | Project dependencies, blockers, stakeholders | `server` on :4000 |
@@ -17,13 +18,15 @@ running:
 | `api-calendar.js` | Opting in changes float; opting out puts it back | `server` on :4000 |
 | `api-readings.js` | A number flags its own line; the trend groups by point | `server` on :4000 |
 | `api-paging.js` | 230 real issues: pages reach each once, the ceiling holds | `server` on :4000 |
+| `api-utilities.js` | Rounds, tanks, invoices, site totals, retiring a meter | `server` on :4000 |
 | `ui-governance.js` | The Gantt draws, blockers clear, roles stick | Both dev servers |
 | `ui-tree.js` | Phase dates roll up, progress shows, the refusal holds | Both dev servers |
 | `ui-calendar.js` | The editor works and the chart shades days nobody works | Both dev servers |
 | `ui-readings.js` | A reading typed on a phone flags the line by itself | Both dev servers |
+| `ui-utilities.js` | A round entered on screen converts and adds up | Both dev servers |
 | `smoke-pages.js` | Nothing else broke | Both dev servers |
 
-509 checks in total.
+623 checks in total.
 
 ```sh
 (cd server && npm run dev)    # :4000
@@ -88,6 +91,14 @@ project link and EAM work-order number; and that hierarchy, milestones, baseline
 dependency links and quotes all then function. It also checks the referential rules
 that are easy to get wrong — deleting a parent clears its children's parent rather
 than cascading onto the work, and a contractor holding a quote cannot be deleted.
+
+## Fixtures use dates relative to today
+
+Learned the hard way twice. A reading dated in the future is correctly excluded from
+the utility summary, and a hardcoded fixture quietly becomes one as the clock moves —
+so `ui-utilities.js` builds its dates with `ago(n)`. The same trap caught several
+period-total expectations: a day only counts once the *next* day's opening reading
+exists, which is a property of the data rather than of the calendar.
 
 ## Two things the schedule tests pin down deliberately
 
