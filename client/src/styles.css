@@ -8288,3 +8288,198 @@ table th {
     display: none !important;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Project planning (v2 slice 1)                                      */
+/*                                                                    */
+/* The panel sits inside an expanded project rather than on a page of  */
+/* its own, so it is styled to read as part of the card and not as a   */
+/* second card nested in the first — hairlines and spacing, no boxes.  */
+/* ------------------------------------------------------------------ */
+.proj-plan {
+  margin: 14px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+  display: grid;
+  gap: 14px;
+}
+
+.proj-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px 14px;
+}
+
+.proj-plan-grid label,
+.proj-money-edit label,
+.proj-quote-new label {
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.proj-plan-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.proj-plan-row p {
+  margin: 0;
+}
+
+/* Late is the one thing on this panel worth a colour. */
+.is-late {
+  color: var(--danger, #b4121f);
+}
+
+.is-early {
+  color: var(--ok, #0a7d33);
+}
+
+.proj-money {
+  display: grid;
+  gap: 10px;
+}
+
+.proj-money-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 10px;
+}
+
+.proj-money-figures span {
+  display: grid;
+  gap: 2px;
+}
+
+.proj-money-figures small {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.proj-money-figures strong {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.proj-money-figures .is-over strong {
+  color: var(--danger, #b4121f);
+}
+
+.proj-money-edit {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.proj-money-edit input {
+  max-width: 140px;
+}
+
+.proj-rollup {
+  margin: 0;
+}
+
+.proj-quotes {
+  display: grid;
+  gap: 8px;
+}
+
+.proj-quotes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.proj-quotes-head h4 {
+  margin: 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The three-quote rule, as a chip you can see from across the room. */
+.chip {
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+
+.chip-ok {
+  background: color-mix(in srgb, var(--ok, #0a7d33) 12%, transparent);
+  color: var(--ok, #0a7d33);
+}
+
+.chip-warn {
+  background: color-mix(in srgb, #9a6700 14%, transparent);
+  color: #9a6700;
+}
+
+.proj-quote-new {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+
+.proj-quote-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--hairline);
+}
+
+.proj-quote {
+  display: grid;
+  grid-template-columns: 1fr auto 1.2fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  background: var(--surface, #fff);
+}
+
+.proj-quote-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.proj-quote.status-awarded {
+  background: color-mix(in srgb, var(--ok, #0a7d33) 7%, var(--surface, #fff));
+}
+
+.proj-quote.status-declined .proj-quote-who,
+.proj-quote.status-declined .proj-quote-amount {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+/* A milestone is a dateline, not a job, so it reads differently in the tree. */
+.proj-issue.is-milestone .proj-issue-title {
+  font-weight: 500;
+}
+
+.proj-milestone-mark {
+  margin-right: 6px;
+  font-size: 10px;
+  color: var(--accent, #0071e3);
+  vertical-align: 1px;
+}
+
+@media (max-width: 620px) {
+  .proj-quote {
+    grid-template-columns: 1fr auto;
+    row-gap: 2px;
+  }
+}

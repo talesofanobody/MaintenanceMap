@@ -1,4 +1,4 @@
-import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
+import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -372,13 +372,71 @@ export const api = {
     return request<Project[]>(`/projects${q.toString() ? `?${q}` : ""}`);
   },
   getProject: (id: string) => request<Project>(`/projects/${id}`),
-  createProject: (data: { name: string; description?: string; propertyId?: string | null }) =>
-    request<Project>("/projects", { method: "POST", body: JSON.stringify(data) }),
-  updateProject: (id: string, data: { name?: string; description?: string | null; status?: ProjectStatus; force?: boolean }) =>
-    request<Project>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  createProject: (data: {
+    name: string;
+    description?: string;
+    propertyId?: string | null;
+    ownerId?: string | null;
+    plannedStart?: string | null;
+    plannedEnd?: string | null;
+    budgetAmount?: number | null;
+    status?: ProjectStatus;
+  }) => request<Project>("/projects", { method: "POST", body: JSON.stringify(data) }),
+  updateProject: (
+    id: string,
+    data: {
+      name?: string;
+      description?: string | null;
+      status?: ProjectStatus;
+      ownerId?: string | null;
+      plannedStart?: string | null;
+      plannedEnd?: string | null;
+      budgetAmount?: number | null;
+      force?: boolean;
+    }
+  ) => request<Project>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   changeProjectIssues: (id: string, data: { add?: string[]; remove?: string[] }) =>
     request<Project>(`/projects/${id}/issues`, { method: "POST", body: JSON.stringify(data) }),
   deleteProject: (id: string) => request<void>(`/projects/${id}`, { method: "DELETE" }),
+
+  /**
+   * Freeze the current plan as the baseline. `force` is needed to re-baseline,
+   * because doing so hides the slippage against the original plan.
+   */
+  baselineProject: (id: string, force = false) =>
+    request<Project>(`/projects/${id}/baseline`, { method: "POST", body: JSON.stringify({ force }) }),
+  approveProject: (id: string, data: { approved?: boolean; budgetAmount?: number | null } = {}) =>
+    request<Project>(`/projects/${id}/approve`, { method: "POST", body: JSON.stringify(data) }),
+
+  // --- quotes: the three-quote rule as something you can count -----------
+  listQuotes: (target: { issueId?: string; projectId?: string }) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(target)) if (v) q.set(k, v);
+    return request<{ quotes: Quote[]; state: QuoteState; required: number }>(`/quotes?${q}`);
+  },
+  createQuote: (data: {
+    issueId?: string;
+    projectId?: string;
+    contractorId: string;
+    amount?: number | null;
+    status?: QuoteStatus;
+    reference?: string | null;
+    notes?: string | null;
+  }) => request<Quote>("/quotes", { method: "POST", body: JSON.stringify(data) }),
+  updateQuote: (id: string, data: { amount?: number | null; status?: QuoteStatus; reference?: string | null; notes?: string | null }) =>
+    request<Quote>(`/quotes/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  /** Awarding is allowed below three quotes; the response says so rather than blocking. */
+  awardQuote: (id: string) =>
+    request<{ quotes: Quote[]; state: QuoteState; required: number; belowRule: boolean; warning: string | null }>(
+      `/quotes/${id}/award`,
+      { method: "POST" }
+    ),
+  deleteQuote: (id: string) => request<void>(`/quotes/${id}`, { method: "DELETE" }),
+
+  // --- work breakdown and dependencies -----------------------------------
+  linkIssues: (id: string, data: { toIssueId: string; kind?: LinkKind; lagDays?: number | null }) =>
+    request<Issue>(`/issues/${id}/links`, { method: "POST", body: JSON.stringify(data) }),
+  unlinkIssues: (id: string, linkId: string) => request<Issue>(`/issues/${id}/links/${linkId}`, { method: "DELETE" }),
 
   setPropertyIntake: (id: string, data: { enabled?: boolean; rotate?: boolean }) =>
     request<{ id: string; intakeEnabled: boolean; intakeToken: string | null }>(`/properties/${id}/intake`, {

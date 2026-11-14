@@ -17,3 +17,6 @@ server/prisma/shadow.db
 client/dist/
 
 .DS_Store
+
+# test screenshots
+tests/.shots/

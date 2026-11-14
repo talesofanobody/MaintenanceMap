@@ -2,18 +2,54 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { formatDate } from "../lib/dates";
-import { categoryLabel, PRIORITY_LABELS, STATUS_LABELS, type Project, type ProjectStatus } from "../types";
+import { categoryLabel, PRIORITY_LABELS, STATUS_LABELS, type Project, type ProjectIssue, type ProjectStatus } from "../types";
+import ProjectPlan from "./ProjectPlan";
 
 const TABS: { key: ProjectStatus | ""; label: string }[] = [
-  { key: "open", label: "Open" },
+  { key: "planning", label: "Planning" },
+  { key: "open", label: "Under way" },
+  { key: "on_hold", label: "On hold" },
   { key: "done", label: "Done" },
   { key: "", label: "Everything" },
 ];
 
 /**
- * Projects are a label over issues — a room refurbishment, a floor's worth of
- * snagging from one inspection. Nothing else in the app has to know about them,
- * which is what keeps the inspection side separable.
+ * Lay the work out as a tree, parents before their children.
+ *
+ * Reading order matters more than it looks: a flat list of forty jobs is a list,
+ * and the same forty under five phases is a plan. Anything whose parent is not in
+ * this project is treated as a root rather than hidden, because a job disappearing
+ * from its own project would be worse than showing it at the wrong indent.
+ */
+function asTree(issues: ProjectIssue[]): { issue: ProjectIssue; depth: number }[] {
+  const byParent = new Map<string | null, ProjectIssue[]>();
+  const ids = new Set(issues.map((i) => i.id));
+  for (const issue of issues) {
+    const key = issue.parentId && ids.has(issue.parentId) ? issue.parentId : null;
+    const list = byParent.get(key) ?? [];
+    list.push(issue);
+    byParent.set(key, list);
+  }
+  const out: { issue: ProjectIssue; depth: number }[] = [];
+  const walk = (parentId: string | null, depth: number) => {
+    for (const issue of byParent.get(parentId) ?? []) {
+      out.push({ issue, depth });
+      // Depth is capped for layout only; the data may nest further.
+      walk(issue.id, Math.min(depth + 1, 4));
+    }
+  };
+  walk(null, 0);
+  return out;
+}
+
+/**
+ * A project is a plan over issues — a refurbishment, a floor's worth of snagging,
+ * a treatment programme. The work itself is still issues, which carry the parent
+ * and the dependencies, so nothing else in the app has to learn a second kind of
+ * work and the inspection side stays separable.
+ *
+ * The EAM remains the record of work orders. This decides what work should exist
+ * and when; the work order it becomes still lives over there.
  */
 export default function Projects() {
   const [tab, setTab] = useState<ProjectStatus | "">("open");
@@ -114,7 +150,7 @@ export default function Projects() {
       <div className="page-header">
         <div>
           <h1>Projects</h1>
-          <p className="muted">Work that belongs together — usually a room's worth of findings from one inspection.</p>
+          <p className="muted">Work planned together: who owns it, what was agreed, what it is costing, and whether the quotes are in.</p>
         </div>
         <div className="page-header-actions">
           <Link to="/inspections" className="btn btn-ghost btn-small">
@@ -176,13 +212,13 @@ export default function Projects() {
                     </span>
                   </div>
                   <div className="proj-actions">
-                    {project.status === "open" ? (
-                      <button type="button" className="btn btn-secondary btn-small" onClick={() => setStatus(project, "done")}>
-                        Close
-                      </button>
-                    ) : (
+                    {project.status === "done" || project.status === "cancelled" ? (
                       <button type="button" className="btn btn-ghost btn-small" onClick={() => setStatus(project, "open")}>
                         Reopen
+                      </button>
+                    ) : (
+                      <button type="button" className="btn btn-secondary btn-small" onClick={() => setStatus(project, "done")}>
+                        Close
                       </button>
                     )}
                     <button type="button" className="btn btn-ghost btn-small danger" onClick={() => remove(project)}>
@@ -198,29 +234,48 @@ export default function Projects() {
                 </p>
                 {project.description && <p className="proj-desc">{project.description}</p>}
 
-                {expanded &&
-                  (project.issues.length === 0 ? (
-                    <p className="empty-state small">Nothing in this project yet.</p>
-                  ) : (
-                    <ul className="proj-issues">
-                      {project.issues.map((issue) => (
-                        <li key={issue.id} className={`proj-issue status-${issue.status}`}>
-                          <Link to={`/properties/${issue.propertyId}?issue=${issue.id}`} className="proj-issue-title">
-                            {issue.title}
-                          </Link>
-                          <span className="muted small">
-                            {issue.roomName ? `${issue.roomName} · ` : ""}
-                            {issue.category ? `${categoryLabel(issue.category)} · ` : ""}
-                            {PRIORITY_LABELS[issue.priority]} · {STATUS_LABELS[issue.status]}
-                            {issue.technician ? ` · ${issue.technician.name}` : ""}
-                          </span>
-                          <button type="button" className="btn btn-ghost btn-small" onClick={() => release(project, issue.id)}>
-                            Remove
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ))}
+                {expanded && (
+                  <>
+                    <ProjectPlan
+                      project={project}
+                      onChange={(updated) => setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))}
+                    />
+                    {project.issues.length === 0 ? (
+                      <p className="empty-state small">Nothing in this project yet.</p>
+                    ) : (
+                      <ul className="proj-issues">
+                        {asTree(project.issues).map(({ issue, depth }) => (
+                          <li
+                            key={issue.id}
+                            className={`proj-issue status-${issue.status} ${issue.isMilestone ? "is-milestone" : ""}`}
+                            /* Indent from the row's own padding, not instead of it:
+                               a depth-0 row must keep the 10px the design gives it. */
+                            style={depth ? { paddingLeft: `${10 + depth * 18}px` } : undefined}
+                          >
+                            <Link to={`/properties/${issue.propertyId}?issue=${issue.id}`} className="proj-issue-title">
+                              {issue.isMilestone && <span className="proj-milestone-mark" title="A dateline, not a job">◆</span>}
+                              {issue.title}
+                            </Link>
+                            <span className="muted small">
+                              {issue.roomName ? `${issue.roomName} · ` : ""}
+                              {issue.category ? `${categoryLabel(issue.category)} · ` : ""}
+                              {PRIORITY_LABELS[issue.priority]} · {STATUS_LABELS[issue.status]}
+                              {issue.technician ? ` · ${issue.technician.name}` : ""}
+                              {/* The agreed date against the current one, where they differ. */}
+                              {issue.baselineDue && issue.dueDate && issue.baselineDue !== issue.dueDate && (
+                                <strong className="is-late"> · due {issue.dueDate}, agreed {issue.baselineDue}</strong>
+                              )}
+                              {issue.workOrderNumber ? ` · ${issue.workOrderNumber}` : ""}
+                            </span>
+                            <button type="button" className="btn btn-ghost btn-small" onClick={() => release(project, issue.id)}>
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
               </li>
             );
           })}

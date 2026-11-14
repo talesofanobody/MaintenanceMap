@@ -94,6 +94,7 @@ model Technician {
   inspections Inspection[]
   timeOff     TimeOff[]
   walkthroughs Walkthrough[]
+  ownedProjects Project[]
 }
 
 model Property {
@@ -166,6 +167,24 @@ model Issue {
   // Set when several pieces of work are being run together as one job of work.
   projectId        String?
   project          Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  /// Work breakdown. A parent is an ordinary issue with children — "replace the AHU"
+  /// over "isolate", "lift out", "install", "commission". There is deliberately no
+  /// separate phase table: one object at several levels is what lets a budget or a
+  /// percentage roll up without a special case per level.
+  parentId         String?
+  parent           Issue?           @relation("IssueHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children         Issue[]          @relation("IssueHierarchy")
+  /// A dateline with no duration — a permit granted, a delivery landing, handover.
+  /// It still carries a position because every issue does; the map leaves it out.
+  isMilestone      Boolean          @default(false)
+  /// The dates this was *planned* for, frozen when the plan was agreed. Kept apart
+  /// from scheduledFor/dueDate so that slippage stays visible instead of being
+  /// overwritten by the current answer.
+  baselineStart    String?
+  baselineDue      String?
+  linksOut         IssueLink[]      @relation("LinkFrom")
+  linksIn          IssueLink[]      @relation("LinkTo")
+  quotes           Quote[]
   // Set when a recurring maintenance schedule created this issue.
   scheduleId       String?
   schedule         Schedule?        @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
@@ -185,6 +204,7 @@ model Issue {
   @@index([propertyId])
   @@index([technicianId])
   @@index([projectId])
+  @@index([parentId])
 }
 
 // One stretch of work on an issue, recorded by clocking in and out. A technician has
@@ -300,6 +320,7 @@ model Contractor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   costs     Cost[]
+  quotes    Quote[]
 }
 
 // Money spent on an issue: parts, an invoice from a contractor, hire, disposal…
@@ -568,13 +589,33 @@ model Project {
   description String?
   propertyId  String?
   property    Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  status      String    @default("open") // open | done | cancelled
+  status      String    @default("open") // planning | open | on_hold | done | cancelled
   createdBy   String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   issues      Issue[]
 
+  /// Who is answerable for it. The roster rather than the login list, because the
+  /// person who owns a job is not always the person who types into the app.
+  ownerId     String?
+  owner       Technician? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  /// Calendar days as YYYY-MM-DD, matching the convention on Issue.
+  plannedStart String?
+  plannedEnd   String?
+  /// The agreed plan, frozen. See the note on Issue.baselineStart.
+  baselineStart String?
+  baselineEnd   String?
+  /// Approved spend. Bare amount, like Cost.amount — this app is single-currency
+  /// and inventing a currency column here without one there would be worse.
+  budgetAmount Float?
+  /// Sign-off. The department rule is a supervisor plus one of the assistant chiefs
+  /// or the chief, so the approver is recorded by name rather than inferred.
+  approvedBy  String?
+  approvedAt  DateTime?
+  quotes      Quote[]
+
   @@index([status, createdAt])
+  @@index([ownerId])
 }
 
 
@@ -613,4 +654,62 @@ model Walkthrough {
 
   @@index([propertyId, startedAt])
   @@index([completedAt])
+}
+
+/// A typed dependency between two pieces of work. A maintenance department runs on
+/// "the scaffold comes down before the painters start", and that is a graph rather
+/// than an ordering: one job can block several and follow several others.
+model IssueLink {
+  id          String   @id @default(cuid())
+  fromIssueId String
+  from        Issue    @relation("LinkFrom", fields: [fromIssueId], references: [id], onDelete: Cascade)
+  toIssueId   String
+  to          Issue    @relation("LinkTo", fields: [toIssueId], references: [id], onDelete: Cascade)
+  /// precedes — from finishes before to starts (the scheduling one)
+  /// blocks    — from stops to happening at all, with no date arithmetic implied
+  /// relates   — worth reading together, no constraint
+  kind        String   @default("precedes")
+  /// Days of slack to add after `from` finishes, for a "precedes" link. Paint needs
+  /// a day to dry whether or not anybody is working on it.
+  lagDays     Int?
+  createdAt   DateTime @default(now())
+
+  @@unique([fromIssueId, toIssueId, kind])
+  @@index([toIssueId])
+}
+
+/// A quote from a contractor, against either one job or a whole project.
+///
+/// The department rule is at least three quotes on a contractor job, with the EAM
+/// team sending the request and notifying the award. That rule is currently kept in
+/// people's heads; as a table it becomes a field you can test and an award you can
+/// audit, which is the whole point.
+model Quote {
+  id           String      @id @default(cuid())
+  /// Exactly one of these is set. Enforced in the route rather than by a CHECK,
+  /// which Prisma cannot express on SQLite.
+  issueId      String?
+  issue        Issue?      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  projectId    String?
+  project      Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contractorId String
+  contractor   Contractor  @relation(fields: [contractorId], references: [id], onDelete: Restrict)
+  amount       Float?
+  /// requested — RFQ sent, nothing back yet
+  /// received  — a number is in
+  /// declined  — they will not quote
+  /// awarded   — this is the one that won
+  status       String      @default("requested")
+  reference    String?
+  notes        String?
+  requestedAt  DateTime    @default(now())
+  receivedAt   DateTime?
+  awardedAt    DateTime?
+  decidedBy    String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([issueId])
+  @@index([projectId])
+  @@index([contractorId])
 }

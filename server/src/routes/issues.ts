@@ -11,6 +11,7 @@ import { getSettings } from "../lib/settings";
 import { COST_KINDS, issueCosts } from "../lib/costs";
 import { parseCategory, resolveTagIds, setIssueTags } from "../lib/taxonomy";
 import { messagesRouter } from "./messages";
+import { wouldCycleInHierarchy, wouldCycleInLinks } from "../lib/planning";
 
 // Fields a technician may change on an issue assigned to them.
 const TECHNICIAN_FIELDS = ["status", "actualHours", "closedAt", "description", "actionNeeded", "category", "roomName", "tagIds"] as const;
@@ -38,6 +39,16 @@ const ISSUE_INCLUDE = {
   // Where the job came from, when it started life as a guest report.
   guestReport: { select: { id: true, roomName: true, createdAt: true, reviewedBy: true } },
   costs: { include: { contractor: { select: { id: true, name: true } } }, orderBy: { incurredOn: "desc" as const } },
+  // Work breakdown and dependencies. The parent is summarised rather than nested so
+  // that reading one issue cannot pull a whole tree back with it.
+  parent: { select: { id: true, title: true, status: true } },
+  children: {
+    select: { id: true, title: true, status: true, priority: true, isMilestone: true, dueDate: true },
+    orderBy: { createdAt: "asc" as const },
+  },
+  linksOut: { include: { to: { select: { id: true, title: true, status: true, dueDate: true } } } },
+  linksIn: { include: { from: { select: { id: true, title: true, status: true, dueDate: true } } } },
+  quotes: { include: { contractor: { select: { id: true, name: true, trade: true } } }, orderBy: { requestedAt: "asc" as const } },
 } as const;
 
 // Accepts a pasted EAM link, tolerating a missing scheme; only http(s) is allowed
@@ -157,6 +168,7 @@ issuesRouter.post("/", requires("issue.write"), async (req, res) => {
     return res.status(400).json({ error: "invalid status" });
   }
 
+
   let extras: ParsedExtras;
   try {
     extras = await parseExtras(req.body);
@@ -167,6 +179,14 @@ issuesRouter.post("/", requires("issue.write"), async (req, res) => {
 
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
   if (!property) return res.status(404).json({ error: "property not found" });
+
+  let newProjectId: string | null | undefined;
+  try {
+    newProjectId = await parseProjectId(req.body.projectId, propertyId);
+  } catch (err) {
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
 
   // Check the report before creating anything, so a stale review tab doesn't leave a
   // duplicate issue behind when the report has already been dealt with.
@@ -225,6 +245,7 @@ issuesRouter.post("/", requires("issue.write"), async (req, res) => {
       // moment it is actually due, which is the only thing a two-hour job can be judged on.
       dueDate: extras.dueDate ?? deadline.dueDate,
       dueAt: extras.dueDate ? endOfDay(extras.dueDate) : deadline.dueAt,
+      projectId: newProjectId ?? null,
     },
     include: ISSUE_INCLUDE,
   });
@@ -317,6 +338,52 @@ issuesRouter.put("/:id", requires("issue.write"), async (req, res) => {
   if (status !== undefined && !STATUSES.has(status)) {
     return res.status(400).json({ error: "invalid status" });
   }
+  // Work breakdown. Re-parenting is a normal edit — a job turns out to belong under
+  // a different phase — but it must not be allowed to close a loop, because every
+  // rollup and every tree render walks this structure.
+  let parentUpdate: { parentId: string | null } | undefined;
+  if (req.body.parentId !== undefined) {
+    const parentId = typeof req.body.parentId === "string" && req.body.parentId ? req.body.parentId : null;
+    if (parentId) {
+      const parent = await prisma.issue.findUnique({ where: { id: parentId }, select: { id: true, propertyId: true } });
+      if (!parent) return res.status(400).json({ error: "That parent does not exist." });
+      if (parent.propertyId !== existing.propertyId) {
+        return res.status(400).json({ error: "A job can only sit under a parent at the same property." });
+      }
+      const loops = await wouldCycleInHierarchy(existing.id, parentId, async (id) => {
+        const row = await prisma.issue.findUnique({ where: { id }, select: { parentId: true } });
+        return row?.parentId ?? null;
+      });
+      if (loops) return res.status(400).json({ error: "That would put this job inside itself." });
+    }
+    parentUpdate = { parentId };
+  }
+
+  let milestoneUpdate: { isMilestone: boolean } | undefined;
+  if (req.body.isMilestone !== undefined) milestoneUpdate = { isMilestone: !!req.body.isMilestone };
+
+  let projectUpdate: { projectId: string | null } | undefined;
+  try {
+    const resolved = await parseProjectId(req.body.projectId, existing.propertyId);
+    if (resolved !== undefined) projectUpdate = { projectId: resolved };
+  } catch (err) {
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+
+  let baselineUpdate: Record<string, string | null> | undefined;
+  try {
+    const bs = req.body.baselineStart !== undefined ? parseOptionalDay(req.body.baselineStart, "baselineStart") ?? null : undefined;
+    const bd = req.body.baselineDue !== undefined ? parseOptionalDay(req.body.baselineDue, "baselineDue") ?? null : undefined;
+    if (bs !== undefined || bd !== undefined) {
+      baselineUpdate = {};
+      if (bs !== undefined) baselineUpdate.baselineStart = bs;
+      if (bd !== undefined) baselineUpdate.baselineDue = bd;
+    }
+  } catch (err) {
+    if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
 
   let extras: ParsedExtras;
   try {
@@ -389,6 +456,10 @@ issuesRouter.put("/:id", requires("issue.write"), async (req, res) => {
       // Actual hours come from clock in/out entries (or a manual figure on completion);
       // an ordinary edit never wipes them.
       ...(extras.actualHours !== undefined ? { actualHours: extras.actualHours } : {}),
+      ...(parentUpdate ?? {}),
+      ...(milestoneUpdate ?? {}),
+      ...(baselineUpdate ?? {}),
+      ...(projectUpdate ?? {}),
       closedAt: nextClosedAt,
     },
     include: ISSUE_INCLUDE,
@@ -556,6 +627,117 @@ issuesRouter.delete("/:id/checklist/:itemId", requires("issue.write"), async (re
   const result = await prisma.checklistItem.deleteMany({ where: { id: req.params.itemId, issueId: issue.id } });
   if (result.count === 0) return res.status(404).json({ error: "not found" });
   res.status(204).end();
+});
+
+/**
+ * Resolve a requested project for an issue.
+ *
+ * An issue could previously only join a project through POST /projects/:id/issues,
+ * which meant building a work breakdown took two calls per job and an issue could
+ * never be moved between projects at all. Planning is the point of v2, so the
+ * project is settable where every other field is.
+ */
+async function parseProjectId(value: unknown, issuePropertyId: string): Promise<string | null | undefined> {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "string") throw new ValidationError("invalid project");
+  const project = await prisma.project.findUnique({ where: { id: value }, select: { id: true, propertyId: true } });
+  if (!project) throw new ValidationError("That project does not exist.");
+  // A project scoped to one property should not collect work from another.
+  if (project.propertyId && project.propertyId !== issuePropertyId) {
+    throw new ValidationError("That project belongs to a different property.");
+  }
+  return project.id;
+}
+
+/** The dependency kinds. Only `precedes` carries date arithmetic. */
+const LINK_KINDS = ["precedes", "blocks", "relates"];
+
+/**
+ * Add a dependency from this job to another.
+ *
+ * `precedes` is the scheduling one — this finishes before that starts, optionally
+ * with lag for things that need time rather than labour, like paint drying.
+ * `blocks` says the other cannot happen at all until this is resolved, with no
+ * implied dates. `relates` asserts nothing beyond "read these together".
+ *
+ * Ordering links are checked for loops; `relates` is not, because two jobs may
+ * perfectly well relate to each other and no schedule depends on it.
+ */
+issuesRouter.post("/:id/links", requires("issue.write"), async (req, res) => {
+  const from = await prisma.issue.findUnique({ where: { id: req.params.id }, select: { id: true, title: true, propertyId: true } });
+  if (!from) return res.status(404).json({ error: "not found" });
+
+  const toIssueId = typeof req.body.toIssueId === "string" ? req.body.toIssueId : "";
+  const kind = typeof req.body.kind === "string" ? req.body.kind : "precedes";
+  if (!LINK_KINDS.includes(kind)) return res.status(400).json({ error: "invalid link kind" });
+  if (!toIssueId) return res.status(400).json({ error: "Which job does this one link to?" });
+  if (toIssueId === from.id) return res.status(400).json({ error: "A job cannot depend on itself." });
+
+  const to = await prisma.issue.findUnique({ where: { id: toIssueId }, select: { id: true, title: true, propertyId: true } });
+  if (!to) return res.status(400).json({ error: "That job does not exist." });
+
+  let lagDays: number | null = null;
+  if (req.body.lagDays !== undefined && req.body.lagDays !== null && req.body.lagDays !== "") {
+    const n = Number(req.body.lagDays);
+    if (!Number.isInteger(n) || n < 0 || n > 365) return res.status(400).json({ error: "Lag must be a whole number of days, 0 to 365." });
+    lagDays = n;
+  }
+
+  if (kind !== "relates") {
+    const loops = await wouldCycleInLinks(from.id, to.id, async (id) => {
+      const rows = await prisma.issueLink.findMany({
+        where: { fromIssueId: id, kind: { in: ["precedes", "blocks"] } },
+        select: { toIssueId: true },
+      });
+      return rows.map((r) => r.toIssueId);
+    });
+    if (loops) {
+      return res.status(400).json({ error: "That would make the two jobs wait for each other, so neither could ever start." });
+    }
+  }
+
+  try {
+    await prisma.issueLink.create({ data: { fromIssueId: from.id, toIssueId: to.id, kind, lagDays } });
+  } catch {
+    // The unique index is the only thing that can realistically fail here.
+    return res.status(400).json({ error: "That link already exists." });
+  }
+
+  await logActivity(req, {
+    action: "issue.linked",
+    entityType: "issue",
+    entityId: from.id,
+    propertyId: from.propertyId,
+    summary: `"${from.title}" ${kind} "${to.title}"${lagDays ? ` with ${lagDays} day${lagDays === 1 ? "" : "s"} lag` : ""}`,
+  });
+
+  const fresh = await prisma.issue.findUnique({ where: { id: from.id }, include: ISSUE_INCLUDE });
+  res.status(201).json(fresh);
+});
+
+/** Remove a dependency. Reachable from either end, since a link has two owners. */
+issuesRouter.delete("/:id/links/:linkId", requires("issue.write"), async (req, res) => {
+  const link = await prisma.issueLink.findUnique({
+    where: { id: req.params.linkId },
+    include: { from: { select: { id: true, title: true, propertyId: true } }, to: { select: { id: true, title: true } } },
+  });
+  if (!link) return res.status(404).json({ error: "not found" });
+  if (link.fromIssueId !== req.params.id && link.toIssueId !== req.params.id) {
+    return res.status(404).json({ error: "not found" });
+  }
+
+  await prisma.issueLink.delete({ where: { id: link.id } });
+  await logActivity(req, {
+    action: "issue.unlinked",
+    entityType: "issue",
+    entityId: link.from.id,
+    propertyId: link.from.propertyId,
+    summary: `Removed "${link.from.title}" ${link.kind} "${link.to.title}"`,
+  });
+
+  const fresh = await prisma.issue.findUnique({ where: { id: req.params.id }, include: ISSUE_INCLUDE });
+  res.json(fresh);
 });
 
 issuesRouter.use("/:id/messages", messagesRouter);

@@ -706,7 +706,7 @@ export interface TechnicianLocation {
 export type Outcome = "ok" | "flagged" | "na";
 export type Severity = "minor" | "moderate" | "major";
 export type InspectionStatus = "in_progress" | "completed" | "abandoned";
-export type ProjectStatus = "open" | "done" | "cancelled";
+export type ProjectStatus = "planning" | "open" | "on_hold" | "done" | "cancelled";
 
 export const OUTCOMES: Outcome[] = ["ok", "flagged", "na"];
 export const SEVERITIES: Severity[] = ["minor", "moderate", "major"];
@@ -845,6 +845,82 @@ export interface ProjectIssue {
   category: string | null;
   dueAt: string | null;
   technician: TechnicianRef | null;
+  /** Work breakdown. A parent is an ordinary issue that has children. */
+  parentId: string | null;
+  isMilestone: boolean;
+  scheduledFor: string | null;
+  dueDate: string | null;
+  /** The plan as agreed, kept apart from the dates above so slippage stays visible. */
+  baselineStart: string | null;
+  baselineDue: string | null;
+  estimatedHours: number | null;
+  actualHours: number | null;
+  /** The EAM remains the record of work orders; this app plans and feeds it. */
+  workOrderNumber: string | null;
+  workOrderUrl: string | null;
+  costs: { amount: number; quantity: number }[];
+}
+
+export type QuoteStatus = "requested" | "received" | "declined" | "awarded";
+
+export interface Quote {
+  id: string;
+  issueId: string | null;
+  projectId: string | null;
+  contractorId: string;
+  contractor: { id: string; name: string; trade: string | null; phone?: string | null; email?: string | null };
+  amount: number | null;
+  status: QuoteStatus;
+  reference: string | null;
+  notes: string | null;
+  requestedAt: string;
+  receivedAt: string | null;
+  awardedAt: string | null;
+  decidedBy: string | null;
+}
+
+/** The three-quote rule, as a countable fact rather than a recollection. */
+export interface QuoteState {
+  total: number;
+  received: number;
+  awarded: number;
+  satisfied: boolean;
+  outstanding: number;
+}
+
+export interface ProjectRollup {
+  total: number;
+  /** Items that are nobody's parent — the ones that represent actual work. */
+  leaves: number;
+  open: number;
+  done: number;
+  milestones: number;
+  milestonesHit: number;
+  /** Per cent complete over leaves only, so nesting cannot inflate it. */
+  progress: number;
+  estimatedHours: number;
+  actualHours: number;
+  actualCost: number;
+}
+
+export interface ProjectBudget {
+  approved: number | null;
+  /** Awarded quotes — promised to somebody, not necessarily spent yet. */
+  committed: number;
+  actual: number;
+  /** Approved less the larger of committed and actual, never their sum. */
+  remaining: number | null;
+  overBudget: boolean;
+}
+
+export interface ProjectSchedule {
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  baselineStart: string | null;
+  baselineEnd: string | null;
+  /** Positive means the end has moved later than what was agreed. */
+  slippageDays: number | null;
+  baselined: boolean;
 }
 
 export interface Project {
@@ -857,7 +933,27 @@ export interface Project {
   createdBy: string | null;
   createdAt: string;
   issues: ProjectIssue[];
-  counts: { total: number; open: number; done: number; progress: number };
+  counts: ProjectRollup;
+  owner: TechnicianRef | null;
+  ownerId: string | null;
+  budgetAmount: number | null;
+  budget: ProjectBudget;
+  schedule: ProjectSchedule;
+  quotes: Quote[];
+  quoteState: QuoteState;
+  approved: boolean;
+  approvedBy: string | null;
+  approvedAt: string | null;
+}
+
+export type LinkKind = "precedes" | "blocks" | "relates";
+
+export interface IssueLinkRef {
+  id: string;
+  kind: LinkKind;
+  lagDays: number | null;
+  to?: { id: string; title: string; status: Status; dueDate: string | null };
+  from?: { id: string; title: string; status: Status; dueDate: string | null };
 }
 
 
