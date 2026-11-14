@@ -1,0 +1,472 @@
+# MaintenanceMap v2 — architecture and sequencing
+
+**Drafted:** 14 November 2026
+**Scope:** project management, a property manual, daily utility logging with graphs, and the
+groundwork for automation.
+**Status:** plan. Nothing in sections 3–6 is built yet; section 7 is the build order.
+
+---
+
+## 1. The short version
+
+Four subsystems were asked for. They are not equal in size, risk or payback, and two of them
+depend on a decision that has to be made before any content is written.
+
+| # | Subsystem | Size | Pays back | Depends on |
+|---|---|---|---|---|
+| A | Project management | Medium | Weeks | Nothing — mostly extends what exists |
+| B | Daily utility logging and graphs | **Small** | **Daily, immediately** | Nothing |
+| C | Property manual (map, assets, circuits) | **Large** | Months, then permanently | Nothing, but it is the long pole |
+| D | Automation / agents | Small *rail*, large *content* | Only after B and C | **B and C** |
+
+**Three things I would push back on before starting.**
+
+1. **Do not build agents yet.** What makes automation useful here is not agent code, it is
+   structured data to act on and a safe way to act. The data comes from B and C. The safe way to
+   act is a proposal-and-approval rail, which is perhaps two days of work and is worth building
+   now *because it is cheap and it shapes everything else*. The agents themselves should wait.
+   Section 6 explains what to build now and what to leave.
+2. **Do not create a "work package" object.** `Issue` is already one — it has priority, status,
+   trade, assignees, estimated and actual hours, scheduled and due dates, costs, time entries, a
+   checklist, tags and a thread. Adding a parallel object alongside it would split every list,
+   every report and every dashboard in the app in two. v2 should give `Issue` a parent and
+   dependencies, not a rival. This is the single most consequential call in this document.
+3. **B is the cheapest win and it is being done by hand right now.** The reporting "bible"
+   described in the project summary — daily tabs, 2am and 5am readings, WTD/MTD/YTD, charts —
+   is a month of spreadsheet maintenance that this app could absorb in one slice. Project
+   management was asked for first and the build order below respects that, but B is small enough
+   to run alongside A rather than behind it.
+
+---
+
+## 2. What was taken from the two reference projects
+
+I read both READMEs on github.com. I did **not** read either data model: `openproject.org`
+is outside this session's allowed network, so the user guide could not be fetched. What follows
+is therefore a judgement about which *ideas* to borrow, not a transcription of their schemas.
+Treat it as such.
+
+### OpenProject — take the work-package graph, leave the breadth
+
+Worth borrowing:
+
+- **A single work item type with hierarchy**, so a phase, a task and a milestone are the same
+  object at different levels rather than three tables. This is what lets a budget or a
+  percentage roll up without special cases.
+- **Typed relations between items** — *precedes*, *follows*, *blocks*, *relates*. A maintenance
+  department lives on "the scaffold has to come down before the painters can start".
+- **Baselines.** The planned dates kept separately from the current dates, so slippage is
+  visible rather than overwritten. The app currently overwrites, so no one can see drift.
+- **Budget as a first-class object on the project**, with committed and actual rolled up from
+  the children.
+
+Deliberately not borrowing: Scrum and SAFe boards, forums, news, wikis, product and release
+planning. OpenProject is a general tool aimed substantially at software teams. Most of its
+surface is dead weight for a 340-room engineering department, and every screen adopted is a
+screen to maintain.
+
+### NocoBase — take the narrow version, refuse the wide one
+
+NocoBase's organising idea is that the data model itself is editable at runtime: define
+collections and fields, and the interface follows. It is genuinely clever and it is the wrong
+trade here.
+
+A runtime-editable schema is a permanent complexity tax — migrations, validation, permissions
+and reporting all become dynamic, and every future feature has to cope with a shape it cannot
+know. You would be buying the ability to add a field without a developer, at the cost of making
+every other change harder.
+
+**The narrow version is worth having:** user-defined custom fields on a small, fixed set of
+objects (asset, work item, project), stored as typed key/value rows. That covers "we need to
+track a serial number on chillers" without making the whole app dynamic.
+
+The second idea worth taking from NocoBase is **permissions and workflow as built-in
+primitives rather than per-feature logic.** This app already does the first half — there is one
+capability table rather than scattered role checks. It does not yet have the second half, which
+is section 6.
+
+---
+
+## 3. (A) Project management
+
+### What exists
+
+`Project` is a thin container: name, description, property, status, and a list of issues.
+`Issue` is, as noted, already most of a work package.
+
+### What v2 adds
+
+**On `Project`:** an owner, planned and actual start/end, a baseline of those dates, an approved
+budget, a phase list, and a sign-off record. Status widens beyond `open | done | cancelled`.
+
+**On `Issue`:** three fields and one new table.
+
+```
+parentId      String?   // work breakdown: a task under a phase under a project
+isMilestone   Boolean   // a dateline with no duration — permits, deliveries, handover
+baselineStart String?   // the planned dates, frozen, so slippage is visible
+baselineDue   String?
+```
+
+```
+model IssueLink {          // typed dependency graph
+  fromIssueId  String
+  toIssueId    String
+  kind         String      // precedes | blocks | relates
+  lagDays      Int?
+}
+```
+
+Hierarchy and dependencies are what turn a list of jobs into a plan. Everything else — Gantt,
+critical path, rollups — is a view over those two.
+
+### Quotes, because the rule already exists
+
+The department rule is **at least three quotes on any contractor job**, with EAM sending the RFQ
+and notifying the award. That rule is currently enforced by memory. It should be a table:
+
+```
+model Quote {
+  issueId / projectId
+  contractorId
+  amount, currency
+  requestedAt, receivedAt
+  status        // requested | received | declined | awarded
+  documentId?
+}
+```
+
+The payoff is that "has this job got its three quotes?" becomes a field rather than a
+conversation, and award is an auditable event. This is a small table with a disproportionate
+return, and I would build it in the first slice.
+
+### Rollups
+
+Budget versus committed versus actual, and percent complete, computed up the hierarchy. The
+pieces already exist — `Cost` per issue, `TimeEntry` per issue — they have never been summed
+against an approved figure because there was no approved figure to sum against.
+
+---
+
+## 4. (B) Daily utility logging and graphs
+
+This is the most precisely specified of the four, because the project summary already settled
+the rules. Restating them as the spec:
+
+| Rule | Consequence for the model |
+|---|---|
+| Readings at **02:00 and 05:00** | Every reading carries which slot it belongs to |
+| The day runs **05:00 to 05:00** | A reading's "day" is derived, not the calendar date |
+| Overnight window is **02:00–05:00** | A separate night aggregate, not a filter applied later |
+| Site electricity = **all meters summed**; the incoming line is **"Main meter"** | Meters carry a flag for whether they roll into the site total, and the main line is named, not numbered |
+| Propane and diesel entered as **% or fraction** | Stored raw *and* converted; conversion needs tank capacity |
+| Water tank is a **height fraction × litre capacity** | Tank geometry belongs on the meter point |
+| Metric throughout; °C | Units are per meter point, with a metric default |
+
+```
+model MeterPoint {
+  propertyId
+  name                 // "Main meter", "Chiller plant", "Propane bulk 1"
+  kind                 // electricity | water | propane | diesel
+  entryMode            // direct | percentage | tank_height
+  unit                 // kWh | litre | m3  — stored, never assumed
+  capacityLitres       Float?   // for percentage and tank_height
+  tankMaxHeightMm      Float?   // for tank_height
+  includeInSiteTotal   Boolean
+}
+
+model Reading {
+  meterPointId
+  takenAt       DateTime
+  slot          String   // "0200" | "0500"
+  readingDay    String   // the 05:00–05:00 day it belongs to, computed on write
+  rawValue      Float    // exactly what was read, never normalised
+  value         Float    // converted to the meter's unit
+  takenBy
+}
+```
+
+**Two open items from the project summary get answered by this design rather than deferred.**
+
+*Water in litres or US gallons (open item 3).* The unit lives on the meter point, so the
+ambiguity stops being global. A meter read in gallons is recorded in gallons and converted once,
+and the conversion is visible rather than assumed. Nothing has to be settled before building.
+
+*Electricity up "nearly 30%" (open item 4).* The app should not accept a claimed percentage. It
+should store the **invoice** per period — amount, kWh billed, period — and derive cost per kWh
+from it. Then the trend is a computed figure with a document behind it, which is what makes it
+safe to put in a monthly report. I would treat "verify against the invoice" as a feature, not a
+to-do.
+
+```
+model UtilityInvoice {
+  propertyId, kind
+  periodStart, periodEnd
+  amount, currency
+  quantity, unit        // kWh billed
+  documentId?           // the invoice itself
+}
+```
+
+Derived cost per unit, month over month, with the invoice attached. Any trend the app states, it
+can show its working for.
+
+### Output
+
+One screen: the property in a nutshell. Daily line charts per utility, the night window
+separately, week-over-week, and WTD/MTD/YTD against the same period last year. A flat log page
+of cleaned data for anything the app has not thought of yet — which is what the spreadsheet is
+really providing today and should not be taken away.
+
+> **Charting is a dependency decision.** The app currently draws its trend charts by hand in
+> SVG. Six or seven utility charts with shared axes and tooltips is past the point where that is
+> sensible. This needs one small charting library, chosen once.
+
+---
+
+## 5. (C) The property manual
+
+The largest and most valuable of the four. The description given was: log the property, sync the
+GPS map to a drawing to make a new view, then log key equipment — panels and breakers *and what
+they control*, valves and pipe locations, generators, tanks, and where the rooms are.
+
+### Why this is worth the effort
+
+Every other feature in the app helps you record a problem. This one helps you *act* on one. The
+questions it answers are the ones that cost the most time in an emergency and are currently
+answered by whoever has been there longest:
+
+- Which breaker isolates room 214, and which panel is it in?
+- Which valve shuts off this pipe without dropping the whole block?
+- What else goes dark if I open this breaker?
+- Where is the nearest isolation point to this leak?
+
+That last class of question — *what else is affected* — is why this cannot be a list of
+equipment with photographs. It needs the connections.
+
+### Three layers
+
+**1. A location hierarchy.** Property → block → floor → space. The blocks are already named:
+Coubaril, Millionaire, Point Suites, Blue Suites, Tennis. 340+ rooms hang off this, and so does
+every report that currently matches on a free-text room name. Replacing the free-text `roomName`
+is a migration with real consequences, so the two should coexist: a nullable `spaceId` added
+beside `roomName`, backfilled gradually, with the text kept as the fallback.
+
+**2. The drawing layer.** A floor plan or site drawing, georeferenced onto the existing Leaflet
+map so that drawing coordinates and GPS coordinates are the same space.
+
+```
+model FloorPlan {
+  propertyId, name, level
+  imageId
+  // Affine georeference: three points identified on both the image and the map.
+  controlPoints Json   // [{imageX, imageY, lat, lng} x3]
+  opacity, order
+}
+```
+
+The pragmatic approach is a raster overlay with three control points, which Leaflet supports
+directly and which someone can set up in a browser in a few minutes per drawing. Vector/CAD
+import is a much larger piece of work and should not be in the first version — but the control
+point model is the same either way, so starting with raster does not close the door.
+
+**3. Assets and the connections between them.**
+
+```
+model Asset {
+  propertyId, spaceId?
+  kind            // panel | breaker | valve | generator | tank | pump | ahu | fcu
+                  // ice_machine | lift | meter | grease_trap | ...
+  ref             // "DB-3", "CB-14", "V-207"
+  parentAssetId?  // a breaker lives in a panel; a pump lives in a plant room
+  lat, lng?       // on the map
+  floorPlanId?, planX, planY?   // and/or on a drawing
+  installedAt?, serialNumber?, model?, capacity?
+  lastServicedAt?, serviceIntervalDays?   // the 90-day AC standard lives here
+}
+
+model AssetRelation {
+  fromAssetId
+  toAssetId?      // breaker feeds a sub-panel; valve isolates a pump
+  toSpaceId?      // breaker feeds room 214
+  kind            // feeds | isolates | serves | drains | vents
+}
+```
+
+`AssetRelation` is the heart of it. It is a directed graph, not a tree — one room is fed by a
+breaker and served by a valve and conditioned by an air handler, and each of those has its own
+upstream. Modelling it as a tree would be simpler and would be wrong.
+
+With that graph, "what does this breaker control" is a traversal, and so is its inverse, "what
+feeds this room" — which is the question people actually ask.
+
+### What this unlocks that is already being asked for
+
+- **AC servicing.** `serviceIntervalDays` on the asset makes the 90-day standard a property of
+  the equipment rather than a column in a tracker. "Not serviced in 3 months" becomes a query
+  over every unit — rooms, back of house and public areas in one list.
+- **Generators.** The weekly 30-minute no-load test and the monthly one-hour load test become
+  recurring schedules attached to a named asset, with the test result recorded against it.
+- **Legionella and water hygiene.** The matrix maps onto assets (tanks, outlets, calorifiers)
+  with recurring checks and **recorded temperatures** — see the schema note below.
+- **Inspections get a target.** A finding can point at the asset that is faulty, not just the
+  room it is in.
+
+### The schema decision that has to be made first
+
+The inspections stocktake flagged this already: **there is nowhere to record a number on a
+check.** Every point is a three-way judgement. But a chlorine reading, an outlet temperature, a
+fridge temperature and a generator run-hour are all numbers, and for those the trend matters more
+than whether today's value passed.
+
+This one change — a nullable numeric value, a unit and an acceptable range on an inspection
+check — serves the Legionella matrix, pool chemistry, the generator tests and the kitchen cold
+chain. **Three of the four subsystems in this document want it.** It should be decided and built
+early, before anybody writes new checklist content against the old shape.
+
+---
+
+## 6. (D) Groundwork for automation
+
+Written for someone who has not set agents up before, because that was the stated position.
+
+### The honest shape of the problem
+
+An agent that can act on this app needs three things, and only one of them is agent code:
+
+1. **Something to read.** Structured, queryable state. This is subsystems B and C. An agent
+   cannot reason about equipment that exists only as a free-text room name.
+2. **Somewhere safe to act.** Not direct database writes. A place to put a *proposal* that a
+   human accepts or rejects.
+3. **A record of what it did.** Already present — the activity log covers every mutation.
+
+So the groundwork is (2), it is small, and it is worth building now. (1) comes free with B and C.
+(3) exists.
+
+### What to build now
+
+```
+model AgentRun {
+  kind         // "overdue-sweep" | "reading-anomaly" | "ac-due" | ...
+  startedAt, finishedAt
+  trigger      // schedule | manual | event
+  status       // running | done | failed
+  summary
+}
+
+model AgentProposal {
+  agentRunId
+  action       // "raise-issue" | "reassign" | "flag-reading" | "order-part"
+  payload      Json          // exactly what would be done
+  rationale    String        // why, in words, for the person approving
+  confidence   Float?
+  status       // pending | approved | rejected | applied | expired
+  decidedBy, decidedAt
+}
+```
+
+**Why a proposal and not an action.** The department already works this way — sign-off is a
+supervisor plus one of two assistant chiefs or the chief. An agent that files a proposal fits
+that existing culture exactly, and it means the first version cannot do damage. Once a given
+proposal type has been approved a few hundred times without a correction, *that type* can be
+promoted to act directly. That is a per-action decision made on evidence, not a switch thrown at
+the start.
+
+### The part that surprises people
+
+**The first "agents" should not use a model at all.** Write them as plain scheduled functions
+that produce proposals:
+
+- every AC unit past 90 days → propose a work order
+- any reading more than *n*% off the trailing fortnight → propose a flag for review
+- any P1 or P2 open past its response target → propose an escalation
+- any contractor job without three quotes → propose a hold
+
+Each is a few lines of SQL and a row in `AgentProposal`. They will cover a surprising amount of
+what you would otherwise want an agent for, they are debuggable, and they cost nothing to run.
+
+Then the rail is already built and proven, and introducing a model is a small, contained change
+in one place — for the jobs that genuinely need judgement rather than a threshold: reading a
+supervisor's turnover narrative and proposing the work orders it implies; clustering a month of
+findings into a capital request; drafting the monthly report from the logs.
+
+**The recommendation: build the rail, write the threshold jobs, and do not put a model behind
+anything until there is a job that visibly needs one.** It is not the exciting answer but it is
+the one that gets automation running this quarter instead of next.
+
+---
+
+## 7. Build order
+
+| Slice | Contents | Why here |
+|---|---|---|
+| **1** | Work breakdown: `parentId`, `isMilestone`, baselines, `IssueLink`, project budget/owner/sign-off, `Quote` | Asked for first. Mostly additive to existing models |
+| **2** | Numeric readings on inspection checks (value, unit, acceptable range) | Blocks new checklist content; wanted by three subsystems |
+| **3** | Daily readings: `MeterPoint`, `Reading`, `UtilityInvoice`, the nutshell dashboard, one charting library | Smallest, pays back daily, replaces live spreadsheet work |
+| **4** | Location hierarchy: block → floor → space, coexisting with `roomName` | Foundation for the manual; touches a lot, so early |
+| **5** | Assets and `AssetRelation`; AC and generator intervals on assets | The manual's substance |
+| **6** | Floor plans: raster overlay, three-point georeference, the drawing map view | Depends on 4 and 5 |
+| **7** | Gantt and critical path over slice 1 | A view; needs the graph to exist first |
+| **8** | Automation rail: `AgentRun`, `AgentProposal`, approval screen, threshold jobs | Needs 3 and 5 to have anything worth proposing |
+
+Slices 1 and 3 are independent and can run in parallel. Slice 2 should go in before any new
+checklist content is written in another conversation.
+
+---
+
+## 8. Things that must be dealt with on the way
+
+### Pagination — verified, and a real ceiling
+
+The issues route makes eight unbounded `findMany` calls. There is no `take` or `skip` anywhere in
+it. At 340-plus rooms with up to 40 issues each — on the order of 13,000 open items — this
+returns the lot in one response and renders it in one list. The same is true of several other
+list endpoints. **This has to be fixed before the room tracker's volume reaches the app**, not
+after. It is unglamorous and it is slice 0.
+
+### Volume of readings
+
+Several meters, twice a day, every day, is tens of thousands of rows a year. SQLite is entirely
+comfortable with that; the aggregates are what need care. Pre-compute the daily rollups on write
+rather than scanning the reading table for every chart.
+
+### The critical dependency advisory is still open
+
+`proxy-addr` allows a forged client address, which on this deployment lets the login rate
+limiter be bypassed. A non-major fix exists and has not been applied. It should be cleared before
+v2 work starts, not after, and the reinstall this session needed is the natural moment.
+
+### Backups are still on the volume they protect
+
+Unchanged and still the highest operational risk. v2 adds considerably more irreplaceable data —
+a property manual is months of surveying that cannot be reconstructed from memory. Off-platform
+backup should land before the manual is populated, not after.
+
+### Smaller items from the project summary
+
+- **Legal paper (8.5 × 14 in).** The daily supervisor checklist prints on Legal. The app's
+  sheets are sized for the intersection of A4 and Letter — 190 mm wide — which fits Legal's width
+  but wastes 77 mm of its length. Paper should be a per-document choice so a Legal checklist gets
+  the rows it has room for.
+- **Sell-status tracker** — GREEN / AMBER / RED per room, weekly, with last-inspected and
+  worked-on dates. This is a view over slice 4 plus a status field, not a new subsystem.
+- **Shift checklists with a turnover report.** The inspection engine nearly does this; what is
+  missing is a narrative turnover field and an issues-to-be-addressed table carrying EAM numbers.
+- **Metric and °C throughout**, per the stated preference. Units are per meter point in slice 3;
+  the rest of the app should be audited for assumed units.
+
+---
+
+## 9. What I have not decided, and would want a view on
+
+1. **Does the drawing layer need to carry room boundaries, or only points?** Points are far
+   cheaper; boundaries let you shade a whole room by status, which is a strong dashboard. It
+   changes slice 6's size materially.
+2. **Should the EAM remain the system of record for work orders**, with this app feeding it, or
+   should this app become the record? Today it links out. The answer decides whether slice 1 is a
+   planning layer over the EAM or a replacement for part of it — and that is a much bigger
+   question than it looks.
+3. **How much of the manual can realistically be surveyed, and by whom?** The schema is the easy
+   half. Several hundred rooms, panels and valves is a field exercise, and a half-populated manual
+   is worse than none because it cannot be trusted. Worth deciding the survey plan before the
+   software is ready for it.
