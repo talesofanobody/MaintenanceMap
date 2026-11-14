@@ -69,12 +69,25 @@ and overlapping trades — that is a workable planning tool today.
 
 ### The four things that are missing, in the order they will bite
 
-**1. A working-day calendar.** Durations are counted in calendar days. On a programme
-with weather days, public holidays and a shift pattern, that is wrong in a way that
-compounds: every duration is slightly short and every float figure slightly generous.
-This matters more than anything else on the list and is the one I would do first.
-Medium-sized: a calendar per property, non-working days, and the schedule pass
-counting in working days.
+**1. ~~A working-day calendar.~~ Done.** Opt-in per property, with a fallback for the
+rest; a weekly pattern plus exceptions in both directions, because a holiday and a
+Sunday worked to claw back a slipped pour are equally real and only one of them gets
+remembered. The whole schedule pass now works in working-day ordinals, so float, lag
+and the longest chain are all counted in days somebody actually works. Days nobody
+works are shaded on the chart.
+
+Opt-in deliberately: setting a calendar changes every float figure on that
+property's programmes, so it is a decision rather than something that happens during
+a deploy. Without one, behaviour is exactly as before.
+
+**What it did not fix, and what that needs.** There is no duration field — only typed
+dates — so a task's duration is the working days *inside* its range. A shutdown in the
+middle therefore reduces what the range holds rather than pushing the end out. That is
+defensible, since somebody typed that end date, but it is not what people expect. The
+expected behaviour needs duration as a first-class field with dates derived from it,
+which is a bigger change than the calendar was and conflicts with `scheduledFor` and
+`dueDate` being used by the day planner and the response targets. Worth doing, not
+worth faking.
 
 **2. Earned value.** Per cent complete and budget both exist, so planned value, earned
 value and actual cost are all derivable — but nothing computes them, which means no
@@ -478,7 +491,7 @@ the one that gets automation running this quarter instead of next.
 | ~~**1**~~ | ~~Work breakdown: `parentId`, `isMilestone`, baselines, `IssueLink`, project budget/owner/sign-off, `Quote`~~ | **Done** — `632caa9` |
 | ~~**1b**~~ | ~~`ProjectLink`, `Blocker`, `Stakeholder`, critical path and float, Gantt with dependencies and baselines, progress curve~~ | **Done** — `991493b` |
 | ~~**1c**~~ | ~~Tree semantics: a phase finishes only when its tasks do, dates and progress roll up, start-to-start and finish-to-finish, per cent complete~~ | **Done**. 334 checks in `tests/` |
-| **1d** | A working-day calendar | See 1b above — the gap that changes numbers already on screen |
+| ~~**1d**~~ | ~~A working-day calendar, with two-way exceptions~~ | **Done**. 423 checks in `tests/` |
 | **1e** | Earned value (PV/EV/AC, SPI/CPI) | Inputs now exist; small |
 | **2** | Numeric readings on inspection checks (value, unit, acceptable range) | Blocks new checklist content; wanted by three subsystems |
 | **3** | Daily readings: `MeterPoint`, `Reading`, `UtilityInvoice`, the nutshell dashboard, one charting library | Smallest, pays back daily, replaces live spreadsheet work |

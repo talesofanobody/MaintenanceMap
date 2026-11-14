@@ -8,16 +8,19 @@ running:
 | `unit-planning.ts` | The rollup and cycle arithmetic | Nothing |
 | `unit-schedule.ts` | Critical path, float, blocker ages, progress curve | Nothing |
 | `unit-tree.ts` | Summary rollup, weighted progress, start-to-start and finish-to-finish | Nothing |
+| `unit-calendar.ts` | Working days, two-way exceptions, float counted in them | Nothing |
 | `migration-planning.js` | A live database survives the migration | A database at the previous schema |
 | `api-planning.js` | The planning endpoints behave | `server` on :4000 |
 | `api-governance.js` | Project dependencies, blockers, stakeholders | `server` on :4000 |
 | `ui-planning.js` | A person can reach and use the plan | Both dev servers |
 | `api-tree.js` | A phase finishes only when its tasks do; rolled dates | `server` on :4000 |
+| `api-calendar.js` | Opting in changes float; opting out puts it back | `server` on :4000 |
 | `ui-governance.js` | The Gantt draws, blockers clear, roles stick | Both dev servers |
 | `ui-tree.js` | Phase dates roll up, progress shows, the refusal holds | Both dev servers |
+| `ui-calendar.js` | The editor works and the chart shades days nobody works | Both dev servers |
 | `smoke-pages.js` | Nothing else broke | Both dev servers |
 
-334 checks in total.
+423 checks in total.
 
 ```sh
 (cd server && npm run dev)    # :4000
@@ -31,6 +34,17 @@ An earlier round of this work kept its suites in a scratch directory outside the
 repository. The container was recycled and all of them were lost, which left the
 application without the harness that had proved it worked. A test that exists on one
 machine is not a test. Anything worth running twice belongs in here.
+
+## One sign-in, shared
+
+A full run signs in **once**. The login limiter allows ten attempts per quarter of an
+hour — correct, and the only thing between a guessable password and unlimited guesses
+— and thirteen suites each signing in separately trips it. Weakening the limiter to
+suit the tests would be the wrong trade, so `session.js` caches a session in a file
+under `MM_SHOTS` and every API suite reuses it.
+
+If you see *"The login limiter has been tripped"*, that is the limiter working. Wait
+out the window rather than changing the limit.
 
 ## Browse on the origin the API allows
 
@@ -84,6 +98,19 @@ no working-day calendar; durations are counted in calendar days.
 **Summary rows take no part in the analysis.** A parent's dates are an envelope
 around its children. The test fixes the case that caught this: a phase spanning two
 months beat the eighteen-day chain of dependent work inside it.
+
+**Float is counted in working days once a calendar exists, and in calendar days
+without one.** A job finishing Friday and the next starting Monday has two days of
+slack when every day counts and one on a six-day week. Both numbers are right for
+what they measure; the point of a calendar is that the second is the one worth
+believing. The tests pin both.
+
+**A shutdown inside a task's dates does not move its end.** There is no duration
+field — only typed dates — so duration is derived as the working days *inside* the
+range, and a shutdown reduces what the range contains rather than pushing the end
+out. Somebody typed that end date. The push-out behaviour everybody expects needs a
+real duration field with dates derived from it, which is recorded as a gap rather
+than faked.
 
 **"The longest chain" can be one task.** A lone activity with no dependencies is the
 longest path through the graph if it is the longest activity — correct, and not a

@@ -4,6 +4,7 @@ import { requires } from "../middleware/requireAuth";
 import { logActivity } from "../lib/activity";
 import { parseOptionalDay, parseOptionalString, ValidationError } from "../lib/validation";
 import { isClosed } from "../lib/workflow";
+import { calendarFor, toSpec } from "./calendars";
 import {
   analyseSchedule,
   BLOCKER_KINDS,
@@ -14,6 +15,8 @@ import {
   rollUp,
   rollUpTree,
   slippageDays,
+  EVERY_DAY,
+  type CalendarSpec,
   STAKEHOLDER_ROLES,
   wouldCycleInLinks,
 } from "../lib/planning";
@@ -102,7 +105,7 @@ const PROJECT_INCLUDE = {
  * and whether the quotes rule is met. None of it is cached — these are small sums
  * over one project's issues, and a stale rollup is worse than a recomputed one.
  */
-function summarise(project: any) {
+function summarise(project: any, calendar: CalendarSpec | null = null) {
   const counts = rollUp(project.issues, isClosed);
   const awarded = (project.quotes ?? []).filter((q: any) => q.status === "awarded" && q.amount != null).map((q: any) => q.amount as number);
   // Every blocker in scope: the project's own, plus the ones on its work. A
@@ -138,7 +141,10 @@ function summarise(project: any) {
     })),
     (project.issues ?? []).flatMap((i: any) =>
       (i.linksOut ?? []).map((l: any) => ({ fromId: i.id, toId: l.toIssueId, kind: l.kind, lagDays: l.lagDays }))
-    )
+    ),
+    // Null means no calendar is set for this property, which counts every day —
+    // the behaviour before calendars existed.
+    calendar ?? EVERY_DAY
   );
 
   return {
@@ -169,6 +175,16 @@ function summarise(project: any) {
   };
 }
 
+/**
+ * Summarise one project with whatever calendar is in force for its property.
+ *
+ * A separate round trip per project, which is fine for a single read and is why
+ * the list endpoint below builds its own map instead of calling this per row.
+ */
+async function withCalendar(project: any) {
+  return summarise(project, await calendarFor(project.propertyId ?? null));
+}
+
 projectsRouter.get("/", async (req, res) => {
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
   const propertyId = typeof req.query.propertyId === "string" ? req.query.propertyId : undefined;
@@ -178,13 +194,26 @@ projectsRouter.get("/", async (req, res) => {
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     take: 200,
   });
-  res.json(projects.map(summarise));
+  /**
+   * Every calendar in one query rather than one per project. A property with no
+   * calendar of its own falls back to the one with no property; a null result
+   * means count every day, as the app always did.
+   */
+  const calendars = await prisma.workCalendar.findMany({ include: { exceptions: true } });
+  const fallback = calendars.find((c) => c.propertyId === null);
+  const byProperty = new Map(calendars.filter((c) => c.propertyId).map((c) => [c.propertyId!, c]));
+  const specFor = (propertyId: string | null) => {
+    const row = (propertyId ? byProperty.get(propertyId) : null) ?? fallback;
+    return row ? toSpec(row) : null;
+  };
+
+  res.json(projects.map((p) => summarise(p, specFor(p.propertyId))));
 });
 
 projectsRouter.get("/:id", async (req, res) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id }, include: PROJECT_INCLUDE });
   if (!project) return res.status(404).json({ error: "not found" });
-  res.json(summarise(project));
+  res.json(await withCalendar(project));
 });
 
 projectsRouter.post("/", requires("project.write"), async (req, res) => {
@@ -206,7 +235,7 @@ projectsRouter.post("/", requires("project.write"), async (req, res) => {
       include: PROJECT_INCLUDE,
     });
     await logActivity(req, { action: "project.created", entityType: "system", entityId: project.id, propertyId: project.propertyId, summary: `Started the project "${project.name}"` });
-    res.status(201).json(summarise(project));
+    res.status(201).json(await withCalendar(project));
   } catch (err) {
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
     throw err;
@@ -244,7 +273,7 @@ projectsRouter.put("/:id", requires("project.write"), async (req, res) => {
     }
     const project = await prisma.project.update({ where: { id: existing.id }, data, include: PROJECT_INCLUDE });
     await logActivity(req, { action: "project.updated", entityType: "system", entityId: project.id, propertyId: project.propertyId, summary: `Project "${project.name}" updated` });
-    res.json(summarise(project));
+    res.json(await withCalendar(project));
   } catch (err) {
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
     throw err;
@@ -270,7 +299,7 @@ projectsRouter.post("/:id/issues", requires("project.write"), async (req, res) =
     summary: `Project "${project.name}": ${add.length} added, ${remove.length} removed`,
   });
   const fresh = await prisma.project.findUnique({ where: { id: project.id }, include: PROJECT_INCLUDE });
-  res.json(summarise(fresh!));
+  res.json(await withCalendar(fresh!));
 });
 
 /**
@@ -319,7 +348,7 @@ projectsRouter.post("/:id/baseline", requires("project.write"), async (req, res)
   });
 
   const fresh = await prisma.project.findUnique({ where: { id: project.id }, include: PROJECT_INCLUDE });
-  res.json(summarise(fresh!));
+  res.json(await withCalendar(fresh!));
 });
 
 /**
@@ -352,7 +381,7 @@ projectsRouter.post("/:id/approve", requires("project.write"), async (req, res) 
         ? `Approved "${project.name}"${updated.budgetAmount != null ? ` with a budget of ${updated.budgetAmount}` : ""}`
         : `Withdrew approval of "${project.name}"`,
     });
-    res.json(summarise(updated));
+    res.json(await withCalendar(updated));
   } catch (err) {
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
     throw err;
@@ -418,7 +447,7 @@ projectsRouter.post("/:id/links", requires("project.write"), async (req, res) =>
     summary: `"${from.name}" ${kind} "${to.name}"`,
   });
   const fresh = await prisma.project.findUnique({ where: { id: from.id }, include: PROJECT_INCLUDE });
-  res.status(201).json(summarise(fresh!));
+  res.status(201).json(await withCalendar(fresh!));
 });
 
 projectsRouter.delete("/:id/links/:linkId", requires("project.write"), async (req, res) => {
@@ -439,7 +468,7 @@ projectsRouter.delete("/:id/links/:linkId", requires("project.write"), async (re
     summary: `Removed "${link.from.name}" ${link.kind} "${link.to.name}"`,
   });
   const fresh = await prisma.project.findUnique({ where: { id: req.params.id }, include: PROJECT_INCLUDE });
-  res.json(summarise(fresh!));
+  res.json(await withCalendar(fresh!));
 });
 
 // ---------------------------------------------------------------------------
@@ -490,7 +519,7 @@ projectsRouter.post("/:id/stakeholders", requires("project.write"), async (req, 
       summary: `${stakeholder.technician?.name ?? stakeholder.name} added to "${project.name}" as ${role}`,
     });
     const fresh = await prisma.project.findUnique({ where: { id: project.id }, include: PROJECT_INCLUDE });
-    res.status(201).json(summarise(fresh!));
+    res.status(201).json(await withCalendar(fresh!));
   } catch (err) {
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
     throw err;
@@ -511,7 +540,7 @@ projectsRouter.put("/:id/stakeholders/:stakeholderId", requires("project.write")
     if (req.body.notes !== undefined) data.notes = parseOptionalString(req.body.notes, "notes", 1000) ?? null;
     await prisma.stakeholder.update({ where: { id: existing.id }, data });
     const fresh = await prisma.project.findUnique({ where: { id: req.params.id }, include: PROJECT_INCLUDE });
-    res.json(summarise(fresh!));
+    res.json(await withCalendar(fresh!));
   } catch (err) {
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message });
     throw err;
@@ -523,7 +552,7 @@ projectsRouter.delete("/:id/stakeholders/:stakeholderId", requires("project.writ
   if (!existing || existing.projectId !== req.params.id) return res.status(404).json({ error: "not found" });
   await prisma.stakeholder.delete({ where: { id: existing.id } });
   const fresh = await prisma.project.findUnique({ where: { id: req.params.id }, include: PROJECT_INCLUDE });
-  res.json(summarise(fresh!));
+  res.json(await withCalendar(fresh!));
 });
 
 /** Deleting a project releases its issues rather than taking them with it. */

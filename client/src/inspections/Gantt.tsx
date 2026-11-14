@@ -1,5 +1,5 @@
 import { useMemo, useRef } from "react";
-import type { ProjectIssue, ScheduleAnalysis } from "../types";
+import type { ProjectIssue, ScheduleAnalysis, WorkCalendar } from "../types";
 
 const DAY = 86400000;
 const toDay = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY);
@@ -30,10 +30,13 @@ interface Row {
 export default function Gantt({
   rows,
   analysis,
+  calendar,
   onPick,
 }: {
   rows: Row[];
   analysis: ScheduleAnalysis;
+  /** When set, days nobody works are shaded so the gaps are visible. */
+  calendar?: WorkCalendar | null;
   onPick?: (issueId: string) => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
@@ -93,6 +96,34 @@ export default function Gantt({
     return { left, width: Math.max(perDay, x(e) + perDay - left) };
   };
 
+  /**
+   * Days nobody works, shaded behind the bars.
+   *
+   * Worth drawing rather than leaving implicit: a bar spanning a shaded stripe is
+   * the visual answer to "why does this take longer than it looks", and a gap that
+   * is entirely shaded is the visual answer to "why is there no float here".
+   */
+  const offDays: { left: number; width: number }[] = [];
+  if (calendar) {
+    let week: boolean[] = [true, true, true, true, true, true, true];
+    try {
+      const parsed = JSON.parse(calendar.workingDays);
+      if (Array.isArray(parsed) && parsed.length === 7) week = parsed.map((v) => !!v);
+    } catch {
+      // A corrupt row should not take the chart down.
+    }
+    const overrides: Record<string, boolean> = {};
+    for (const e of calendar.exceptions ?? []) overrides[e.day] = e.working;
+    for (let offset = 0; offset < model.span; offset += 1) {
+      const dayNum = model.first + offset;
+      const iso = new Date(dayNum * DAY).toISOString().slice(0, 10);
+      // Monday-first weekday: day 0 of the epoch was a Thursday.
+      const weekday = (((dayNum + 3) % 7) + 7) % 7;
+      const works = overrides[iso] ?? week[weekday] ?? true;
+      if (!works) offDays.push({ left: offset * model.perDay, width: model.perDay });
+    }
+  }
+
   const rowIndex = new Map(model.rows.map((r, i) => [r.issue.id, i]));
   // A row with children is an envelope around them, and is drawn as one. It is
   // excluded from the analysis for the same reason, so it has no float to show.
@@ -142,6 +173,7 @@ export default function Gantt({
         <span><i className="gantt-key gantt-key-base" /> agreed</span>
         <span><i className="gantt-key gantt-key-chain" /> longest chain</span>
         <span><i className="gantt-key gantt-key-done" /> done</span>
+        {offDays.length > 0 && <span><i className="gantt-key gantt-key-off" /> not worked</span>}
         {analysis.violations.length > 0 && <span className="is-late">● cannot start as planned</span>}
       </div>
 
@@ -172,6 +204,14 @@ export default function Gantt({
                 </span>
               ))}
             </div>
+
+            {offDays.length > 0 && (
+              <div className="gantt-off" style={{ top: HEADER, height }} aria-hidden="true">
+                {offDays.map((d, i) => (
+                  <span key={i} style={{ left: d.left, width: d.width }} />
+                ))}
+              </div>
+            )}
 
             {showToday && (
               <div className="gantt-today" style={{ left: todayX, top: HEADER, height }} title="Today" />
@@ -222,7 +262,9 @@ export default function Gantt({
                           title={
                             `${issue.title}\n${d.start ?? "?"} to ${d.end ?? "?"}` +
                             (pct !== null && pct !== undefined ? `\n${pct}% complete` : "") +
-                            (slack !== undefined ? `\n${slack} day${slack === 1 ? "" : "s"} of slack` : "") +
+                            (slack !== undefined
+                              ? `\n${slack} ${analysis.workingDays ? "working " : ""}day${slack === 1 ? "" : "s"} of slack`
+                              : "") +
                             (issue.blockers?.some((b) => !b.clearedAt) ? "\nBlocked" : "")
                           }
                         >

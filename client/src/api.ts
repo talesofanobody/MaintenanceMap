@@ -1,4 +1,4 @@
-import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
+import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -432,6 +432,23 @@ export const api = {
       { method: "POST" }
     ),
   deleteQuote: (id: string) => request<void>(`/quotes/${id}`, { method: "DELETE" }),
+
+  // --- the working calendar ----------------------------------------------
+  listCalendars: () => request<WorkCalendar[]>("/calendars"),
+  /** What is in force for a property, whether its own or inherited. */
+  calendarFor: (propertyId: string) =>
+    request<{ calendar: WorkCalendar | null; inherited: boolean }>(`/calendars/for/${propertyId}`),
+  createCalendar: (data: { propertyId?: string | null; name?: string; workingDays?: boolean[] }) =>
+    request<WorkCalendar>("/calendars", { method: "POST", body: JSON.stringify(data) }),
+  updateCalendar: (id: string, data: { name?: string; workingDays?: boolean[] }) =>
+    request<WorkCalendar>(`/calendars/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  /** Sets a day against the pattern — a holiday, or a day worked anyway. */
+  setCalendarException: (id: string, data: { day: string; working: boolean; reason?: string }) =>
+    request<WorkCalendar>(`/calendars/${id}/exceptions`, { method: "POST", body: JSON.stringify(data) }),
+  removeCalendarException: (id: string, exceptionId: string) =>
+    request<WorkCalendar>(`/calendars/${id}/exceptions/${exceptionId}`, { method: "DELETE" }),
+  /** Removing it puts that property back to counting every day. */
+  deleteCalendar: (id: string) => request<void>(`/calendars/${id}`, { method: "DELETE" }),
 
   // --- governance: blockers, stakeholders, project dependencies ----------
   listBlockers: (target: { issueId?: string; projectId?: string; open?: boolean }) => {

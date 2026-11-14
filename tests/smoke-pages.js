@@ -13,11 +13,13 @@ const ok = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + m); if (!c)
   page.on('console', m => { if (m.type() === 'error' && !envNoise.test(m.text())) errs.push(m.text().slice(0,160)); });
   page.on('requestfailed', r => { if (!envNoise.test(r.url())) errs.push('REQFAIL ' + r.url().slice(0,80)); });
 
+  // Reuse the shared session rather than signing in again: a full run of the
+  // suites otherwise trips the login limiter, which is the limiter working.
+  const { session } = require('./session');
+  const { cookie } = await session();
+  const [name, value] = cookie.split('=');
+  await page.context().addCookies([{ name, value, domain: 'localhost', path: '/' }]);
   await page.goto(B + '/');
-  await page.waitForSelector('input[autocomplete="username"]', { timeout: 30000 });
-  await page.fill('input[autocomplete="username"]', 'khalid');
-  await page.fill('input[autocomplete="current-password"]', 'correcthorsebattery9');
-  await page.click('button:has-text("Sign in")');
   await page.waitForSelector('.nav-toggle', { timeout: 20000 });
 
   // Every page reachable from the drawer, looking only for breakage.
@@ -50,21 +52,37 @@ const ok = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + m); if (!c)
   }
 
   // An issue panel, which is the read that now carries the new relations.
-  const props = await (await page.request.fetch((process.env.MM_API || 'http://localhost:4000') + '/api/properties')).json();
-  if (props[0]) {
-    const issues = await (await page.request.fetch(`${process.env.MM_API || 'http://localhost:4000'}/api/issues?propertyId=${props[0].id}`)).json();
-    ok(Array.isArray(issues), `the issue list still reads (${issues.length} issues)`);
-    if (issues[0]) {
-      const one = await (await page.request.fetch(`${process.env.MM_API || 'http://localhost:4000'}/api/issues/${issues[0].id}`)).json();
-      ok(one.id === issues[0].id, 'and a single issue reads');
-      ok(Array.isArray(one.linksOut) && Array.isArray(one.children) && Array.isArray(one.quotes),
-         'with the new relations present and empty rather than missing');
-      const before = errs.length;
-      await page.goto(`${B}/#/properties/${props[0].id}?issue=${issues[0].id}`);
-      await page.waitForTimeout(3500);
-      ok(errs.length === before, `the issue panel opens clean${errs.length > before ? ' — ' + errs.slice(before).join(' | ') : ''}`);
-    }
-  }
+  //
+  // With its own fixture rather than whatever happens to be first in the list:
+  // picking properties[0] meant that once other suites had created properties,
+  // this quietly found one with no issues and skipped three of its four checks.
+  // A test that skips silently is worse than one that fails.
+  const API = process.env.MM_API || 'http://localhost:4000';
+  const csrf = (await page.request.fetch(API + '/api/auth/me')).headers()['x-csrf-token'];
+  const post = async (path, data) => {
+    const r = await page.request.fetch(API + '/api' + path, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, data,
+    });
+    return r.json();
+  };
+  const prop = await post('/properties', { name: 'Smoke ' + Date.now() });
+  const issue = await post('/issues', {
+    propertyId: prop.id, title: 'Smoke test issue', lat: 13.99, lng: -61.0, priority: 'medium',
+  });
+  ok(!!issue.id, 'a fixture issue is created');
+
+  const list = await (await page.request.fetch(`${API}/api/issues?propertyId=${prop.id}`)).json();
+  ok(Array.isArray(list) && list.length === 1, `the issue list reads it back (${list.length})`);
+
+  const one = await (await page.request.fetch(`${API}/api/issues/${issue.id}`)).json();
+  ok(one.id === issue.id, 'and a single issue reads');
+  ok(Array.isArray(one.linksOut) && Array.isArray(one.children) && Array.isArray(one.quotes) && Array.isArray(one.blockers),
+     'with the new relations present and empty rather than missing');
+
+  const before = errs.length;
+  await page.goto(`${B}/#/properties/${prop.id}?issue=${issue.id}`);
+  await page.waitForTimeout(3500);
+  ok(errs.length === before, `the issue panel opens clean${errs.length > before ? ' — ' + errs.slice(before).join(' | ') : ''}`);
 
   console.log(fail === 0 ? '\nALL CHECKS PASSED' : `\n${fail} FAILED`);
   await br.close();

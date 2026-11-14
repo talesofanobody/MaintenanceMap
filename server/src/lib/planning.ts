@@ -318,11 +318,20 @@ export interface ScheduleLink {
 
 export interface ScheduledItem {
   id: string;
-  /** Day numbers, inclusive, counted from the epoch. */
+  /**
+   * Working-day ordinals, inclusive. Differences between them are therefore in
+   * working days, which is what float means once a calendar exists. Without a
+   * calendar every day is a working day and these are plain day numbers.
+   */
   earliestStart: number;
   earliestFinish: number;
   latestStart: number;
   latestFinish: number;
+  /** The same four as dates, so a reader never has to invert the calendar. */
+  earliestStartDate: string;
+  earliestFinishDate: string;
+  latestStartDate: string;
+  latestFinishDate: string;
   /** Days this can slip before it moves the end of the project. */
   floatDays: number;
   critical: boolean;
@@ -359,6 +368,8 @@ export interface ScheduleAnalysis {
   unscheduled: string[];
   /** Summary rows, excluded deliberately rather than for want of dates. */
   summaries: string[];
+  /** True when a working calendar was applied, so days above are working days. */
+  workingDays: boolean;
   /**
    * True when the ordering links contain a loop. The routes refuse to create one,
    * so this should not happen — but a schedule pass must not hang on data that
@@ -371,6 +382,127 @@ const DAY = 86400000;
 const toDay = (iso: string): number => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY);
 const fromDay = (day: number): string => new Date(day * DAY).toISOString().slice(0, 10);
 
+/** Day 0 of the epoch was a Thursday, so Monday-first weekday is (day + 3) % 7. */
+const weekdayOf = (day: number): number => (((day + 3) % 7) + 7) % 7;
+
+/** Which days work happens on. */
+export interface CalendarSpec {
+  /** Seven booleans, Monday first. */
+  workingWeekdays: boolean[];
+  /** YYYY-MM-DD → whether that day is worked, overriding the weekly pattern. */
+  exceptions: Record<string, boolean>;
+}
+
+/**
+ * No calendar at all: every day counts.
+ *
+ * This is the default, and it is what the app did before calendars existed. It
+ * means adding this machinery changes nothing until somebody sets a calendar up,
+ * which matters because a calendar alters every float figure on a programme.
+ */
+export const EVERY_DAY: CalendarSpec = {
+  workingWeekdays: [true, true, true, true, true, true, true],
+  exceptions: {},
+};
+
+export interface WorkingTime {
+  isWorking(day: number): boolean;
+  /** Working-day ordinal. A non-working day snaps forward to the next worked one. */
+  indexOf(day: number): number;
+  /** The calendar day at a working-day ordinal. */
+  dayAt(index: number): number;
+  /** Working days in [a, b] inclusive. */
+  count(a: number, b: number): number;
+  /** False when the calendar excludes nothing, so callers can skip the fuss. */
+  restricted: boolean;
+}
+
+/**
+ * A working-day index over a bounded window.
+ *
+ * Built as an explicit list rather than computed arithmetically from week
+ * patterns. The arithmetic version is a page of modular reasoning that has to get
+ * exceptions, both directions of them, and partial weeks right; the list is a loop
+ * anybody can check. A window of a few years is about a thousand entries, which is
+ * nothing, and the schedule pass only ever needs one window.
+ *
+ * Every date calculation downstream happens in this index space. That is the whole
+ * trick: once a day number means "the nth working day", finish-to-start, lag and
+ * float are the same sums they were before, and none of them has to know which
+ * days are worked.
+ */
+export function makeWorkingTime(spec: CalendarSpec, windowStart: number, windowEnd: number): WorkingTime {
+  const restricted = spec.workingWeekdays.some((w) => !w) || Object.keys(spec.exceptions).length > 0;
+
+  const worksOn = (day: number): boolean => {
+    const override = spec.exceptions[fromDay(day)];
+    if (override !== undefined) return override;
+    return spec.workingWeekdays[weekdayOf(day)] ?? true;
+  };
+
+  if (!restricted) {
+    // Nothing is excluded, so the index is the day number itself.
+    return {
+      isWorking: () => true,
+      indexOf: (day) => day,
+      dayAt: (index) => index,
+      count: (a, b) => Math.max(0, b - a + 1),
+      restricted: false,
+    };
+  }
+
+  const first = windowStart;
+  const last = Math.max(windowEnd, windowStart);
+  const days: number[] = [];
+  const indexByDay = new Map<number, number>();
+  for (let day = first; day <= last; day += 1) {
+    if (worksOn(day)) {
+      indexByDay.set(day, days.length);
+      days.push(day);
+    }
+  }
+
+  // For a non-working day, the ordinal of the next worked day. One backward pass.
+  const snapForward = new Map<number, number>();
+  let nextIndex = days.length; // past the end, for trailing non-working days
+  for (let day = last; day >= first; day -= 1) {
+    const own = indexByDay.get(day);
+    if (own !== undefined) nextIndex = own;
+    snapForward.set(day, nextIndex);
+  }
+
+  return {
+    isWorking: worksOn,
+    indexOf: (day) => {
+      const own = indexByDay.get(day);
+      if (own !== undefined) return own;
+      const snapped = snapForward.get(day);
+      if (snapped !== undefined) return snapped;
+      // Outside the window: fall back to proportional, which only happens for
+      // dates the caller did not declare and never feeds a stored result.
+      return day < first ? 0 : days.length;
+    },
+    dayAt: (index) => {
+      if (index < 0) return days[0] ?? first;
+      if (index >= days.length) {
+        // Past the window. Extend by whole weeks, which is right for a weekly
+        // pattern and close enough for a tail nobody has put exceptions on.
+        const perWeek = Math.max(1, spec.workingWeekdays.filter(Boolean).length);
+        const over = index - days.length + 1;
+        return (days[days.length - 1] ?? last) + Math.ceil(over / perWeek) * 7;
+      }
+      return days[index];
+    },
+    count: (a, b) => {
+      if (b < a) return 0;
+      let n = 0;
+      for (let day = a; day <= b; day += 1) if (worksOn(day)) n += 1;
+      return n;
+    },
+    restricted: true,
+  };
+}
+
 /**
  * Forward and backward pass over the dependency graph, producing three different
  * answers because people keep asking three different questions.
@@ -378,20 +510,20 @@ const fromDay = (day: number): string => new Date(day * DAY).toISOString().slice
  * **Float, and `criticalPath`.** Slack against the plan *as typed*. Everything here
  * has dates somebody chose, so a planned start acts as a "not before this" and
  * float measures the gap to whatever comes next. That makes it operationally true —
- * how long can this slip before something else has to move — but it also means any
- * gap left in the plan reads as slack, a weekend included, because it genuinely is
- * slack: the job can slide into it. On a plan laid out Monday to Friday, almost
- * everything therefore has a couple of days of float and very little is "critical".
- * That is not a defect in the sum; it is what fixed dates mean. (It matters less
- * here than in an office, because this department works Monday to Saturday with
- * Sunday covered.) There is no working-day calendar, so durations are counted in
- * calendar days throughout.
+ * how long can this slip before something else has to move.
+ *
+ * With a working calendar this is counted in **working days**, which is the point of
+ * having one: a job finishing Friday and the next starting Monday had two days of
+ * float when every day counted, and has one when Sunday is not worked. Every float
+ * figure was slightly generous before, and generous float is the kind that gets
+ * believed. Without a calendar, every day counts and the numbers are unchanged.
  *
  * **`longestChain`.** The chain of dependent work with the greatest total duration,
  * computed from durations alone and ignoring the typed starts. This is the classic
  * sense of a critical path — where the end date comes from — and unlike float it is
  * stable against gaps somebody left in the calendar. It is what a chart should
- * highlight.
+ * highlight. A single unlinked activity can be the longest; that is correct, and it
+ * is not a chain, so anything displaying it should say which it has.
  *
  * **`violations`.** Jobs the plan has starting earlier than their own dependencies
  * permit. This tends to be the most useful output of the three, because it finds
@@ -403,25 +535,40 @@ const fromDay = (day: number): string => new Date(day * DAY).toISOString().slice
  * it is ignored. It is the same reason the progress rollup counts leaves only: a
  * parent restates its children rather than adding to them.
  *
- * A milestone is treated as occupying the single day it falls on rather than zero
- * days. Classic CPM gives it zero duration, which makes finish fall before start
- * and needs a special case in every expression; one day is consistent, reads
- * correctly on a chart, and shifts nothing by more than a day.
- *
- * Only `precedes` constrains. `blocks` deliberately carries no date arithmetic —
- * it says a thing cannot proceed, not when it would — and `relates` asserts
- * nothing at all.
+ * A milestone occupies the single working day it falls on rather than zero days.
+ * Classic CPM gives it zero duration, which makes finish fall before start and needs
+ * a special case in every expression; one day is consistent and shifts nothing.
  */
-export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): ScheduleAnalysis {
+export function analyseSchedule(
+  items: ScheduleItem[],
+  links: ScheduleLink[],
+  calendar: CalendarSpec = EVERY_DAY
+): ScheduleAnalysis {
   const summaries = items.filter((i) => i.isSummary).map((i) => i.id);
   const work = items.filter((i) => !i.isSummary);
   const schedulable = work.filter((i) => i.start && i.end);
   const unscheduled = work.filter((i) => !i.start || !i.end).map((i) => i.id);
   const ids = new Set(schedulable.map((i) => i.id));
 
-  if (!schedulable.length) {
-    return { items: {}, criticalPath: [], longestChain: [], longestChainDays: 0, violations: [], projectStart: null, projectEnd: null, unscheduled, summaries, cyclic: false };
-  }
+  const empty = (cyclic: boolean): ScheduleAnalysis => ({
+    items: {},
+    criticalPath: [],
+    longestChain: [],
+    longestChainDays: 0,
+    violations: [],
+    projectStart: null,
+    projectEnd: null,
+    unscheduled,
+    summaries,
+    cyclic,
+    workingDays: calendar !== EVERY_DAY,
+  });
+
+  if (!schedulable.length) return empty(false);
+
+  // A window wide enough to hold the plan and anything it could be pushed into.
+  const allDays = schedulable.flatMap((i) => [toDay(i.start!), toDay(i.end!)]);
+  const wt = makeWorkingTime(calendar, Math.min(...allDays) - 14, Math.max(...allDays) + 1100);
 
   const ordering = links.filter((l) => ORDERING_KINDS.includes(l.kind) && ids.has(l.fromId) && ids.has(l.toId));
   const succ = new Map<string, ScheduleLink[]>();
@@ -431,14 +578,18 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
     (pred.get(l.toId) ?? pred.set(l.toId, []).get(l.toId)!).push(l);
   }
 
+  // Everything from here on is in working-day ordinals, not calendar days.
   const dur = new Map<string, number>();
   const ownStart = new Map<string, number>();
   for (const i of schedulable) {
-    const s = toDay(i.start!);
-    const e = toDay(i.end!);
-    ownStart.set(i.id, s);
-    // Inclusive, and never less than a day, so a same-day job still occupies one.
-    dur.set(i.id, Math.max(1, e - s + 1));
+    const startDay = toDay(i.start!);
+    const endDay = Math.max(toDay(i.end!), startDay);
+    const startIdx = wt.indexOf(startDay);
+    ownStart.set(i.id, startIdx);
+    // Counted from the snapped start, so a job nominally starting on a Sunday is
+    // not credited with a day nobody worked.
+    const snapped = wt.dayAt(startIdx);
+    dur.set(i.id, Math.max(1, wt.count(snapped, Math.max(endDay, snapped))));
   }
 
   // Topological order by Kahn's algorithm. If it cannot consume every node the
@@ -456,13 +607,8 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
       if (left === 0) queue.push(l.toId);
     }
   }
-  const cyclic = order.length !== ids.size;
-  if (cyclic) {
-    return { items: {}, criticalPath: [], longestChain: [], longestChainDays: 0, violations: [], projectStart: null, projectEnd: null, unscheduled, summaries, cyclic: true };
-  }
+  if (order.length !== ids.size) return empty(true);
 
-  // Forward pass: the earliest anything can happen, respecting both the date
-  // somebody chose and what has to finish first.
   /**
    * The earliest `to` may start, given one constraint from `from`.
    *
@@ -470,7 +616,7 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
    * past its start, so the two run together with an offset. Finish-to-finish
    * constrains the finish, which becomes a start by subtracting the duration —
    * which is why a finish-to-finish link on a long successor can pull its start
-   * earlier than its predecessor's, correctly.
+   * earlier than its predecessor's, correctly. All in working days.
    */
   const earliestFrom = (kind: string, fromStart: number, fromFinish: number, lag: number, toDur: number): number => {
     switch (kind) {
@@ -506,12 +652,12 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
       const at = earliestFrom(l.kind, es.get(l.fromId)!, ef.get(l.fromId)!, l.lagDays ?? 0, dur.get(id)!);
       if (at > start) start = at;
     }
-    // The plan asks for something its own dependencies do not allow.
     if (start > planned) {
       violations.push({
         id,
-        plannedStart: fromDay(planned),
-        earliestStart: fromDay(start),
+        plannedStart: fromDay(wt.dayAt(planned)),
+        earliestStart: fromDay(wt.dayAt(start)),
+        // In working days, which is what "too early" means once a calendar exists.
         tooEarlyByDays: start - planned,
       });
     }
@@ -526,9 +672,7 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
    * Running it separately is what keeps the chain stable: the first pass answers
    * "when can this happen, given the dates people chose", and a gap left over a
    * weekend changes that. This one answers "which run of dependent work is
-   * longest", which a gap in somebody's calendar should not change at all. The
-   * same constraint arithmetic is used, so start-to-start and finish-to-finish
-   * contribute correctly rather than being approximated.
+   * longest", which a gap in somebody's calendar should not change at all.
    */
   const anchorStart = new Map<string, number>();
   const anchorFinish = new Map<string, number>();
@@ -585,6 +729,12 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
       earliestFinish: ef.get(id)!,
       latestStart: ls.get(id)!,
       latestFinish: lf.get(id)!,
+      // The same four as dates, since a working-day ordinal means nothing to a
+      // reader and a caller should not have to invert the calendar itself.
+      earliestStartDate: fromDay(wt.dayAt(es.get(id)!)),
+      earliestFinishDate: fromDay(wt.dayAt(ef.get(id)!)),
+      latestStartDate: fromDay(wt.dayAt(ls.get(id)!)),
+      latestFinishDate: fromDay(wt.dayAt(lf.get(id)!)),
       floatDays: slack,
       critical: slack <= 0,
     };
@@ -600,11 +750,12 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
     longestChain,
     longestChainDays,
     violations,
-    projectStart: fromDay(projectStart),
-    projectEnd: fromDay(projectEnd),
+    projectStart: fromDay(wt.dayAt(projectStart)),
+    projectEnd: fromDay(wt.dayAt(projectEnd)),
     unscheduled,
     summaries,
     cyclic: false,
+    workingDays: wt.restricted,
   };
 }
 

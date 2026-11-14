@@ -37,7 +37,7 @@ run() { echo "================ $1 ================"; shift; "$@"; local r=$?; [ 
 
 case "${1:-all}" in
   unit)
-    for f in unit-planning unit-schedule unit-tree; do
+    for f in unit-planning unit-schedule unit-tree unit-calendar; do
       run "unit: $f" npx --prefix "$ROOT/server" ts-node --transpile-only \
         --compiler-options '{"module":"commonjs","target":"es2020","ignoreDeprecations":"6.0","moduleResolution":"node"}' \
         "$HERE/$f.ts"
@@ -52,15 +52,17 @@ case "${1:-all}" in
     run "api: planning endpoints" node "$HERE/api-planning.js"
     run "api: governance"         node "$HERE/api-governance.js"
     run "api: the tree"           node "$HERE/api-tree.js"
+    run "api: the calendar"       node "$HERE/api-calendar.js"
     ;;
   ui)
     run "ui: the plan on screen" node "$HERE/ui-planning.js"
     run "ui: gantt and governance" node "$HERE/ui-governance.js"
     run "ui: the tree"             node "$HERE/ui-tree.js"
+    run "ui: the calendar"         node "$HERE/ui-calendar.js"
     ;;
   smoke)  run "smoke: every page"       node "$HERE/smoke-pages.js" ;;
   all)
-    for f in unit-planning unit-schedule unit-tree; do
+    for f in unit-planning unit-schedule unit-tree unit-calendar; do
       run "unit: $f" npx --prefix "$ROOT/server" ts-node --transpile-only \
         --compiler-options '{"module":"commonjs","target":"es2020","ignoreDeprecations":"6.0","moduleResolution":"node"}' \
         "$HERE/$f.ts"
@@ -68,9 +70,11 @@ case "${1:-all}" in
     run "api: planning endpoints"  node "$HERE/api-planning.js"
     run "api: governance"          node "$HERE/api-governance.js"
     run "api: the tree"            node "$HERE/api-tree.js"
+    run "api: the calendar"        node "$HERE/api-calendar.js"
     run "ui: the plan on screen"   node "$HERE/ui-planning.js"
     run "ui: gantt and governance" node "$HERE/ui-governance.js"
     run "ui: the tree"             node "$HERE/ui-tree.js"
+    run "ui: the calendar"         node "$HERE/ui-calendar.js"
     run "smoke: every page"        node "$HERE/smoke-pages.js"
     ;;
   *) echo "unknown target: $1"; exit 2 ;;

@@ -8897,3 +8897,144 @@ table th {
   border-radius: 3px 0 0 3px;
   pointer-events: none;
 }
+
+/* ---- the working calendar ---------------------------------------------- */
+.cal-list {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.cal {
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.cal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cal-head strong {
+  flex: 1 1 auto;
+}
+
+.cal-week {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cal-day {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  padding: 4px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.cal-day.is-on {
+  border-color: color-mix(in srgb, var(--accent, #0071e3) 45%, transparent);
+  background: color-mix(in srgb, var(--accent, #0071e3) 9%, transparent);
+  color: var(--ink, #1d1d1f);
+}
+
+.cal-ex {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 10px;
+}
+
+.cal-ex-new {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+
+.cal-ex-new label {
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.cal-ex-dir {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-ex-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--hairline);
+}
+
+.cal-ex-list li {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px;
+  background: var(--surface, #fff);
+}
+
+/* A day lost and a day gained read differently. */
+.cal-ex-list li.is-off span:first-child {
+  color: var(--danger, #b4121f);
+}
+
+.cal-ex-list li.is-worked span:first-child {
+  color: var(--ok, #0a7d33);
+}
+
+.cal-new {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--hairline);
+  padding-top: 12px;
+}
+
+.cal-new label {
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+/* Days nobody works, shaded behind the bars. A bar crossing a stripe is the
+   visual answer to "why does this take longer than it looks". */
+.gantt-off {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.gantt-off span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--ink, #1d1d1f) 5%, transparent);
+}
+
+.gantt-key-off {
+  background: color-mix(in srgb, var(--ink, #1d1d1f) 12%, transparent);
+}

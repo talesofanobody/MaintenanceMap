@@ -1,28 +1,14 @@
 // Slice 1b: dependencies between projects, blockers, stakeholders, and the
 // schedule analysis behind the Gantt.
 const B = (process.env.MM_API || 'http://127.0.0.1:4000') + '/api';
-let fail = 0, cookie = '', csrf = '';
+const { session } = require('./session');
+let fail = 0;
+let req;
 const ok = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + m); if (!c) fail++; };
 
-async function req(method, path, body) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (cookie) headers.Cookie = cookie;
-  if (csrf) headers['X-CSRF-Token'] = csrf;
-  const r = await fetch(B + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  const sc = r.headers.get('set-cookie'); if (sc) cookie = sc.split(';')[0];
-  const t = r.headers.get('x-csrf-token'); if (t) csrf = t;
-  let json = null; try { json = await r.json(); } catch {}
-  return { status: r.status, body: json };
-}
-
 (async () => {
-  let me = await req('GET', '/auth/me');
-  if (me.status !== 200 || !me.body?.user) {
-    let r = await req('POST', '/auth/setup', { username: 'khalid', password: 'correcthorsebattery9' });
-    if (r.status !== 201 && r.status !== 200) r = await req('POST', '/auth/login', { username: 'khalid', password: 'correcthorsebattery9' });
-    ok(r.status === 200 || r.status === 201, `signed in (${r.status})`);
-  }
-  await req('GET', '/auth/me');
+  ({ req } = await session());
+  ok(true, 'signed in (shared session)');
 
   const prop = (await req('POST', '/properties', { name: 'La Toc governance ' + Date.now() })).body;
   await req('PUT', `/properties/${prop.id}`, { centerLat: 13.99, centerLng: -61.0 });

@@ -120,6 +120,7 @@ model Property {
   inspections   Inspection[]
   projects      Project[]
   walkthroughs Walkthrough[]
+  calendars     WorkCalendar[]
 }
 
 model Issue {
@@ -828,4 +829,45 @@ model Stakeholder {
 
   @@index([projectId])
   @@index([technicianId])
+}
+
+/// Which days work actually happens on.
+///
+/// Opt-in per property, and deliberately so: without one, durations are counted in
+/// calendar days, which is what this app did before calendars existed. Creating a
+/// calendar changes every float figure on that property's programmes, so it has to
+/// be a decision somebody makes rather than something that happens on deploy.
+model WorkCalendar {
+  id         String    @id @default(cuid())
+  /// Null means it is the fallback for properties with none of their own.
+  propertyId String?   @unique
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name       String    @default("Working days")
+  /// Seven booleans, Monday first, as a JSON array — the same shape and reasoning
+  /// as Technician.weeklyHours.
+  workingDays String   @default("[true,true,true,true,true,true,false]")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  exceptions CalendarException[]
+}
+
+/// A single day that goes against the weekly pattern.
+///
+/// Both directions matter and only one is usually remembered. A public holiday or a
+/// shutdown makes a normal working day non-working; a weekend worked to claw back a
+/// slipped pour makes a non-working day working. A calendar that could only hold
+/// holidays would be wrong by exactly the days a programme cares about most.
+model CalendarException {
+  id         String       @id @default(cuid())
+  calendarId String
+  calendar   WorkCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  /// YYYY-MM-DD, matching the date convention everywhere else.
+  day        String
+  /// True when this day IS worked despite the pattern; false when it is not.
+  working    Boolean      @default(false)
+  reason     String?
+  createdAt  DateTime     @default(now())
+
+  @@unique([calendarId, day])
+  @@index([calendarId])
 }

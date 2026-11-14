@@ -1013,11 +1013,16 @@ export interface ProjectLinkRef {
 
 export interface ScheduledItem {
   id: string;
+  /** Working-day ordinals; differences between them are in working days. */
   earliestStart: number;
   earliestFinish: number;
   latestStart: number;
   latestFinish: number;
-  /** Days this can slip before it moves the end of the project. */
+  earliestStartDate: string;
+  earliestFinishDate: string;
+  latestStartDate: string;
+  latestFinishDate: string;
+  /** Days this can slip before it moves the end — working days where one is set. */
   floatDays: number;
   critical: boolean;
 }
@@ -1043,8 +1048,33 @@ export interface ScheduleAnalysis {
   unscheduled: string[];
   /** Summary rows, excluded deliberately rather than for want of dates. */
   summaries: string[];
+  /** True when a working calendar was applied, so the day counts are working days. */
+  workingDays: boolean;
   cyclic: boolean;
 }
+
+/** A day that goes against the weekly pattern, in either direction. */
+export interface CalendarException {
+  id: string;
+  calendarId: string;
+  day: string;
+  /** True when this day IS worked despite the pattern; false when it is not. */
+  working: boolean;
+  reason: string | null;
+}
+
+export interface WorkCalendar {
+  id: string;
+  /** Null means it is the fallback for properties with none of their own. */
+  propertyId: string | null;
+  property: { id: string; name: string } | null;
+  name: string;
+  /** Seven booleans, Monday first, as a JSON string. */
+  workingDays: string;
+  exceptions: CalendarException[];
+}
+
+export const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export interface CurvePoint {
   day: string;

@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useSettings } from "../settings/SettingsContext";
 import Backups from "../components/Backups";
+import WorkCalendars from "../settings/WorkCalendars";
 import TagAdmin from "../components/TagAdmin";
 import { PRIORITY_DESCRIPTIONS, PRIORITY_SHORT_LABELS, type AppSettings, type Priority } from "../types";
 import { describeWindow } from "../lib/capacity";
@@ -162,6 +163,7 @@ export default function Settings() {
       </form>
 
       <div className="settings-form" style={{ marginTop: 20 }}>
+        <WorkCalendars />
         <TagAdmin />
         <Backups />
       </div>

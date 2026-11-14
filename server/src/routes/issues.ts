@@ -49,6 +49,15 @@ const ISSUE_INCLUDE = {
   linksOut: { include: { to: { select: { id: true, title: true, status: true, dueDate: true } } } },
   linksIn: { include: { from: { select: { id: true, title: true, status: true, dueDate: true } } } },
   quotes: { include: { contractor: { select: { id: true, name: true, trade: true } } }, orderBy: { requestedAt: "asc" as const } },
+  // What is in the way, open ones first. Whoever opens a job is the person most
+  // likely to be standing in front of the thing that is blocking it.
+  blockers: {
+    include: { owner: { select: { id: true, name: true, color: true } } },
+    // One key, because this include is `as const` and a readonly tuple is not
+    // assignable to Prisma's orderBy. Nulls sort first in SQLite, so open
+    // blockers come before cleared ones, which is the order that matters.
+    orderBy: { clearedAt: "asc" as const },
+  },
 } as const;
 
 // Accepts a pasted EAM link, tolerating a missing scheme; only http(s) is allowed

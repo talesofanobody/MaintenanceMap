@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { formatDate } from "../lib/dates";
-import { categoryLabel, PRIORITY_LABELS, STATUS_LABELS, type Project, type ProjectIssue, type ProjectStatus } from "../types";
+import { categoryLabel, PRIORITY_LABELS, STATUS_LABELS, type Project, type ProjectIssue, type ProjectStatus, type WorkCalendar } from "../types";
 import ProjectPlan from "./ProjectPlan";
 import ProjectGovernance from "./ProjectGovernance";
 import Gantt from "./Gantt";
@@ -63,6 +63,9 @@ export default function Projects() {
   // Which view each expanded project is showing. The list is the default because
   // it is the one that works on a phone.
   const [view, setView] = useState<Record<string, "list" | "timeline">>({});
+  // The calendar in force per property, so the chart can shade the days nobody
+  // works. Keyed by property because that is what a calendar belongs to.
+  const [calendars, setCalendars] = useState<Record<string, WorkCalendar | null>>({});
 
   const [showNew, setShowNew] = useState(false);
   const [name, setName] = useState("");
@@ -82,6 +85,15 @@ export default function Projects() {
   }, [tab]);
 
   useEffect(load, [load]);
+
+  // One pass over whatever properties are on screen, after the projects arrive.
+  useEffect(() => {
+    const wanted = [...new Set(projects.map((p) => p.propertyId).filter((v): v is string => !!v))];
+    const missing = wanted.filter((id) => !(id in calendars));
+    if (!missing.length) return;
+    Promise.all(missing.map((id) => api.calendarFor(id).then((r) => [id, r.calendar] as const).catch(() => [id, null] as const)))
+      .then((pairs) => setCalendars((prev) => ({ ...prev, ...Object.fromEntries(pairs) })));
+  }, [projects, calendars]);
 
   function toggle(id: string) {
     setOpen((prev) => {
@@ -289,7 +301,7 @@ export default function Projects() {
                               {/* A single unlinked task can be the longest run, which is
                                   correct but is not a chain. Say which it is. */}
                               {project.analysis.longestChain.length === 1 ? "longest task" : "longest chain"}{" "}
-                              {project.analysis.longestChainDays} days
+                              {project.analysis.longestChainDays} {project.analysis.workingDays ? "working " : ""}days
                               {project.analysis.violations.length > 0 && (
                                 <strong className="is-late">
                                   {" "}
@@ -304,6 +316,7 @@ export default function Projects() {
                           <Gantt
                             rows={asTree(project.issues)}
                             analysis={project.analysis}
+                            calendar={project.propertyId ? calendars[project.propertyId] : null}
                             onPick={(issueId) => {
                               const issue = project.issues.find((i) => i.id === issueId);
                               if (issue) navigate(`/properties/${issue.propertyId}?issue=${issue.id}`);
