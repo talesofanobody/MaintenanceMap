@@ -179,6 +179,10 @@ model Issue {
   /// A dateline with no duration — a permit granted, a delivery landing, handover.
   /// It still carries a position because every issue does; the map leaves it out.
   isMilestone      Boolean          @default(false)
+  /// How far along, 0 to 100. Construction work is not done or not-done: a pour is
+  /// 60 per cent poured. Null means nobody has said, which is different from zero.
+  /// On a parent this is ignored and computed from the children instead.
+  percentComplete  Int?
   /// The dates this was *planned* for, frozen when the plan was agreed. Kept apart
   /// from scheduledFor/dueDate so that slippage stays visible instead of being
   /// overwritten by the current answer.
@@ -672,9 +676,17 @@ model IssueLink {
   from        Issue    @relation("LinkFrom", fields: [fromIssueId], references: [id], onDelete: Cascade)
   toIssueId   String
   to          Issue    @relation("LinkTo", fields: [toIssueId], references: [id], onDelete: Cascade)
-  /// precedes — from finishes before to starts (the scheduling one)
-  /// blocks    — from stops to happening at all, with no date arithmetic implied
-  /// relates   — worth reading together, no constraint
+  /// The four scheduling relationships, named plainly rather than as FS/SS/FF:
+  ///   precedes            — from finishes before to starts (finish-to-start)
+  ///   starts_after_start  — to starts after from starts (start-to-start)
+  ///   finishes_after_finish — to finishes after from finishes (finish-to-finish)
+  /// and two that carry no dates:
+  ///   blocks  — from stops to happening at all
+  ///   relates — worth reading together, no constraint
+  ///
+  /// Start-to-start and finish-to-finish are not niceties on heavy work: shoring
+  /// starts two days after excavation starts and runs alongside it, and curing
+  /// finishes when the pour finishes. Finish-to-start alone cannot say either.
   kind        String   @default("precedes")
   /// Days of slack to add after `from` finishes, for a "precedes" link. Paint needs
   /// a day to dry whether or not anybody is working on it.

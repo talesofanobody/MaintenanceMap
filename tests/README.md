@@ -7,14 +7,17 @@ running:
 |---|---|---|
 | `unit-planning.ts` | The rollup and cycle arithmetic | Nothing |
 | `unit-schedule.ts` | Critical path, float, blocker ages, progress curve | Nothing |
+| `unit-tree.ts` | Summary rollup, weighted progress, start-to-start and finish-to-finish | Nothing |
 | `migration-planning.js` | A live database survives the migration | A database at the previous schema |
 | `api-planning.js` | The planning endpoints behave | `server` on :4000 |
 | `api-governance.js` | Project dependencies, blockers, stakeholders | `server` on :4000 |
 | `ui-planning.js` | A person can reach and use the plan | Both dev servers |
+| `api-tree.js` | A phase finishes only when its tasks do; rolled dates | `server` on :4000 |
 | `ui-governance.js` | The Gantt draws, blockers clear, roles stick | Both dev servers |
+| `ui-tree.js` | Phase dates roll up, progress shows, the refusal holds | Both dev servers |
 | `smoke-pages.js` | Nothing else broke | Both dev servers |
 
-254 checks in total.
+334 checks in total.
 
 ```sh
 (cd server && npm run dev)    # :4000
@@ -81,6 +84,17 @@ no working-day calendar; durations are counted in calendar days.
 **Summary rows take no part in the analysis.** A parent's dates are an envelope
 around its children. The test fixes the case that caught this: a phase spanning two
 months beat the eighteen-day chain of dependent work inside it.
+
+**"The longest chain" can be one task.** A lone activity with no dependencies is the
+longest path through the graph if it is the longest activity — correct, and not a
+chain, so the wording changes to "longest task" when it has one member. Pinned by a
+test, because it looks like a bug when you first see it.
+
+**A phase is finished exactly when its tasks are.** Refused rather than cascaded:
+marking a parent done must not quietly close its children, because somebody still has
+to do them. `force` exists for work descoped part-way through and is logged as its own
+action. The mirror holds too — reopening a task reopens the finished phases above it,
+or a phase would report done with live work inside.
 
 ## What is not covered
 

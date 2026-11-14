@@ -39,13 +39,16 @@ export default function Gantt({
   const scroller = useRef<HTMLDivElement>(null);
 
   const model = useMemo(() => {
-    // Everything with any date at all, its own or its baseline's.
-    const dated = rows.filter((r) => r.issue.scheduledFor || r.issue.dueDate || r.issue.baselineStart || r.issue.baselineDue);
+    // The tree's dates, not the typed ones: a phase spans its children. Anything
+    // with a date at all, its own, its children's or its baseline's.
+    const dated = rows.filter(
+      (r) => r.issue.rolled?.start || r.issue.rolled?.end || r.issue.scheduledFor || r.issue.dueDate || r.issue.baselineStart || r.issue.baselineDue
+    );
     if (!dated.length) return null;
 
     const days: number[] = [];
     for (const { issue } of dated) {
-      for (const d of [issue.scheduledFor, issue.dueDate, issue.baselineStart, issue.baselineDue]) {
+      for (const d of [issue.rolled?.start, issue.rolled?.end, issue.scheduledFor, issue.dueDate, issue.baselineStart, issue.baselineDue]) {
         if (d) days.push(toDay(d));
       }
     }
@@ -94,6 +97,11 @@ export default function Gantt({
   // A row with children is an envelope around them, and is drawn as one. It is
   // excluded from the analysis for the same reason, so it has no float to show.
   const summaryIds = new Set(rows.map((r) => r.issue.parentId).filter((v): v is string => !!v));
+  /** The dates to draw: the tree's where it has them, the typed ones otherwise. */
+  const dates = (i: ProjectIssue) => ({
+    start: i.rolled?.start ?? i.scheduledFor,
+    end: i.rolled?.end ?? i.dueDate,
+  });
   const chain = new Set(analysis.longestChain);
   const violated = new Set(analysis.violations.map((v) => v.id));
   const today = todayDay();
@@ -104,13 +112,16 @@ export default function Gantt({
   const arrows: { x1: number; y1: number; x2: number; y2: number; critical: boolean }[] = [];
   for (const { issue } of model.rows) {
     for (const link of issue.linksOut ?? []) {
-      if (link.kind !== "precedes") continue;
+      // Only the kinds that constrain dates are worth drawing as an arrow.
+      if (link.kind !== "precedes" && link.kind !== "starts_after_start" && link.kind !== "finishes_after_finish") continue;
       const fromRow = rowIndex.get(issue.id);
       const toRow = rowIndex.get(link.toIssueId);
       if (fromRow === undefined || toRow === undefined) continue;
-      const fromBar = barFor(issue.scheduledFor, issue.dueDate);
+      const fd = dates(issue);
+      const fromBar = barFor(fd.start, fd.end);
       const target = model.rows[toRow].issue;
-      const toBar = barFor(target.scheduledFor, target.dueDate);
+      const td = dates(target);
+      const toBar = barFor(td.start, td.end);
       if (!fromBar || !toBar) continue;
       arrows.push({
         x1: fromBar.left + fromBar.width,
@@ -184,7 +195,9 @@ export default function Gantt({
 
             <div className="gantt-rows" style={{ top: HEADER, height }}>
               {model.rows.map(({ issue }, i) => {
-                const bar = barFor(issue.scheduledFor, issue.dueDate);
+                const d = dates(issue);
+                const bar = barFor(d.start, d.end);
+                const pct = issue.rolled?.percentComplete;
                 const base = barFor(issue.baselineStart, issue.baselineDue);
                 const moved =
                   issue.baselineDue && issue.dueDate && issue.baselineDue !== issue.dueDate;
@@ -200,18 +213,25 @@ export default function Gantt({
                         <span
                           className={`gantt-ms ${chain.has(issue.id) ? "is-chain" : ""} ${issue.status === "completed" ? "is-done" : ""}`}
                           style={{ left: bar.left }}
-                          title={`${issue.title} — ${issue.dueDate ?? issue.scheduledFor}`}
+                          title={`${issue.title} — ${d.end ?? d.start}`}
                         />
                       ) : (
                         <span
                           className={`gantt-bar status-${issue.status} ${summaryIds.has(issue.id) ? "is-summary" : ""} ${chain.has(issue.id) ? "is-chain" : ""} ${violated.has(issue.id) ? "is-violated" : ""}`}
                           style={{ left: bar.left, width: bar.width }}
                           title={
-                            `${issue.title}\n${issue.scheduledFor ?? "?"} to ${issue.dueDate ?? "?"}` +
+                            `${issue.title}\n${d.start ?? "?"} to ${d.end ?? "?"}` +
+                            (pct !== null && pct !== undefined ? `\n${pct}% complete` : "") +
                             (slack !== undefined ? `\n${slack} day${slack === 1 ? "" : "s"} of slack` : "") +
                             (issue.blockers?.some((b) => !b.clearedAt) ? "\nBlocked" : "")
                           }
                         >
+                          {/* Progress along the bar, where it has been reported.
+                              A bar with no fill means nobody has said, which is
+                              deliberately different from nothing done. */}
+                          {pct !== null && pct !== undefined && pct > 0 && (
+                            <i className="gantt-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+                          )}
                           {issue.blockers?.some((b) => !b.clearedAt) && <i className="gantt-blocked" title="Blocked" />}
                         </span>
                       ))}

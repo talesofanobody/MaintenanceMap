@@ -12,6 +12,7 @@ import {
   progressCurve,
   quoteState,
   rollUp,
+  rollUpTree,
   slippageDays,
   STAKEHOLDER_ROLES,
   wouldCycleInLinks,
@@ -76,6 +77,7 @@ const PROJECT_INCLUDE = {
       // avoid double-counting; the baselines are what make slippage visible.
       parentId: true,
       isMilestone: true,
+      percentComplete: true,
       scheduledFor: true,
       dueDate: true,
       baselineStart: true,
@@ -108,15 +110,31 @@ function summarise(project: any) {
   const allBlockers = [...(project.blockers ?? []), ...(project.issues ?? []).flatMap((i: any) => i.blockers ?? [])];
 
   // The schedule, from the work's own dates and the dependencies between it.
-  // A parent is an envelope around its children, not work of its own.
-  const hasChildren = new Set((project.issues ?? []).map((i: any) => i.parentId).filter(Boolean));
-  const schedule = analyseSchedule(
+  /**
+   * The tree, resolved. A parent's dates and progress come from its children
+   * rather than from whatever was typed on it — see rollUpTree. Everything below
+   * reads these rather than the stored values.
+   */
+  const tree = rollUpTree(
     (project.issues ?? []).map((i: any) => ({
       id: i.id,
+      parentId: i.parentId ?? null,
       start: i.scheduledFor ?? null,
       end: i.dueDate ?? i.scheduledFor ?? null,
       isMilestone: !!i.isMilestone,
-      isSummary: hasChildren.has(i.id),
+      status: i.status,
+      percentComplete: i.percentComplete ?? null,
+    })),
+    isClosed
+  );
+
+  const schedule = analyseSchedule(
+    (project.issues ?? []).map((i: any) => ({
+      id: i.id,
+      start: tree[i.id]?.start ?? i.scheduledFor ?? null,
+      end: tree[i.id]?.end ?? i.dueDate ?? i.scheduledFor ?? null,
+      isMilestone: !!i.isMilestone,
+      isSummary: tree[i.id]?.isSummary ?? false,
     })),
     (project.issues ?? []).flatMap((i: any) =>
       (i.linksOut ?? []).map((l: any) => ({ fromId: i.id, toId: l.toIssueId, kind: l.kind, lagDays: l.lagDays }))
@@ -125,6 +143,12 @@ function summarise(project: any) {
 
   return {
     ...project,
+    // Each task carries what the tree actually says about it, alongside what is
+    // stored, so a caller never has to work the rollup out for itself.
+    issues: (project.issues ?? []).map((i: any) => ({
+      ...i,
+      rolled: tree[i.id] ?? { start: i.scheduledFor, end: i.dueDate, percentComplete: i.percentComplete, isSummary: false, openBeneath: 0 },
+    })),
     counts,
     analysis: schedule,
     curve: progressCurve(project.issues ?? []),

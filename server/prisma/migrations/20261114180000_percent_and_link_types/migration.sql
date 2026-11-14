@@ -1,0 +1,11 @@
+-- Percent complete on a task, for work that is not done or not-done.
+--
+-- Additive: one nullable column. Null means nobody has said how far along this is,
+-- which is deliberately different from zero — on a construction programme "not
+-- started" and "nobody has reported" are different facts and conflating them is
+-- how a progress report becomes fiction.
+--
+-- The new dependency kinds (start-to-start, finish-to-finish) need no migration:
+-- IssueLink.kind is already a free string with a default, so the widened set is a
+-- change in what the route accepts rather than in the table.
+ALTER TABLE "Issue" ADD COLUMN "percentComplete" INTEGER;

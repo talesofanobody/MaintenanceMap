@@ -859,6 +859,20 @@ export interface ProjectIssue {
   workOrderNumber: string | null;
   workOrderUrl: string | null;
   closedAt: string | null;
+  /** How far along, 0–100. Null means nobody has said, which is not zero. */
+  percentComplete: number | null;
+  /**
+   * What the tree says about this item, as opposed to what is stored on it. A
+   * parent's dates and progress come from its children; a leaf's are its own.
+   */
+  rolled: {
+    start: string | null;
+    end: string | null;
+    percentComplete: number | null;
+    isSummary: boolean;
+    /** Tasks beneath that are still open — what stops this being finished. */
+    openBeneath: number;
+  };
   costs: { amount: number; quantity: number }[];
   blockers: { id: string; summary: string; kind: BlockerKind; raisedAt: string; clearedAt: string | null }[];
   linksOut: { id: string; toIssueId: string; kind: LinkKind; lagDays: number | null }[];
@@ -1072,7 +1086,20 @@ export interface Project {
   openBlockers: number;
 }
 
-export type LinkKind = "precedes" | "blocks" | "relates";
+export type LinkKind = "precedes" | "starts_after_start" | "finishes_after_finish" | "blocks" | "relates";
+
+/**
+ * How the relationships read to somebody planning work. Start-to-start and
+ * finish-to-finish are not refinements on heavy work: shoring starts after
+ * excavation starts and runs alongside it; curing finishes when the pour does.
+ */
+export const LINK_KIND_LABELS: Record<LinkKind, string> = {
+  precedes: "must finish before",
+  starts_after_start: "starts after this starts",
+  finishes_after_finish: "finishes after this finishes",
+  blocks: "blocks",
+  relates: "relates to",
+};
 
 export interface IssueLinkRef {
   id: string;

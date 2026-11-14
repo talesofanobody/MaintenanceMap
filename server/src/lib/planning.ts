@@ -295,6 +295,20 @@ export interface ScheduleItem {
   isSummary?: boolean;
 }
 
+/**
+ * The kinds that constrain dates, and the two that do not.
+ *
+ * Finish-to-start on its own cannot describe heavy work. Shoring starts two days
+ * after excavation starts and then runs alongside it; curing finishes when the
+ * pour finishes. Those are start-to-start and finish-to-finish, and a programme
+ * without them has to be faked with padded durations that then lie about float.
+ */
+export const LINK_KINDS = ["precedes", "starts_after_start", "finishes_after_finish", "blocks", "relates"] as const;
+export type LinkKind = (typeof LINK_KINDS)[number];
+
+/** The ones the schedule pass actually acts on. */
+export const ORDERING_KINDS: readonly string[] = ["precedes", "starts_after_start", "finishes_after_finish"];
+
 export interface ScheduleLink {
   fromId: string;
   toId: string;
@@ -409,7 +423,7 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
     return { items: {}, criticalPath: [], longestChain: [], longestChainDays: 0, violations: [], projectStart: null, projectEnd: null, unscheduled, summaries, cyclic: false };
   }
 
-  const ordering = links.filter((l) => l.kind === "precedes" && ids.has(l.fromId) && ids.has(l.toId));
+  const ordering = links.filter((l) => ORDERING_KINDS.includes(l.kind) && ids.has(l.fromId) && ids.has(l.toId));
   const succ = new Map<string, ScheduleLink[]>();
   const pred = new Map<string, ScheduleLink[]>();
   for (const l of ordering) {
@@ -449,6 +463,39 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
 
   // Forward pass: the earliest anything can happen, respecting both the date
   // somebody chose and what has to finish first.
+  /**
+   * The earliest `to` may start, given one constraint from `from`.
+   *
+   * Finish-to-start pushes past the predecessor's finish. Start-to-start pushes
+   * past its start, so the two run together with an offset. Finish-to-finish
+   * constrains the finish, which becomes a start by subtracting the duration —
+   * which is why a finish-to-finish link on a long successor can pull its start
+   * earlier than its predecessor's, correctly.
+   */
+  const earliestFrom = (kind: string, fromStart: number, fromFinish: number, lag: number, toDur: number): number => {
+    switch (kind) {
+      case "starts_after_start":
+        return fromStart + lag;
+      case "finishes_after_finish":
+        return fromFinish + lag - toDur + 1;
+      default:
+        return fromFinish + lag + 1;
+    }
+  };
+
+  /** The mirror, for the backward pass: the latest `from` may finish. */
+  const latestFrom = (kind: string, toStart: number, toFinish: number, lag: number, fromDur: number): number => {
+    switch (kind) {
+      case "starts_after_start":
+        // from must START by toStart - lag, so it may FINISH that much later.
+        return toStart - lag + fromDur - 1;
+      case "finishes_after_finish":
+        return toFinish - lag;
+      default:
+        return toStart - lag - 1;
+    }
+  };
+
   const es = new Map<string, number>();
   const ef = new Map<string, number>();
   const violations: ScheduleViolation[] = [];
@@ -456,8 +503,8 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
     const planned = ownStart.get(id)!;
     let start = planned;
     for (const l of pred.get(id) ?? []) {
-      const after = ef.get(l.fromId)! + (l.lagDays ?? 0) + 1;
-      if (after > start) start = after;
+      const at = earliestFrom(l.kind, es.get(l.fromId)!, ef.get(l.fromId)!, l.lagDays ?? 0, dur.get(id)!);
+      if (at > start) start = at;
     }
     // The plan asks for something its own dependencies do not allow.
     if (start > planned) {
@@ -472,29 +519,40 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
     ef.set(id, start + dur.get(id)! - 1);
   }
 
-  // The longest chain by duration alone. Ignores the typed starts deliberately:
-  // this is the answer to "where does the end date come from", and a gap someone
-  // left in the calendar should not change it.
-  const chainDays = new Map<string, number>();
+  /**
+   * A second forward pass, anchored at zero and ignoring the typed starts, used
+   * only to find the longest chain.
+   *
+   * Running it separately is what keeps the chain stable: the first pass answers
+   * "when can this happen, given the dates people chose", and a gap left over a
+   * weekend changes that. This one answers "which run of dependent work is
+   * longest", which a gap in somebody's calendar should not change at all. The
+   * same constraint arithmetic is used, so start-to-start and finish-to-finish
+   * contribute correctly rather than being approximated.
+   */
+  const anchorStart = new Map<string, number>();
+  const anchorFinish = new Map<string, number>();
   const chainPrev = new Map<string, string | null>();
   for (const id of order) {
-    let best = 0;
+    let start = 0;
     let via: string | null = null;
     for (const l of pred.get(id) ?? []) {
-      const through = chainDays.get(l.fromId)! + (l.lagDays ?? 0);
-      if (through > best) {
-        best = through;
+      const at = earliestFrom(l.kind, anchorStart.get(l.fromId)!, anchorFinish.get(l.fromId)!, l.lagDays ?? 0, dur.get(id)!);
+      if (at > start) {
+        start = at;
         via = l.fromId;
       }
     }
-    chainDays.set(id, best + dur.get(id)!);
+    anchorStart.set(id, start);
+    anchorFinish.set(id, start + dur.get(id)! - 1);
     chainPrev.set(id, via);
   }
   let chainTail: string | null = null;
   let longestChainDays = 0;
   for (const id of order) {
-    if (chainDays.get(id)! > longestChainDays) {
-      longestChainDays = chainDays.get(id)!;
+    const finish = anchorFinish.get(id)! + 1;
+    if (finish > longestChainDays) {
+      longestChainDays = finish;
       chainTail = id;
     }
   }
@@ -511,7 +569,7 @@ export function analyseSchedule(items: ScheduleItem[], links: ScheduleLink[]): S
     const outgoing = succ.get(id) ?? [];
     let finish = outgoing.length ? Infinity : projectEnd;
     for (const l of outgoing) {
-      const before = ls.get(l.toId)! - (l.lagDays ?? 0) - 1;
+      const before = latestFrom(l.kind, ls.get(l.toId)!, lf.get(l.toId)!, l.lagDays ?? 0, dur.get(id)!);
       if (before < finish) finish = before;
     }
     lf.set(id, finish);
@@ -601,4 +659,112 @@ export function progressCurve(
     }
   }
   return points;
+}
+
+// ---------------------------------------------------------------------------
+// The tree: what a parent's dates and progress actually are
+// ---------------------------------------------------------------------------
+
+export interface TreeItem {
+  id: string;
+  parentId: string | null;
+  start: string | null;
+  end: string | null;
+  isMilestone: boolean;
+  status: string;
+  percentComplete: number | null;
+}
+
+export interface TreeRollup {
+  /** Earliest start across everything beneath, or its own if it is a leaf. */
+  start: string | null;
+  end: string | null;
+  /** Duration-weighted progress across the leaves beneath. */
+  percentComplete: number | null;
+  /** True when this item has children. */
+  isSummary: boolean;
+  /** Leaves beneath it that are not yet closed — what stops it being finished. */
+  openBeneath: number;
+}
+
+/**
+ * What a parent's dates and progress are, as opposed to what somebody typed on it.
+ *
+ * On a tree, a phase does not have dates of its own: it starts when the first
+ * thing in it starts and ends when the last thing ends. Typing them separately
+ * is how a programme ends up with a phase running to March while everything
+ * inside it finishes in January. So they are derived, bottom-up, and the typed
+ * values on a parent are ignored rather than trusted.
+ *
+ * Progress is weighted by duration, not counted per task. Ten days of excavation
+ * and one day of signage are not half the phase each, and a plain average of
+ * percentages says they are. A leaf with no percentage reported falls back to its
+ * status — closed counts as complete, anything else as nothing — because "nobody
+ * has said" and "no progress" are different facts and only one of them is safe to
+ * assume.
+ */
+export function rollUpTree(items: TreeItem[], isClosed: (status: string) => boolean): Record<string, TreeRollup> {
+  const byParent = new Map<string | null, TreeItem[]>();
+  const byId = new Map(items.map((i) => [i.id, i]));
+  for (const i of items) {
+    const key = i.parentId && byId.has(i.parentId) ? i.parentId : null;
+    const list = byParent.get(key) ?? [];
+    list.push(i);
+    byParent.set(key, list);
+  }
+
+  const out: Record<string, TreeRollup> = {};
+  const dayOf = (iso: string | null) => (iso ? Math.round(Date.parse(`${iso}T00:00:00Z`) / 86400000) : null);
+
+  /** Depth-first, so a parent of parents spans its grandchildren. */
+  const visit = (item: TreeItem): { start: number | null; end: number | null; weight: number; earned: number; open: number } => {
+    const kids = byParent.get(item.id) ?? [];
+
+    if (!kids.length) {
+      const s = dayOf(item.start);
+      const e = dayOf(item.end) ?? s;
+      // Milestones carry no duration, so they must not pull the weighted average
+      // around — a delivery date is not effort.
+      const weight = item.isMilestone ? 0 : Math.max(1, (e ?? 0) - (s ?? 0) + 1);
+      const reported = item.percentComplete;
+      const percent = reported !== null && reported !== undefined ? reported : isClosed(item.status) ? 100 : 0;
+      const open = isClosed(item.status) ? 0 : 1;
+      out[item.id] = {
+        start: item.start,
+        end: item.end ?? item.start,
+        percentComplete: reported ?? (isClosed(item.status) ? 100 : null),
+        isSummary: false,
+        openBeneath: 0,
+      };
+      return { start: s, end: e, weight, earned: (weight * percent) / 100, open };
+    }
+
+    let start: number | null = null;
+    let end: number | null = null;
+    let weight = 0;
+    let earned = 0;
+    let open = 0;
+    for (const kid of kids) {
+      const r = visit(kid);
+      if (r.start !== null && (start === null || r.start < start)) start = r.start;
+      if (r.end !== null && (end === null || r.end > end)) end = r.end;
+      weight += r.weight;
+      earned += r.earned;
+      open += r.open;
+    }
+    const iso = (d: number | null) => (d === null ? null : new Date(d * 86400000).toISOString().slice(0, 10));
+    out[item.id] = {
+      start: iso(start),
+      end: iso(end),
+      percentComplete: weight > 0 ? Math.round((earned / weight) * 100) : null,
+      isSummary: true,
+      openBeneath: open,
+    };
+    // A parent contributes its children's span and weight upward, never its own
+    // typed dates, which is the whole point.
+    return { start, end, weight, earned, open };
+  };
+
+  for (const root of byParent.get(null) ?? []) visit(root);
+  return out;
 }

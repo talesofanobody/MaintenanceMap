@@ -11,7 +11,7 @@ import { getSettings } from "../lib/settings";
 import { COST_KINDS, issueCosts } from "../lib/costs";
 import { parseCategory, resolveTagIds, setIssueTags } from "../lib/taxonomy";
 import { messagesRouter } from "./messages";
-import { wouldCycleInHierarchy, wouldCycleInLinks } from "../lib/planning";
+import { LINK_KINDS as SCHEDULE_LINK_KINDS, ORDERING_KINDS, wouldCycleInHierarchy, wouldCycleInLinks } from "../lib/planning";
 
 // Fields a technician may change on an issue assigned to them.
 const TECHNICIAN_FIELDS = ["status", "actualHours", "closedAt", "description", "actionNeeded", "category", "roomName", "tagIds"] as const;
@@ -338,6 +338,67 @@ issuesRouter.put("/:id", requires("issue.write"), async (req, res) => {
   if (status !== undefined && !STATUSES.has(status)) {
     return res.status(400).json({ error: "invalid status" });
   }
+  /**
+   * A parent cannot be finished while anything under it is open.
+   *
+   * On a tree this is not a nicety, it is what the tree means: a phase is
+   * complete exactly when the work in it is, and a programme whose phases can be
+   * ticked off independently of their contents reports progress that never
+   * happened. Refused rather than cascaded — marking a parent done must not
+   * quietly close its children, because somebody has to actually do them.
+   *
+   * `force` is accepted for the case that genuinely occurs: work descoped part-way
+   * through, where the remaining children should have been cancelled and were not.
+   * It is logged as its own action so it is visible afterwards.
+   */
+  if (status === "completed" && !isClosed(existing.status)) {
+    const children = await prisma.issue.findMany({
+      where: { parentId: existing.id },
+      select: { id: true, title: true, status: true },
+    });
+    const stillOpen = children.filter((c) => !isClosed(c.status));
+    if (stillOpen.length && !req.body.force) {
+      return res.status(400).json({
+        error:
+          `${stillOpen.length} task${stillOpen.length === 1 ? "" : "s"} under this one ${stillOpen.length === 1 ? "is" : "are"} still open, ` +
+          `so it cannot be finished yet: ${stillOpen.slice(0, 3).map((c) => c.title).join(", ")}` +
+          `${stillOpen.length > 3 ? `, and ${stillOpen.length - 3} more` : ""}.`,
+        openChildren: stillOpen.map((c) => ({ id: c.id, title: c.title, status: c.status })),
+      });
+    }
+    if (stillOpen.length && req.body.force) {
+      await logActivity(req, {
+        action: "issue.closed_over_open_children",
+        entityType: "issue",
+        entityId: existing.id,
+        propertyId: existing.propertyId,
+        summary: `Finished "${existing.title}" with ${stillOpen.length} task${stillOpen.length === 1 ? "" : "s"} under it still open`,
+      });
+    }
+  }
+
+  /**
+   * And the mirror: reopening something cannot leave a finished parent above it.
+   *
+   * The same invariant read the other way. Without this, reopening one task in a
+   * completed phase leaves the phase reporting done with live work inside it,
+   * which is the state the rule above exists to prevent.
+   */
+  let ancestorsToReopen: string[] = [];
+  if (status !== undefined && !isClosed(status) && isClosed(existing.status) && existing.parentId) {
+    let cursor: string | null = existing.parentId;
+    for (let depth = 0; cursor && depth < 200; depth += 1) {
+      const parent: { id: string; parentId: string | null; status: string } | null = await prisma.issue.findUnique({
+        where: { id: cursor },
+        select: { id: true, parentId: true, status: true },
+      });
+      if (!parent) break;
+      if (!isClosed(parent.status)) break;
+      ancestorsToReopen.push(parent.id);
+      cursor = parent.parentId;
+    }
+  }
+
   // Work breakdown. Re-parenting is a normal edit — a job turns out to belong under
   // a different phase — but it must not be allowed to close a loop, because every
   // rollup and every tree render walks this structure.
@@ -361,6 +422,20 @@ issuesRouter.put("/:id", requires("issue.write"), async (req, res) => {
 
   let milestoneUpdate: { isMilestone: boolean } | undefined;
   if (req.body.isMilestone !== undefined) milestoneUpdate = { isMilestone: !!req.body.isMilestone };
+
+  let percentUpdate: { percentComplete: number | null } | undefined;
+  if (req.body.percentComplete !== undefined) {
+    const raw = req.body.percentComplete;
+    if (raw === null || raw === "") {
+      percentUpdate = { percentComplete: null };
+    } else {
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        return res.status(400).json({ error: "Per cent complete has to be a number from 0 to 100." });
+      }
+      percentUpdate = { percentComplete: Math.round(n) };
+    }
+  }
 
   let projectUpdate: { projectId: string | null } | undefined;
   try {
@@ -460,10 +535,31 @@ issuesRouter.put("/:id", requires("issue.write"), async (req, res) => {
       ...(milestoneUpdate ?? {}),
       ...(baselineUpdate ?? {}),
       ...(projectUpdate ?? {}),
+      ...(percentUpdate ?? {}),
+      // Finishing a task means it is finished, whatever was last reported.
+      ...(status === "completed" ? { percentComplete: 100 } : {}),
       closedAt: nextClosedAt,
     },
     include: ISSUE_INCLUDE,
   });
+
+  // Reopening a task reopens any finished parents above it, so a phase can never
+  // read as done with live work inside it.
+  if (ancestorsToReopen.length) {
+    await prisma.issue.updateMany({
+      where: { id: { in: ancestorsToReopen } },
+      data: { status: "in_progress", closedAt: null },
+    });
+    await logActivity(req, {
+      action: "issue.parent_reopened",
+      entityType: "issue",
+      entityId: issue.id,
+      propertyId: issue.propertyId,
+      summary:
+        `Reopening "${issue.title}" reopened ${ancestorsToReopen.length} ` +
+        `parent task${ancestorsToReopen.length === 1 ? "" : "s"} above it`,
+    });
+  }
 
   if (extras.tagIds !== undefined) await setIssueTags(issue.id, extras.tagIds);
   if (crew !== undefined) {
@@ -650,8 +746,13 @@ async function parseProjectId(value: unknown, issuePropertyId: string): Promise<
   return project.id;
 }
 
-/** The dependency kinds. Only `precedes` carries date arithmetic. */
-const LINK_KINDS = ["precedes", "blocks", "relates"];
+/**
+ * The dependency kinds the route accepts. Three carry date arithmetic:
+ * finish-to-start, start-to-start and finish-to-finish. `blocks` and `relates`
+ * do not. Defined once in the planning library so the schedule pass and the
+ * validation here cannot drift apart.
+ */
+const LINK_KINDS: readonly string[] = SCHEDULE_LINK_KINDS;
 
 /**
  * Add a dependency from this job to another.
@@ -687,7 +788,7 @@ issuesRouter.post("/:id/links", requires("issue.write"), async (req, res) => {
   if (kind !== "relates") {
     const loops = await wouldCycleInLinks(from.id, to.id, async (id) => {
       const rows = await prisma.issueLink.findMany({
-        where: { fromIssueId: id, kind: { in: ["precedes", "blocks"] } },
+        where: { fromIssueId: id, kind: { in: [...ORDERING_KINDS, "blocks"] } },
         select: { toIssueId: true },
       });
       return rows.map((r) => r.toIssueId);

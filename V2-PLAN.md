@@ -44,6 +44,76 @@ depend on a decision that has to be made before any content is written.
 
 ---
 
+## 1b. Can this run heavy construction?
+
+Asked directly, so answered directly: **not yet, and the gap is narrower than it
+looks.** The structure is right and four specific things are missing. None of them is
+architectural.
+
+### What is in place and genuinely sufficient
+
+| | |
+|---|---|
+| Work breakdown | Unlimited nesting; a phase is an ordinary task with children |
+| Tree semantics | A phase's dates and progress come from its children; it finishes only when they do |
+| Dependencies | Finish-to-start, start-to-start, finish-to-finish, with lag. Loops refused |
+| Schedule | Forward and backward pass, float, longest chain, and plans that contradict themselves |
+| Baselines | Frozen deliberately; slippage visible per task and per project |
+| Progress | Per cent complete per task, duration-weighted up the tree |
+| Money | Approved, committed, actual; quotes with the three-quote rule and an audited award |
+| Governance | Stakeholders with roles, blockers with an owner and an age |
+| Chart | Gantt with arrows, baselines, summary brackets, progress fill, critical chain |
+
+For a multi-part job — substructure, frame, envelope, fit-out, each with sub-packages
+and overlapping trades — that is a workable planning tool today.
+
+### The four things that are missing, in the order they will bite
+
+**1. A working-day calendar.** Durations are counted in calendar days. On a programme
+with weather days, public holidays and a shift pattern, that is wrong in a way that
+compounds: every duration is slightly short and every float figure slightly generous.
+This matters more than anything else on the list and is the one I would do first.
+Medium-sized: a calendar per property, non-working days, and the schedule pass
+counting in working days.
+
+**2. Earned value.** Per cent complete and budget both exist, so planned value, earned
+value and actual cost are all derivable — but nothing computes them, which means no
+schedule or cost performance index. On heavy work those two numbers are how progress
+is reported upward. Small, now that the inputs are there.
+
+**3. Quantities and unit rates.** Heavy construction is planned by quantity — cubic
+metres of concrete, tonnes of steel — with a rate against each, and progress measured
+as quantity placed. `Cost` has an amount and a quantity but there is no bill of
+quantities, so a task cannot say "400 m³ at $x, 240 placed". Medium.
+
+**4. Variations and change orders.** A change to scope mid-job has to be tracked
+separately from the baseline, with its own approval and its own effect on budget and
+programme. Right now a scope change is indistinguishable from the original plan once
+it is typed in. Medium, and the thing an auditor or a claim will ask for.
+
+### Smaller gaps, worth knowing about
+
+- **Resource levelling.** Crews can be assigned and there is a day planner, but
+  nothing shows a trade over-committed across a project.
+- **One baseline only.** Re-baselining overwrites; construction often keeps several.
+- **Free float** is not computed, only total float.
+- **Submittals, RFIs, progress claims and retention** — contract administration
+  generally — are absent. Whether they belong here or in the contract is a real
+  question, not an oversight.
+- **Drawings.** Photographs attach to work; drawings and revisions do not. This
+  overlaps the property manual in section 5.
+- **The Gantt does not print.** It scrolls horizontally, which paper does not do.
+
+### The honest summary
+
+The bones are right and the tree semantics are now correct, which was the part most
+likely to have been wrong. What is missing is arithmetic and record-keeping layered on
+top of a model that already holds the right things — not a different model. The
+working-day calendar is the one that would change numbers already on screen, so it
+should come before the other three.
+
+---
+
 ## 2. What was taken from the two reference projects
 
 I read both READMEs on github.com. I did **not** read either data model: `openproject.org`
@@ -406,7 +476,10 @@ the one that gets automation running this quarter instead of next.
 | Slice | Contents | Why here |
 |---|---|---|
 | ~~**1**~~ | ~~Work breakdown: `parentId`, `isMilestone`, baselines, `IssueLink`, project budget/owner/sign-off, `Quote`~~ | **Done** — `632caa9` |
-| ~~**1b**~~ | ~~`ProjectLink`, `Blocker`, `Stakeholder`, critical path and float, Gantt with dependencies and baselines, progress curve~~ | **Done**. 254 checks in `tests/` |
+| ~~**1b**~~ | ~~`ProjectLink`, `Blocker`, `Stakeholder`, critical path and float, Gantt with dependencies and baselines, progress curve~~ | **Done** — `991493b` |
+| ~~**1c**~~ | ~~Tree semantics: a phase finishes only when its tasks do, dates and progress roll up, start-to-start and finish-to-finish, per cent complete~~ | **Done**. 334 checks in `tests/` |
+| **1d** | A working-day calendar | See 1b above — the gap that changes numbers already on screen |
+| **1e** | Earned value (PV/EV/AC, SPI/CPI) | Inputs now exist; small |
 | **2** | Numeric readings on inspection checks (value, unit, acceptable range) | Blocks new checklist content; wanted by three subsystems |
 | **3** | Daily readings: `MeterPoint`, `Reading`, `UtilityInvoice`, the nutshell dashboard, one charting library | Smallest, pays back daily, replaces live spreadsheet work |
 | **4** | Location hierarchy: block → floor → space, coexisting with `roomName` | Foundation for the manual; touches a lot, so early |

@@ -286,7 +286,10 @@ export default function Projects() {
                           </button>
                           {project.analysis?.longestChainDays > 0 && (
                             <span className="muted small">
-                              longest chain {project.analysis.longestChainDays} days
+                              {/* A single unlinked task can be the longest run, which is
+                                  correct but is not a chain. Say which it is. */}
+                              {project.analysis.longestChain.length === 1 ? "longest task" : "longest chain"}{" "}
+                              {project.analysis.longestChainDays} days
                               {project.analysis.violations.length > 0 && (
                                 <strong className="is-late">
                                   {" "}
@@ -325,6 +328,17 @@ export default function Projects() {
                               {issue.category ? `${categoryLabel(issue.category)} · ` : ""}
                               {PRIORITY_LABELS[issue.priority]} · {STATUS_LABELS[issue.status]}
                               {issue.technician ? ` · ${issue.technician.name}` : ""}
+                              {/* A phase's dates come from its children, so show those. */}
+                              {issue.rolled?.isSummary && issue.rolled.start && (
+                                <> · {issue.rolled.start} to {issue.rolled.end}</>
+                              )}
+                              {issue.rolled?.percentComplete !== null && issue.rolled?.percentComplete !== undefined && (
+                                <> · {issue.rolled.percentComplete}%</>
+                              )}
+                              {/* What stops this phase being finished. */}
+                              {issue.rolled?.isSummary && issue.rolled.openBeneath > 0 && (
+                                <> · {issue.rolled.openBeneath} open beneath</>
+                              )}
                               {/* The agreed date against the current one, where they differ. */}
                               {issue.baselineDue && issue.dueDate && issue.baselineDue !== issue.dueDate && (
                                 <strong className="is-late"> · due {issue.dueDate}, agreed {issue.baselineDue}</strong>
