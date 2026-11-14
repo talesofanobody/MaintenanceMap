@@ -123,6 +123,7 @@ model Property {
   calendars     WorkCalendar[]
   meterPoints   MeterPoint[]
   utilityInvoices UtilityInvoice[]
+  spaces        Space[]
 }
 
 model Issue {
@@ -137,7 +138,14 @@ model Issue {
   // Trade the work belongs to, used to suggest who should pick it up.
   category         String?
   // Room or sub-location within the property, e.g. "Room 214" or "Pool plant room".
+  //
+  // Kept as free text even now there is a Space tree. Three hundred and forty rooms
+  // of history were typed by hand and a migration that guessed at them would be
+  // wrong in ways nobody could audit, so the two coexist: spaceId where somebody
+  // has matched it up, this where they have not, and every read falls back to it.
   roomName         String?
+  spaceId          String?
+  space            Space?           @relation(fields: [spaceId], references: [id], onDelete: SetNull)
   workOrderCreated Boolean          @default(false)
   workOrderNumber  String?
   workOrderUrl     String?
@@ -215,6 +223,7 @@ model Issue {
   @@index([technicianId])
   @@index([projectId])
   @@index([parentId])
+  @@index([spaceId])
 }
 
 // One stretch of work on an issue, recorded by clocking in and out. A technician has
@@ -530,7 +539,11 @@ model Inspection {
   template     InspectionTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   /// Snapshot, so renaming or deleting a template never rewrites history.
   templateName String
+  /// What was typed, kept for the same reason as on Issue: it is the record of
+  /// what somebody wrote, and the tree is matched up beside it rather than over it.
   roomName     String
+  spaceId      String?
+  space        Space?              @relation(fields: [spaceId], references: [id], onDelete: SetNull)
   status       String              @default("in_progress") // in_progress | completed | abandoned
   /// The login that typed it in.
   inspectorId  String?
@@ -993,4 +1006,55 @@ model UtilityInvoice {
 
   @@unique([propertyId, kind, periodStart, periodEnd])
   @@index([propertyId, kind, periodStart])
+}
+
+/// Where something is, as a tree rather than a sentence.
+///
+/// Property, then block, then floor, then the space itself — a guest room, a plant
+/// room, a stretch of pool deck. The blocks here are named things with their own
+/// character: Coubaril, Millionaire, Point Suites, Blue Suites, Tennis.
+///
+/// This exists because "Room 214" as free text cannot answer any of the questions
+/// that matter once a site is large: everything in Coubaril, every room on floor
+/// two, how many of the sellable rooms are out of order. A string can be matched
+/// and counted; it cannot be walked.
+///
+/// It does not replace the free text. Three hundred and forty rooms of history were
+/// typed by hand, and a migration that guessed which string meant which room would
+/// be wrong in ways nobody could check afterwards. So the two coexist and the text
+/// is matched up as somebody gets to it.
+model Space {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  /// Null for a top-level block. A floor hangs off a block, a room off a floor.
+  parentId   String?
+  parent     Space?   @relation("SpaceTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children   Space[]  @relation("SpaceTree")
+  /// block | floor | space
+  kind       String   @default("space")
+  name       String
+  /// The short reference people actually say: "214", "P3", "DB-2".
+  code       String?
+  /// Whether this is a room that can be sold. What makes the sell-status tracker
+  /// possible without a second subsystem: back of house is excluded by not being
+  /// sellable rather than by a list of exceptions.
+  sellable   Boolean  @default(false)
+  /// green | amber | red, for the weekly sell-status round. Null until somebody says.
+  sellStatus String?
+  /// A space can have its own position, for the ones worth putting on a map.
+  lat        Float?
+  lng        Float?
+  notes      String?
+  sortOrder  Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  issues     Issue[]
+  inspections Inspection[]
+
+  @@unique([propertyId, parentId, name])
+  @@index([propertyId, kind])
+  @@index([parentId, sortOrder])
+  @@index([propertyId, sellable, sellStatus])
 }

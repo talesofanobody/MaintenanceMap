@@ -1375,3 +1375,70 @@ export interface UtilitySummary {
   costs: Record<string, UnitCost[]>;
   kinds: readonly string[];
 }
+
+
+// ---------------------------------------------------------------------------
+// Spaces: where things are
+// ---------------------------------------------------------------------------
+
+export const SPACE_KINDS = ["block", "floor", "space"] as const;
+export type SpaceKind = (typeof SPACE_KINDS)[number];
+export const SPACE_KIND_LABELS: Record<SpaceKind, string> = {
+  block: "Block",
+  floor: "Floor",
+  space: "Space",
+};
+
+export const SELL_STATUSES = ["green", "amber", "red"] as const;
+export type SellStatus = (typeof SELL_STATUSES)[number];
+export const SELL_STATUS_LABELS: Record<SellStatus, string> = {
+  green: "Sellable",
+  amber: "Watch",
+  red: "Out of order",
+};
+
+export interface Space {
+  id: string;
+  propertyId: string;
+  parentId: string | null;
+  kind: SpaceKind;
+  name: string;
+  /** The short reference people actually say: "214", "P3". */
+  code: string | null;
+  /** Whether this is a room that can be sold, which is what the round counts. */
+  sellable: boolean;
+  sellStatus: SellStatus | null;
+  lat: number | null;
+  lng: number | null;
+  notes: string | null;
+  sortOrder: number;
+  active: boolean;
+  /** Ancestors then self: ["Coubaril", "Floor 2", "214"]. */
+  path: string[];
+  depth: number;
+}
+
+export interface SellRollup {
+  green: number;
+  amber: number;
+  red: number;
+  /** Sellable rooms nobody has given a status — never folded into green. */
+  unset: number;
+  total: number;
+}
+
+export interface SpaceMatch {
+  spaceId: string;
+  path: string[];
+  how: "exact" | "token" | "partial";
+}
+
+export interface UnmatchedText {
+  text: string;
+  issues: number;
+  inspections: number;
+  total: number;
+  matches: SpaceMatch[];
+  /** Set only where a single exact match makes it safe to apply unasked. */
+  certain: string | null;
+}

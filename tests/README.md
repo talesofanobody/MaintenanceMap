@@ -10,6 +10,7 @@ running:
 | `unit-tree.ts` | Summary rollup, weighted progress, start-to-start and finish-to-finish | Nothing |
 | `unit-calendar.ts` | Working days, two-way exceptions, float counted in them | Nothing |
 | `unit-utilities.ts` | The 05:00 day, tank conversions, WTD/MTD/YTD, cost per unit | Nothing |
+| `unit-spaces.ts` | Range expansion, paths, matching text, the sell round | Nothing |
 | `migration-planning.js` | A live database survives the migration | A database at the previous schema |
 | `api-planning.js` | The planning endpoints behave | `server` on :4000 |
 | `api-governance.js` | Project dependencies, blockers, stakeholders | `server` on :4000 |
@@ -19,14 +20,16 @@ running:
 | `api-readings.js` | A number flags its own line; the trend groups by point | `server` on :4000 |
 | `api-paging.js` | 230 real issues: pages reach each once, the ceiling holds | `server` on :4000 |
 | `api-utilities.js` | Rounds, tanks, invoices, site totals, retiring a meter | `server` on :4000 |
+| `api-spaces.js` | The tree, 40 rooms from a range, reconciling free text | `server` on :4000 |
 | `ui-governance.js` | The Gantt draws, blockers clear, roles stick | Both dev servers |
 | `ui-tree.js` | Phase dates roll up, progress shows, the refusal holds | Both dev servers |
 | `ui-calendar.js` | The editor works and the chart shades days nobody works | Both dev servers |
 | `ui-readings.js` | A reading typed on a phone flags the line by itself | Both dev servers |
 | `ui-utilities.js` | A round entered on screen converts and adds up | Both dev servers |
+| `ui-spaces.js` | A tree built from a range, then the text matched to it | Both dev servers |
 | `smoke-pages.js` | Nothing else broke | Both dev servers |
 
-623 checks in total.
+731 checks in total.
 
 ```sh
 (cd server && npm run dev)    # :4000
@@ -99,6 +102,14 @@ the utility summary, and a hardcoded fixture quietly becomes one as the clock mo
 so `ui-utilities.js` builds its dates with `ago(n)`. The same trap caught several
 period-total expectations: a day only counts once the *next* day's opening reading
 exists, which is a property of the data rather than of the calendar.
+
+## The one thing that must never be automatic
+
+Room 101 exists in Coubaril and in Blue Suites. "Room 101" therefore matches two
+spaces exactly, and picking either would be a coin toss recorded as a fact. The
+reconcile pass applies **only** a single exact match and reports the rest for a
+person — `unit-spaces.ts` and `api-spaces.js` both pin that, because it is the
+difference between reconciling history and corrupting it.
 
 ## Two things the schedule tests pin down deliberately
 

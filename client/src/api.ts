@@ -1,4 +1,4 @@
-import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, ReadingSeries, MeterPoint, Reading, Slot, UtilityKind, EntryMode, UtilitySummary, UtilityInvoice, UnitCost, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
+import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, ReadingSeries, MeterPoint, Reading, Slot, UtilityKind, EntryMode, UtilitySummary, UtilityInvoice, UnitCost, Space, SpaceKind, SellStatus, SellRollup, UnmatchedText, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary} from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -485,6 +485,45 @@ export const api = {
     for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
     return request<{ series: ReadingSeries[]; units: string[] }>(`/inspections/readings${q.toString() ? `?${q}` : ""}`);
   },
+
+  // --- spaces: where things are ------------------------------------------
+  listSpaces: (propertyId: string, all = false) =>
+    request<{ spaces: Space[]; sell: SellRollup; kinds: string[]; sellStatuses: string[] }>(
+      `/spaces?propertyId=${propertyId}${all ? "&all=1" : ""}`
+    ),
+  /** `names` takes a range spec — "101-140" — which is how 340 rooms get created. */
+  createSpaces: (data: {
+    propertyId: string;
+    parentId?: string | null;
+    kind?: SpaceKind;
+    name?: string;
+    names?: string;
+    code?: string | null;
+    sellable?: boolean;
+  }) =>
+    request<{ created: number; skipped: number; spaces: Space[]; sell: SellRollup }>("/spaces", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateSpace: (
+    id: string,
+    data: { name?: string; code?: string | null; kind?: SpaceKind; sellable?: boolean; sellStatus?: SellStatus | null; parentId?: string | null; active?: boolean; notes?: string | null }
+  ) => request<{ spaces: Space[]; sell: SellRollup }>(`/spaces/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteSpace: (id: string, force = false) =>
+    request<void>(`/spaces/${id}`, { method: "DELETE", body: JSON.stringify({ force }) }),
+
+  /** Free text on this property's work that has not been matched to the tree. */
+  unmatchedSpaces: (propertyId: string) =>
+    request<{ unmatched: UnmatchedText[]; distinct: number; certain: number }>(`/spaces/unmatched?propertyId=${propertyId}`),
+  /**
+   * Point rows at a space. `auto` applies only the unambiguous ones — a single
+   * exact match — and reports what it left for a person.
+   */
+  reconcileSpaces: (data: { propertyId: string; auto?: boolean; text?: string; spaceId?: string }) =>
+    request<{ texts: number; issues: number; inspections: number; remaining: { issues: number; inspections: number } }>(
+      "/spaces/reconcile",
+      { method: "POST", body: JSON.stringify(data) }
+    ),
 
   // --- utilities: the daily round ----------------------------------------
   listMeters: (propertyId: string, all = false) =>

@@ -497,7 +497,7 @@ the one that gets automation running this quarter instead of next.
 | **1e** | Earned value (PV/EV/AC, SPI/CPI) | Inputs now exist; small |
 | ~~**2**~~ | ~~Numeric readings on inspection checks (value, unit, acceptable range, trend)~~ | **Done**. 484 checks in `tests/` |
 | ~~**3**~~ | ~~Daily readings: `MeterPoint`, `Reading`, `UtilityInvoice`, the nutshell dashboard~~ | **Done**. 623 checks in `tests/` |
-| **4** | Location hierarchy: block → floor → space, coexisting with `roomName` | Foundation for the manual; touches a lot, so early |
+| ~~**4**~~ | ~~Location hierarchy: block → floor → space, coexisting with `roomName`~~ | **Done**. 731 checks in `tests/` |
 | **5** | Assets and `AssetRelation`; AC and generator intervals on assets | The manual's substance |
 | **6** | Floor plans: raster overlay, three-point georeference, the drawing map view | Depends on 4 and 5 |
 | ~~**7**~~ | ~~Gantt and critical path~~ | **Pulled forward into 1b** |
@@ -591,8 +591,10 @@ whatever checklist rewrite comes out of slice 2.
   sheets are sized for the intersection of A4 and Letter — 190 mm wide — which fits Legal's width
   but wastes 77 mm of its length. Paper should be a per-document choice so a Legal checklist gets
   the rows it has room for.
-- **Sell-status tracker** — GREEN / AMBER / RED per room, weekly, with last-inspected and
-  worked-on dates. This is a view over slice 4 plus a status field, not a new subsystem.
+- ~~**Sell-status tracker**~~ — done as part of slice 4, as predicted: a `sellable` flag and a
+  status on `Space`, counted over sellable rooms only. Back of house is excluded by not being
+  sellable rather than by a list of exceptions, and rooms nobody has looked at are counted
+  separately — never folded into green.
 - **Shift checklists with a turnover report.** The inspection engine nearly does this; what is
   missing is a narrative turnover field and an issues-to-be-addressed table carrying EAM numbers.
 - **Metric and °C throughout**, per the stated preference. Units are per meter point in slice 3;
