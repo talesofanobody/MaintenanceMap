@@ -9648,3 +9648,13 @@ table th {
 .direct-done-title { font-weight: 500; }
 
 .direct-more { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+
+/* Three fields to a box: what it is, where it is, what is wrong with it.
+   Name and location share a row where there is width, because they are both
+   short; the description gets its own, because it is not. */
+.direct-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 680px) { .direct-row { grid-template-columns: 1fr; } }
+.direct-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.direct-label { font-size: 12px; color: var(--muted); }
+.direct-field input, .direct-field textarea { width: 100%; }
+.direct-field textarea { resize: vertical; }

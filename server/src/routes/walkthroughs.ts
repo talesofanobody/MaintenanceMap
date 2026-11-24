@@ -6,6 +6,7 @@ import { readExif } from "../lib/exif";
 import { storeImage } from "../lib/images";
 import { logActivity } from "../lib/activity";
 import { getSettings } from "../lib/settings";
+import { resolvePlace } from "../lib/spaces";
 import { computeDeadline } from "../lib/validation";
 
 /**
@@ -302,6 +303,18 @@ walkthroughsRouter.post("/:id/issues", requires("issue.write"), async (req, res)
   if (!title) return res.status(400).json({ error: "Give the issue a name." });
   if (title.length > 200) return res.status(400).json({ error: "That name is too long." });
 
+  /**
+   * What is actually wrong, written while standing in front of it.
+   *
+   * Optional, because the name alone is a usable finding and demanding prose at
+   * the moment of capture is how people stop logging things. But it is carried
+   * through to the issue when given — the whole reason for asking here rather
+   * than later is that the person who can describe it is the one looking at it.
+   */
+  const description = typeof req.body?.description === "string" && req.body.description.trim()
+    ? req.body.description.trim().slice(0, 4000)
+    : null;
+
   // Photographs already uploaded against this walk, if any were taken.
   const raw: unknown = req.body?.photoIds;
   const photoIds = Array.isArray(raw) ? [...new Set(raw.map(String))] : [];
@@ -330,20 +343,46 @@ walkthroughsRouter.post("/:id/issues", requires("issue.write"), async (req, res)
     });
   }
 
-  // The location asked for at the top of the screen, unless this issue overrides it.
-  const spaceId = req.body?.spaceId !== undefined
-    ? (typeof req.body.spaceId === "string" && req.body.spaceId ? req.body.spaceId : null)
-    : walk.spaceId;
+  /**
+   * Where this one is.
+   *
+   * `place` is what somebody typed into the box — one field that accepts a space
+   * from the tree or anything else. Resolving it here rather than in the browser
+   * keeps one implementation of the rule, next to the matching code it is
+   * deliberately stricter than.
+   *
+   * Without any of it, the issue takes the location the walk is at.
+   */
+  let typedSpaceId: string | null | undefined;
+  let typedRoom: string | null | undefined;
+  if (typeof req.body?.place === "string") {
+    const spaces = await prisma.space.findMany({
+      where: { propertyId: walk.propertyId },
+      select: { id: true, parentId: true, kind: true, name: true, code: true, sellable: true, sellStatus: true, sortOrder: true, active: true },
+      take: 5000,
+    });
+    const resolved = resolvePlace(req.body.place, spaces);
+    typedSpaceId = resolved.spaceId;
+    typedRoom = resolved.roomName;
+  }
+
+  const spaceId = typedSpaceId !== undefined
+    ? typedSpaceId
+    : req.body?.spaceId !== undefined
+      ? (typeof req.body.spaceId === "string" && req.body.spaceId ? req.body.spaceId : null)
+      : walk.spaceId;
   if (spaceId) {
     const space = await prisma.space.findFirst({ where: { id: spaceId, propertyId: walk.propertyId }, select: { id: true } });
     if (!space) return res.status(400).json({ error: "That space is not in this property." });
   }
-  const roomName = req.body?.roomName !== undefined || req.body?.spaceId !== undefined
-    ? await nameTheRoom(
-        spaceId,
-        typeof req.body?.roomName === "string" && req.body.roomName.trim() ? req.body.roomName.trim().slice(0, 120) : null
-      )
-    : walk.roomName;
+  const roomName = typedRoom !== undefined
+    ? await nameTheRoom(spaceId, typedRoom)
+    : req.body?.roomName !== undefined || req.body?.spaceId !== undefined
+      ? await nameTheRoom(
+          spaceId,
+          typeof req.body?.roomName === "string" && req.body.roomName.trim() ? req.body.roomName.trim().slice(0, 120) : null
+        )
+      : walk.roomName;
 
   const { responseHours } = await getSettings();
   const { dueDate, dueAt } = computeDeadline("medium", responseHours, {});
@@ -351,7 +390,7 @@ walkthroughsRouter.post("/:id/issues", requires("issue.write"), async (req, res)
   const issue = await prisma.$transaction(async (tx) => {
     const created = await tx.issue.create({
       data: {
-        propertyId: walk.propertyId, walkthroughId: walk.id, title, roomName, spaceId,
+        propertyId: walk.propertyId, walkthroughId: walk.id, title, description, roomName, spaceId,
         lat, lng, priority: "medium", status: "pending", dueDate, dueAt,
       },
     });

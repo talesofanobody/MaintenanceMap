@@ -114,6 +114,41 @@ const API = process.env.MM_API || 'http://127.0.0.1:4000';
   r = await req('GET', `/walkthroughs/${walk.id}`);
   ok(r.body.spaceId === r102.id, 'and the walk stays where it was');
 
+  // ---- three fields to a finding --------------------------------------
+  // The box asks what it is, where it is and what is wrong with it, because the
+  // person who can describe it is the one standing in front of it.
+  r = await req('POST', `/walkthroughs/${walk.id}/issues`, {
+    title: 'Mould on the ceiling',
+    description: 'Spreading from the corner above the shower. Extract fan not running.',
+    place: 'Coubaril · 101',
+  });
+  ok(r.status === 201, `a finding carries all three (${r.status})`);
+  ok(r.body.description === 'Spreading from the corner above the shower. Extract fan not running.',
+    'the description reaches the issue');
+  ok(r.body.spaceId === r101.id, 'and the typed location resolves to the tree');
+  ok(r.body.roomName === '101', 'naming the room readably');
+
+  // Typing something the tree does not hold keeps it verbatim rather than
+  // guessing at the nearest room.
+  r = await req('POST', `/walkthroughs/${walk.id}/issues`, {
+    title: 'Hose left out',
+    place: 'Behind the pool pump house',
+  });
+  ok(r.body.spaceId === null, 'somewhere not in the tree matches nothing');
+  ok(r.body.roomName === 'Behind the pool pump house', 'and is kept as written');
+
+  r = await req('POST', `/walkthroughs/${walk.id}/issues`, { title: 'Near miss', place: 'Room 101' });
+  ok(r.body.spaceId === null, 'a near miss is not quietly filed against the wrong room');
+  ok(r.body.roomName === 'Room 101', 'it stays as written for the reconcile pass');
+
+  // An empty location field means none, not the walk's.
+  r = await req('POST', `/walkthroughs/${walk.id}/issues`, { title: 'Nowhere in particular', place: '' });
+  ok(r.body.spaceId === null && r.body.roomName === null, 'an empty location field means no location');
+
+  // A description is optional: the name alone is still a usable finding.
+  r = await req('POST', `/walkthroughs/${walk.id}/issues`, { title: 'Just a name' });
+  ok(r.status === 201 && r.body.description === null, 'a description is optional');
+
   // ---- grouping still means what it meant -----------------------------
   const groupWalk = (await req('POST', '/walkthroughs', { propertyId: prop.id })).body;
   r = await req('POST', `/walkthroughs/${groupWalk.id}/group`, { photoIds: [] });
@@ -129,7 +164,7 @@ const API = process.env.MM_API || 'http://127.0.0.1:4000';
   ok(r.status === 400, 'and takes no more issues once it is');
 
   r = await req('GET', `/walkthroughs/${walk.id}`);
-  ok(r.body.issues.length === 4, `the walk holds everything logged on it (${r.body.issues.length})`);
+  ok(r.body.issues.length === 9, `the walk holds everything logged on it (${r.body.issues.length})`);
 
   console.log(fail === 0 ? '\nAll api-walkmode checks passed.' : `\n${fail} FAILED`);
   process.exit(fail === 0 ? 0 : 1);

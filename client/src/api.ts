@@ -116,7 +116,12 @@ export const api = {
    */
   logWalkthroughIssue: (
     id: string,
-    data: { title: string; photoIds?: string[]; spaceId?: string | null; roomName?: string | null }
+    data: {
+      title: string; description?: string | null; photoIds?: string[];
+      /** What was typed into the one location field; resolved against the tree server-side. */
+      place?: string;
+      spaceId?: string | null; roomName?: string | null;
+    }
   ) => request<Issue>(`/walkthroughs/${id}/issues`, { method: "POST", body: JSON.stringify(data) }),
   updateWalkthrough: (
     id: string,

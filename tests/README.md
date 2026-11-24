@@ -10,7 +10,7 @@ running:
 | `unit-tree.ts` | Summary rollup, weighted progress, start-to-start and finish-to-finish | Nothing |
 | `unit-calendar.ts` | Working days, two-way exceptions, float counted in them | Nothing |
 | `unit-utilities.ts` | The 05:00 day, tank conversions, WTD/MTD/YTD, cost per unit | Nothing |
-| `unit-spaces.ts` | Range expansion, paths, matching text, the sell round | Nothing |
+| `unit-spaces.ts` | Range expansion, paths, matching text, the sell round, one-field locations | Nothing |
 | `unit-assets.ts` | Both graph walks, loops and bounds, isolation order, service state | Nothing |
 | `migration-planning.js` | A live database survives the migration | A database at the previous schema |
 | `migration-assets.js` | A tree and matched issues survive slice 5 | A database at the previous schema |
@@ -26,7 +26,7 @@ running:
 | `api-spaces.js` | The tree, 40 rooms from a range, reconciling free text | `server` on :4000 |
 | `api-assets.js` | The register, relations, the blast radius, services, the due list | `server` on :4000 |
 | `api-assetmap.js` | Markers and anchoring, the unplaced list, who may photograph equipment | `server` on :4000 |
-| `api-walkmode.js` | Both ways to work a walk, the location that moves, grouping unchanged | `server` on :4000 |
+| `api-walkmode.js` | Both ways to work a walk, three fields a finding, grouping unchanged | `server` on :4000 |
 | `ui-governance.js` | The Gantt draws, blockers clear, roles stick | Both dev servers |
 | `ui-tree.js` | Phase dates roll up, progress shows, the refusal holds | Both dev servers |
 | `ui-calendar.js` | The editor works and the chart shades days nobody works | Both dev servers |
@@ -35,10 +35,10 @@ running:
 | `ui-spaces.js` | A tree built from a range, then the text matched to it | Both dev servers |
 | `ui-assets.js` | A breaker's blast radius on screen, and a room traced back | Both dev servers |
 | `ui-assetmap.js` | Equipment on the map, the side tabs, following a chain, placing a pin | Both dev servers |
-| `ui-walkmode.js` | The choice, ten boxes at a time, moving rooms, picking a walk back up | Both dev servers |
+| `ui-walkmode.js` | The choice, three fields a box, moving rooms, picking a walk back up | Both dev servers |
 | `smoke-pages.js` | Nothing else broke | Both dev servers |
 
-1020 checks in total, plus the migration drills below (55 more).
+1053 checks in total, plus the migration drills below (55 more).
 
 ```sh
 (cd server && npm run dev)    # :4000

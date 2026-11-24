@@ -10,37 +10,29 @@ export const BATCH = 10;
 interface Box {
   key: number;
   title: string;
+  /** What it is, where it is, and what is wrong with it. */
+  place: string;
+  description: string;
   /** Photographs already uploaded against the walk, waiting to be attached. */
   photoIds: string[];
   thumbs: { id: string; thumbFilename: string | null; filename: string }[];
   /** Set once logged: the issue it became. */
-  loggedAs: { id: string; title: string; photos: number } | null;
+  loggedAs: { id: string; title: string; photos: number; where: string | null } | null;
   busy: boolean;
   error: string | null;
 }
 
 let nextKey = 1;
-const blanks = (n: number): Box[] =>
+/**
+ * New boxes start at wherever the walk is, so logging five things in one room
+ * does not mean typing the room five times. Changing a box changes only that box.
+ */
+const blanks = (n: number, place: string): Box[] =>
   Array.from({ length: n }, () => ({
-    key: nextKey++, title: "", photoIds: [], thumbs: [], loggedAs: null, busy: false, error: null,
+    key: nextKey++, title: "", place, description: "",
+    photoIds: [], thumbs: [], loggedAs: null, busy: false, error: null,
   }));
 
-/**
- * A walk worked one issue at a time.
- *
- * The other screen is built for covering ground: photograph everything, sort it
- * out in a chair. This one is for the opposite job — standing in a room working
- * through what is wrong with it, where the findings are already obvious and
- * typing a name is quicker than photographing three things and remembering later
- * which shot was which.
- *
- * So the box asks for a name and treats photographs as optional. A light out in a
- * corridor is worth logging whether or not anybody photographed it, and demanding
- * a photo would only teach people to take a pointless one to get past the form.
- *
- * Ten boxes at a time, because a screen of forty empty fields reads as a chore
- * and a screen of one means pressing Add after every finding.
- */
 export default function DirectWalk({
   walk, spaces, onChanged,
 }: {
@@ -48,11 +40,16 @@ export default function DirectWalk({
   spaces: (Space & { path: string[] })[];
   onChanged: () => void;
 }) {
-  const [boxes, setBoxes] = useState<Box[]>(() => blanks(BATCH));
+  const [boxes, setBoxes] = useState<Box[]>(() =>
+    blanks(BATCH, walk.spaceId
+      ? (spaces.find((sp) => sp.id === walk.spaceId)?.path.join(" · ") ?? walk.roomName ?? "")
+      : walk.roomName ?? ""));
   const [spaceId, setSpaceId] = useState(walk.spaceId ?? "");
   const [roomName, setRoomName] = useState(walk.roomName ?? "");
   const [savingPlace, setSavingPlace] = useState(false);
   const [placeNote, setPlaceNote] = useState<string | null>(null);
+
+  const placeText = spaces.find((sp) => sp.id === spaceId)?.path.join(" · ") || roomName.trim();
 
   // One hidden input per box would be forty inputs; one pair, aimed, is enough.
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -81,7 +78,16 @@ export default function DirectWalk({
       setSpaceId(updated.spaceId ?? "");
       setRoomName(updated.roomName ?? "");
       const where = spaces.find((sp) => sp.id === updated.spaceId)?.path.join(" · ") || updated.roomName || "";
-      setPlaceNote(where ? `Logging against ${where}.` : "Location cleared.");
+
+      /**
+       * Moving rooms carries the blanks with it, but only the ones nobody has
+       * touched. A box somebody has already typed a different room into is their
+       * answer, not a stale default, and overwriting it would file a finding in
+       * the wrong place without anybody seeing it happen.
+       */
+      const was = placeText;
+      setBoxes((all) => all.map((b) => (!b.loggedAs && b.place === was ? { ...b, place: where } : b)));
+      setPlaceNote(where ? `New boxes will be filed under ${where}.` : "Location cleared.");
       onChanged();
     } catch (e) {
       setPlaceNote((e as Error).message);
@@ -147,11 +153,18 @@ export default function DirectWalk({
     try {
       const issue = await api.logWalkthroughIssue(walk.id, {
         title: box.title.trim(),
+        description: box.description.trim() || null,
         photoIds: box.photoIds,
+        // One field, resolved server-side: an exact match earns the space, and
+        // anything else is kept as written rather than guessed at.
+        place: box.place,
       });
       patch(box.key, {
         busy: false,
-        loggedAs: { id: issue.id, title: issue.title, photos: box.photoIds.length },
+        loggedAs: {
+          id: issue.id, title: issue.title, photos: box.photoIds.length,
+          where: issue.roomName ?? box.place.trim() ?? null,
+        },
       });
       onChanged();
     } catch (e) {
@@ -177,18 +190,20 @@ export default function DirectWalk({
 
   const logged = boxes.filter((b) => b.loggedAs).length;
   const open = boxes.filter((b) => !b.loggedAs);
-  const place = spaces.find((s) => s.id === spaceId)?.path.join(" · ") || roomName.trim();
 
   return (
     <div className="direct-walk">
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => addPhotos(e.target.files)} />
       <input ref={libraryRef} type="file" accept="image/*,.heic,.heif" multiple hidden onChange={(e) => addPhotos(e.target.files)} />
+      <datalist id="direct-places">
+        {spaces.map((sp) => <option key={sp.id} value={sp.path.join(" · ")} />)}
+      </datalist>
 
       {/* ---- where you are ------------------------------------------- */}
       <section className="card direct-place">
         <div className="direct-place-head">
           <h2>Where you are</h2>
-          {place && <span className="muted small">{place}</span>}
+          {placeText && <span className="muted small">{placeText}</span>}
         </div>
         <div className="form direct-place-form">
           <label>
@@ -214,7 +229,7 @@ export default function DirectWalk({
           </label>
         </div>
         <p className="muted small">
-          {placeNote ?? "Everything logged below is filed here. Change it when you move on and the next ones follow."}
+          {placeNote ?? "This fills in the Where on each new box. Change any box on its own if one thing is somewhere else."}
         </p>
       </section>
 
@@ -223,7 +238,7 @@ export default function DirectWalk({
         <div className="direct-boxes-head">
           <h2>What is wrong here</h2>
           <span className="muted small">
-            {logged > 0 ? `${logged} logged` : "A name is enough. Photos help but are not required."}
+            {logged > 0 ? `${logged} logged` : "A name is enough. The rest helps whoever fixes it."}
           </span>
         </div>
 
@@ -235,22 +250,53 @@ export default function DirectWalk({
                   <span className="direct-tick" aria-hidden="true">✓</span>
                   <span className="direct-done-title">{box.loggedAs.title}</span>
                   <span className="muted small">
-                    logged{box.loggedAs.photos > 0 ? ` · ${box.loggedAs.photos} photo${box.loggedAs.photos === 1 ? "" : "s"}` : ""}
+                    logged{box.loggedAs.where ? ` · ${box.loggedAs.where}` : ""}
+                    {box.loggedAs.photos > 0 ? ` · ${box.loggedAs.photos} photo${box.loggedAs.photos === 1 ? "" : "s"}` : ""}
                   </span>
                 </div>
               ) : (
                 <>
                   <span className="direct-num" aria-hidden="true">{i + 1}</span>
                   <div className="direct-fields">
-                    <input
-                      className="direct-title"
-                      value={box.title}
-                      onChange={(e) => patch(box.key, { title: e.target.value })}
-                      onKeyDown={(e) => { if (e.key === "Enter") void log(box); }}
-                      placeholder="What is wrong?"
-                      maxLength={200}
-                      disabled={box.busy}
-                    />
+                    <div className="direct-row">
+                      <label className="direct-field direct-field-name">
+                        <span className="direct-label">Issue</span>
+                        <input
+                          className="direct-title"
+                          value={box.title}
+                          onChange={(e) => patch(box.key, { title: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === "Enter") void log(box); }}
+                          placeholder="What is wrong?"
+                          maxLength={200}
+                          disabled={box.busy}
+                        />
+                      </label>
+                      <label className="direct-field direct-field-place">
+                        <span className="direct-label">Where</span>
+                        {/* One field, not a dropdown plus a text box: the tree is
+                            offered, typing anything is allowed, and only an exact
+                            match earns the space. Nothing is guessed. */}
+                        <input
+                          list="direct-places"
+                          value={box.place}
+                          onChange={(e) => patch(box.key, { place: e.target.value })}
+                          placeholder={placeText || "Room or area"}
+                          maxLength={120}
+                          disabled={box.busy}
+                        />
+                      </label>
+                    </div>
+                    <label className="direct-field">
+                      <span className="direct-label">Description <span className="muted">(optional)</span></span>
+                      <textarea
+                        value={box.description}
+                        onChange={(e) => patch(box.key, { description: e.target.value })}
+                        placeholder="What you can see, and anything the person fixing it needs to know."
+                        rows={2}
+                        maxLength={4000}
+                        disabled={box.busy}
+                      />
+                    </label>
 
                     {box.thumbs.length > 0 && (
                       <div className="direct-thumbs">
@@ -295,7 +341,7 @@ export default function DirectWalk({
         </ul>
 
         <div className="direct-more">
-          <button type="button" className="btn btn-secondary" onClick={() => setBoxes((all) => [...all, ...blanks(BATCH)])}>
+          <button type="button" className="btn btn-secondary" onClick={() => setBoxes((all) => [...all, ...blanks(BATCH, placeText)])}>
             Add {BATCH} more
           </button>
           <span className="muted small">

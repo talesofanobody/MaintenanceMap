@@ -239,3 +239,32 @@ export function sellRollup(spaces: SpaceNode[]): SellRollup {
     total: rooms.length,
   };
 }
+
+/**
+ * What a typed location means.
+ *
+ * The walk-through's one-issue-at-a-time screen gives each finding a single
+ * location field rather than a dropdown and a text box: two controls per box is a
+ * lot of screen for something usually left alone, and the honest answer is often
+ * not in the tree at all ("behind the pool pump house").
+ *
+ * So typing anything is allowed, and matching the tree exactly is what earns a
+ * `spaceId`. A near miss — "Room 101" against a space called "101" — deliberately
+ * stays free text. `matchSpaces` exists to find those, but it is wired to a pass
+ * where a person confirms each one, because quietly filing a finding against the
+ * wrong room is worse than filing it against none.
+ */
+export function resolvePlace(
+  typed: string,
+  spaces: SpaceNode[]
+): { spaceId: string | null; roomName: string | null } {
+  const text = typed.trim();
+  if (!text) return { spaceId: null, roomName: null };
+
+  const want = text.toLowerCase();
+  const withPath = withPaths(spaces);
+  const hit = withPath.find((s) => s.path.join(" · ").toLowerCase() === want)
+    ?? withPath.find((s) => s.name.toLowerCase() === want);
+
+  return hit ? { spaceId: hit.id, roomName: null } : { spaceId: null, roomName: text };
+}

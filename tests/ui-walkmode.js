@@ -82,16 +82,30 @@ const ok = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + m); if (!c)
   ok((await page.locator('.direct-place').innerText()).includes('Coubaril · 101'),
     'and it says where you are');
 
-  // A name alone is enough.
+  // ---- three fields to a box -------------------------------------------
   const first = page.locator('.direct-box').first();
+  ok((await first.locator('.direct-label').count()) === 3, `each box asks three things (${await first.locator('.direct-label').count()})`);
+  const labels = (await first.locator('.direct-label').allTextContents()).join('|').toLowerCase();
+  ok(labels.includes('issue'), 'what it is');
+  ok(labels.includes('where'), 'where it is');
+  ok(labels.includes('description'), 'and what is wrong with it');
+
+  // The location is pre-filled from where the walk is, so logging five things in
+  // one room does not mean typing the room five times.
+  ok((await first.locator('.direct-field-place input').inputValue()) === 'Coubaril · 101',
+    'the location starts at wherever the walk is');
+
+  // A name alone is enough.
   ok(await first.locator('button:has-text("Log it")').isDisabled(), 'an empty box logs nothing');
   await first.locator('.direct-title').fill('Corridor light out');
   await page.waitForTimeout(200);
-  ok(!(await first.locator('button:has-text("Log it")').isDisabled()), 'a name is enough to log it');
+  ok(!(await first.locator('button:has-text("Log it")').isDisabled()), 'a name alone is enough to log it');
+  await first.locator('.direct-field textarea').fill('Third fitting from the lift. Tube flickers then dies.');
   await first.locator('button:has-text("Log it")').click();
   await page.waitForTimeout(1500);
   ok((await page.locator('.direct-box-done').count()) === 1, 'the box shows it is logged');
   ok((await page.locator('.direct-box-done').innerText()).includes('Corridor light out'), 'naming what it became');
+  ok((await page.locator('.direct-box-done').innerText()).includes('101'), 'and where it went');
 
   // Enter logs it too, because a thumb on a phone should not hunt for a button.
   const second = page.locator('.direct-box').nth(1);
@@ -100,11 +114,21 @@ const ok = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + m); if (!c)
   await page.waitForTimeout(1500);
   ok((await page.locator('.direct-box-done').count()) === 2, 'pressing Enter logs one as well');
 
+  // One box may be somewhere else without moving the walk.
+  const odd = page.locator('.direct-box').filter({ hasNot: page.locator('.direct-done') }).first();
+  await odd.locator('.direct-title').fill('Hose left out');
+  await odd.locator('.direct-field-place input').fill('Behind the pool pump house');
+  await odd.locator('button:has-text("Log it")').click();
+  await page.waitForTimeout(1500);
+  ok((await page.locator('.direct-box-done').count()) === 3, 'a box filed elsewhere logs too');
+  ok((await page.locator('.direct-place input').inputValue()) !== 'Behind the pool pump house',
+    'without dragging the walk along with it');
+
   // ---- ten more -------------------------------------------------------
   await page.locator('.direct-more button:has-text("Add 10 more")').click();
   await page.waitForTimeout(400);
   ok((await page.locator('.direct-box').count()) === 20, `ten more boxes appear (${await page.locator('.direct-box').count()})`);
-  ok((await page.locator('.direct-box-done').count()) === 2, 'and the logged ones stay logged');
+  ok((await page.locator('.direct-box-done').count()) === 3, 'and the logged ones stay logged');
 
   // ---- moving to the next room ----------------------------------------
   await page.selectOption('.direct-place select', { label: 'Coubaril · 102' });
@@ -117,9 +141,12 @@ const ok = (c, m) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + m); if (!c)
   const walks = (await req('GET', `/walkthroughs?propertyId=${prop.id}`)).body;
   const walk = (await req('GET', `/walkthroughs/${walks[0].id}`)).body;
   ok(walk.mode === 'direct', 'the walk records how it is being worked');
-  ok(walk.issues.length === 3, `three issues logged (${walk.issues.length})`);
+  ok(walk.issues.length === 4, `four issues logged (${walk.issues.length})`);
   const byTitle = Object.fromEntries(walk.issues.map(i => [i.title, i]));
-  ok(byTitle['Corridor light out'].roomName === '101', 'the first two are filed against room 101');
+  ok(byTitle['Corridor light out'].roomName === '101', 'the first is filed against room 101');
+  ok(byTitle['Corridor light out'].description.includes('Third fitting'), 'with the description written at the time');
+  ok(byTitle['Hose left out'].roomName === 'Behind the pool pump house',
+    'somewhere not in the tree is kept as written');
   ok(byTitle['Blind broken'].roomName === '102', 'and the one after the move against 102');
 
   // ---- picking it back up lands in the same screen ---------------------

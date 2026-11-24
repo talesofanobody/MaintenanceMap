@@ -1,5 +1,5 @@
 import {
-  expandRange, matchSpaces, sellRollup, unambiguousMatch, withPaths, type SpaceNode,
+  expandRange, matchSpaces, resolvePlace, sellRollup, unambiguousMatch, withPaths, type SpaceNode,
 } from "../server/src/lib/spaces";
 
 let fail = 0;
@@ -102,6 +102,54 @@ ok(roll.green === 2 && roll.amber === 1 && roll.red === 1, `counted by status ($
 ok(roll.unset === 1, `and one nobody has looked at (${roll.unset})`);
 ok(roll.green + roll.amber + roll.red + roll.unset === roll.total, "the parts add up to the whole");
 ok(sellRollup([]).total === 0, "no rooms is zero rather than a crash");
+
+// ---- one location field, resolved strictly --------------------------------
+// The walk-through's one-issue-at-a-time box takes a single location field: the
+// tree is offered, typing anything is allowed, and only an exact match earns a
+// spaceId. A near miss stays free text on purpose — matchSpaces exists to find
+// those, but behind a pass where a person confirms each one, because quietly
+// filing a finding against the wrong room is worse than filing it against none.
+const estate: SpaceNode[] = [
+  node({ id: "coub", name: "Coubaril", kind: "block" }),
+  node({ id: "fl1", name: "Floor 1", kind: "floor", parentId: "coub" }),
+  node({ id: "r101", name: "101", code: "101", parentId: "fl1", sellable: true }),
+  node({ id: "r102", name: "102", code: "102", parentId: "fl1", sellable: true }),
+  node({ id: "boh", name: "Back of house", kind: "block" }),
+  node({ id: "pool", name: "Pool plant room", parentId: "boh" }),
+];
+
+let place = resolvePlace("Coubaril · Floor 1 · 101", estate);
+ok(place.spaceId === "r101", "the full path matches a space");
+ok(place.roomName === null, "and leaves no free text to reconcile later");
+
+place = resolvePlace("101", estate);
+ok(place.spaceId === "r101", "so does the short name people actually say");
+
+place = resolvePlace("  coubaril · floor 1 · 102  ", estate);
+ok(place.spaceId === "r102", "case and surrounding space do not matter");
+
+place = resolvePlace("Pool plant room", estate);
+ok(place.spaceId === "pool", "a named area matches as readily as a numbered room");
+
+place = resolvePlace("Behind the pool pump house", estate);
+ok(place.spaceId === null, "something not in the tree matches nothing");
+ok(place.roomName === "Behind the pool pump house", "and is kept verbatim");
+
+place = resolvePlace("Room 101", estate);
+ok(place.spaceId === null, "a near miss is not guessed at");
+ok(place.roomName === "Room 101", "it stays as written, for the reconcile pass");
+
+place = resolvePlace("10", estate);
+ok(place.spaceId === null, "nor is a prefix of a real room");
+
+place = resolvePlace("", estate);
+ok(place.spaceId === null && place.roomName === null, "an empty field means no location at all");
+place = resolvePlace("   ", estate);
+ok(place.spaceId === null && place.roomName === null, "and so does whitespace");
+
+place = resolvePlace("101", []);
+ok(place.spaceId === null && place.roomName === "101", "with no tree loaded, everything is free text");
+
 
 console.log(fail === 0 ? "\nALL CHECKS PASSED" : `\n${fail} FAILED`);
 process.exit(fail === 0 ? 0 : 1);
