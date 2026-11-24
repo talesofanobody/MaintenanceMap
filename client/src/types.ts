@@ -1165,12 +1165,29 @@ export interface WalkthroughIssue {
   photos: { id: string; filename: string; thumbFilename: string | null }[];
 }
 
+/**
+ * How a walk is being worked.
+ *
+ * "group"  — photograph everything, sort it into issues afterwards.
+ * "direct" — one named issue at a time, photographs optional.
+ */
+export type WalkMode = "group" | "direct";
+
+export const WALK_MODE_LABELS: Record<WalkMode, string> = {
+  group: "Photograph first, sort it afterwards",
+  direct: "One issue at a time",
+};
+
 export interface WalkthroughSummary {
   id: string;
   propertyId: string;
   property: { id: string; name: string };
   technician: { id: string; name: string; color: string } | null;
   walkedBy: string;
+  mode: WalkMode;
+  /** Where the walk is now — the default for issues logged next, not a fact about the walk. */
+  spaceId: string | null;
+  roomName: string | null;
   areas: string | null;
   notes: string | null;
   startedAt: string;

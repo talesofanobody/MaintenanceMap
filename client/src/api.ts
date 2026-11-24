@@ -1,4 +1,4 @@
-import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, ReadingSeries, MeterPoint, Reading, Slot, UtilityKind, EntryMode, UtilitySummary, UtilityInvoice, UnitCost, Space, SpaceKind, SellStatus, SellRollup, UnmatchedText, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary, Asset, AssetKind, AssetDetail, AssetRelationOut, AssetServiceEntry, RelationKind, ServiceKind, SpaceTrace, AssetMap, AssetPhoto} from "./types";
+import type { RestoreResult, Inspection, InspectionCheck, InspectionReport, InspectionStatus, InspectionSummary, InspectionTemplate, Outcome, Project, ProjectStatus, Quote, QuoteState, QuoteStatus, LinkKind, Blocker, BlockerKind, BlockerState, StakeholderRole, WorkCalendar, ReadingSeries, MeterPoint, Reading, Slot, UtilityKind, EntryMode, UtilitySummary, UtilityInvoice, UnitCost, Space, SpaceKind, SellStatus, SellRollup, UnmatchedText, Severity, DaySchedule, ScheduledJob, TechnicianLocation, TimeOff, TimeOffKind, GuestReport, ActivityEntry, AppNotification, AppSettings, AppUser, BackupFile, CalendarFeed, Category, Message, Rota, Shift, Tag, ChecklistItem, Contractor, Cost, CostSummary, DayPlan, Portfolio, Schedule, ScheduleInput, TimeEntry, Trends, AuthUser, DashboardData, GeoJSONPolygon, Issue, Photo, Priority, Property, Role, Status, Technician, Walkthrough, WalkthroughSummary, Asset, AssetKind, AssetDetail, AssetRelationOut, AssetServiceEntry, RelationKind, ServiceKind, SpaceTrace, AssetMap, AssetPhoto, WalkMode} from "./types";
 
 export interface TechnicianInput {
   name: string;
@@ -90,7 +90,10 @@ export const api = {
     return request<WalkthroughSummary[]>(`/walkthroughs${qs ? `?${qs}` : ""}`);
   },
   getWalkthrough: (id: string) => request<Walkthrough>(`/walkthroughs/${id}`),
-  startWalkthrough: (data: { propertyId: string; technicianId?: string; lat?: number; lng?: number }) =>
+  startWalkthrough: (data: {
+    propertyId: string; technicianId?: string; lat?: number; lng?: number;
+    mode?: WalkMode; spaceId?: string | null; roomName?: string | null;
+  }) =>
     request<Walkthrough>("/walkthroughs", { method: "POST", body: JSON.stringify(data) }),
   addWalkthroughPhotos: (
     id: string,
@@ -107,7 +110,18 @@ export const api = {
   },
   groupWalkthroughPhotos: (id: string, photoIds: string[], extra?: { title?: string; roomName?: string }) =>
     request<Issue>(`/walkthroughs/${id}/group`, { method: "POST", body: JSON.stringify({ photoIds, ...extra }) }),
-  updateWalkthrough: (id: string, data: { areas?: string; notes?: string; state?: "open" | "completed" }) =>
+  /**
+   * One named issue, logged where it was found. Photographs are optional here,
+   * unlike grouping: the name is the finding, a photo is supporting detail.
+   */
+  logWalkthroughIssue: (
+    id: string,
+    data: { title: string; photoIds?: string[]; spaceId?: string | null; roomName?: string | null }
+  ) => request<Issue>(`/walkthroughs/${id}/issues`, { method: "POST", body: JSON.stringify(data) }),
+  updateWalkthrough: (
+    id: string,
+    data: { areas?: string; notes?: string; state?: "open" | "completed"; spaceId?: string | null; roomName?: string | null }
+  ) =>
     request<Walkthrough>(`/walkthroughs/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteWalkthrough: (id: string) => request<void>(`/walkthroughs/${id}`, { method: "DELETE" }),
 

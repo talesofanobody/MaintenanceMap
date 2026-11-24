@@ -14,6 +14,7 @@ running:
 | `unit-assets.ts` | Both graph walks, loops and bounds, isolation order, service state | Nothing |
 | `migration-planning.js` | A live database survives the migration | A database at the previous schema |
 | `migration-assets.js` | A tree and matched issues survive slice 5 | A database at the previous schema |
+| `migration-walkmode.js` | Existing walks still read as photograph-first | A database at the previous schema |
 | `api-planning.js` | The planning endpoints behave | `server` on :4000 |
 | `api-governance.js` | Project dependencies, blockers, stakeholders | `server` on :4000 |
 | `ui-planning.js` | A person can reach and use the plan | Both dev servers |
@@ -25,6 +26,7 @@ running:
 | `api-spaces.js` | The tree, 40 rooms from a range, reconciling free text | `server` on :4000 |
 | `api-assets.js` | The register, relations, the blast radius, services, the due list | `server` on :4000 |
 | `api-assetmap.js` | Markers and anchoring, the unplaced list, who may photograph equipment | `server` on :4000 |
+| `api-walkmode.js` | Both ways to work a walk, the location that moves, grouping unchanged | `server` on :4000 |
 | `ui-governance.js` | The Gantt draws, blockers clear, roles stick | Both dev servers |
 | `ui-tree.js` | Phase dates roll up, progress shows, the refusal holds | Both dev servers |
 | `ui-calendar.js` | The editor works and the chart shades days nobody works | Both dev servers |
@@ -33,9 +35,10 @@ running:
 | `ui-spaces.js` | A tree built from a range, then the text matched to it | Both dev servers |
 | `ui-assets.js` | A breaker's blast radius on screen, and a room traced back | Both dev servers |
 | `ui-assetmap.js` | Equipment on the map, the side tabs, following a chain, placing a pin | Both dev servers |
+| `ui-walkmode.js` | The choice, ten boxes at a time, moving rooms, picking a walk back up | Both dev servers |
 | `smoke-pages.js` | Nothing else broke | Both dev servers |
 
-956 checks in total, plus the two migration drills below (38 more).
+1020 checks in total, plus the migration drills below (55 more).
 
 ```sh
 (cd server && npm run dev)    # :4000
@@ -125,6 +128,27 @@ It proves the location tree and the issues already matched to it come through
 untouched, that an issue predating the migration points at no equipment, and that
 deleting a piece of equipment takes its own relations and photographs with it while
 leaving the work history and the spaces it fed alone.
+
+### And again for walk-through modes
+
+Every walk recorded before that migration was worked one way: photograph
+everything, sort it afterwards. The column has to say so — a walk that came back
+reading `direct` would open the wrong screen and lose the pile of photos somebody
+is halfway through sorting.
+
+```sh
+cd server
+SCRATCH=$(mktemp -d)
+HOLD=$SCRATCH/held && mkdir -p "$HOLD"
+
+mv prisma/migrations/20261124090000_walkthrough_mode "$HOLD/"
+DATABASE_URL="file:$SCRATCH/old.db" npx prisma migrate deploy
+DATABASE_URL="file:$SCRATCH/old.db" node ../tests/migration-seed-prewalkmode.js
+
+mv "$HOLD/20261124090000_walkthrough_mode" prisma/migrations/
+DATABASE_URL="file:$SCRATCH/old.db" npx prisma migrate deploy
+DATABASE_URL="file:$SCRATCH/old.db" node ../tests/migration-walkmode.js
+```
 
 ## Fixtures use dates relative to today
 

@@ -5,7 +5,8 @@ import { useCurrentUser } from "../auth/AuthContext";
 import { formatDateTime } from "../lib/dates";
 import { getFix, locationAllowedHere, locationAlreadyGranted } from "../lib/deviceLocation";
 import { preparePhoto } from "./preparePhoto";
-import type { Property, Technician, Walkthrough as Walk } from "../types";
+import DirectWalk from "./DirectWalk";
+import type { Property, Space, Technician, WalkMode, Walkthrough as Walk } from "../types";
 
 /**
  * Walk the building, photograph what you find, sort it out afterwards.
@@ -65,6 +66,10 @@ export default function Walkthrough() {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<WalkMode | null>(null);
+  const [spaces, setSpaces] = useState<(Space & { path: string[] })[]>([]);
+  const [startSpaceId, setStartSpaceId] = useState("");
+  const [startRoom, setStartRoom] = useState("");
   const [areas, setAreas] = useState("");
   const [notes, setNotes] = useState("");
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -98,6 +103,21 @@ export default function Walkthrough() {
 
   useEffect(load, [load]);
 
+  /**
+   * The location tree, for the walks that ask where you are. Loaded per property
+   * rather than wholesale: a site is a few thousand spaces and the other route
+   * never looks at them.
+   */
+  const placeOf = walk?.propertyId ?? propertyId;
+  useEffect(() => {
+    if (!placeOf) return;
+    let live = true;
+    api.listSpaces(placeOf)
+      .then((r) => { if (live) setSpaces(r.spaces as (Space & { path: string[] })[]); })
+      .catch(() => { if (live) setSpaces([]); });
+    return () => { live = false; };
+  }, [placeOf]);
+
   async function start() {
     setError(null);
     setBusy("starting");
@@ -116,6 +136,8 @@ export default function Walkthrough() {
         propertyId,
         ...(technicianId ? { technicianId } : {}),
         ...(fix ?? {}),
+        mode: mode ?? "group",
+        ...(mode === "direct" ? { spaceId: startSpaceId || null, roomName: startRoom.trim() || null } : {}),
       });
       navigate(`/walkthrough/${created.id}`);
     } catch (e) {
@@ -230,17 +252,84 @@ export default function Walkthrough() {
 
         {error && <div className="banner banner-error">{error}</div>}
 
+        {/* ---- which way are you working? ----------------------------- */}
+        <section className="card walk-pick">
+          <h2>How do you want to work?</h2>
+          <p className="muted small">
+            Both end in the same place — issues against this property, with the photos
+            attached. They differ in when you do the typing.
+          </p>
+          <div className="walk-modes">
+            <button
+              type="button"
+              className={mode === "group" ? "walk-mode walk-mode-on" : "walk-mode"}
+              aria-pressed={mode === "group"}
+              onClick={() => setMode("group")}
+            >
+              <span className="walk-mode-title">Photograph first, sort it afterwards</span>
+              <span className="walk-mode-body">
+                Cover the ground and shoot everything. Nothing to type while you are on your
+                feet. Afterwards you pick the shots that are the same problem and group them
+                into issues.
+              </span>
+              <span className="walk-mode-when muted small">Best for covering a lot of ground.</span>
+            </button>
+
+            <button
+              type="button"
+              className={mode === "direct" ? "walk-mode walk-mode-on" : "walk-mode"}
+              aria-pressed={mode === "direct"}
+              onClick={() => setMode("direct")}
+            >
+              <span className="walk-mode-title">One issue at a time</span>
+              <span className="walk-mode-body">
+                Say where you are, then name each thing that is wrong and photograph it if it
+                helps. Each one is logged as you go, so there is nothing to sort out later.
+              </span>
+              <span className="walk-mode-when muted small">Best for working through one area properly.</span>
+            </button>
+          </div>
+        </section>
+
         <section className="card walk-start">
           <h2>Start a walk-through</h2>
           <div className="form walk-start-form">
             <label>
               Property
-              <select value={propertyId} onChange={(e) => setPropertyId(e.target.value)}>
+              <select
+                value={propertyId}
+                onChange={(e) => { setPropertyId(e.target.value); setStartSpaceId(""); }}
+              >
                 {properties.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
             </label>
+
+            {/* Only asked when it is about to be used, so the other route stays a
+                property and a button. */}
+            {mode === "direct" && (
+              <>
+                <label>
+                  Location
+                  <select value={startSpaceId} onChange={(e) => setStartSpaceId(e.target.value)}>
+                    <option value="">Not from the list</option>
+                    {spaces.filter((sp) => sp.propertyId === propertyId).map((sp) => (
+                      <option key={sp.id} value={sp.id}>{sp.path.join(" · ")}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Or type it
+                  <input
+                    value={startRoom}
+                    onChange={(e) => setStartRoom(e.target.value)}
+                    placeholder="Pool plant room"
+                    maxLength={120}
+                  />
+                </label>
+              </>
+            )}
             {!user?.technicianId && team.length > 0 && (
               <label>
                 Walked by
@@ -253,16 +342,22 @@ export default function Walkthrough() {
               </label>
             )}
           </div>
-          <button type="button" className="btn btn-primary" onClick={start} disabled={!propertyId || busy !== null}>
-            {busy === "starting" ? "Starting…" : "Start walking"}
+          <button type="button" className="btn btn-primary" onClick={start} disabled={!propertyId || !mode || busy !== null}>
+            {busy === "starting" ? "Starting…" : mode === "direct" ? "Start logging" : "Start walking"}
           </button>
-          <p className="muted small">The date, the time and who walked it are recorded from this moment.</p>
+          <p className="muted small">
+            {mode
+              ? "The date, the time and who walked it are recorded from this moment."
+              : "Choose how you want to work first."}
+          </p>
         </section>
 
-        <section className="card">
-          <h2>How it works</h2>
-          <HowItWorks />
-        </section>
+        {mode !== "direct" && (
+          <section className="card">
+            <h2>How it works</h2>
+            <HowItWorks />
+          </section>
+        )}
 
         {open && open.length > 0 && (
           <section className="walk-open">
@@ -274,6 +369,7 @@ export default function Walkthrough() {
                     <Link to={`/walkthrough/${w.id}`} className="insp-card-title">{w.property.name}</Link>
                     <p className="muted small">
                       {w.walkedBy} · started {formatDateTime(w.startedAt)} · {elapsed(w.startedAt)} ago
+                      {w.mode === "direct" && " · one issue at a time"}
                     </p>
                   </div>
                   <div className="insp-card-counts">
@@ -321,83 +417,97 @@ export default function Walkthrough() {
       {error && <div className="banner banner-error">{error}</div>}
       {finished && <div className="banner">This walk-through is finished. It is kept as the record of what was covered.</div>}
 
-      {!finished && (
-        <section className="walk-capture">
-          <div className="walk-capture-actions">
-            <button type="button" className="btn btn-primary btn-large" onClick={() => cameraRef.current?.click()} disabled={busy !== null}>
-              Take a photo
-            </button>
-            <button type="button" className="btn btn-secondary btn-large" onClick={() => libraryRef.current?.click()} disabled={busy !== null}>
-              Add from library
-            </button>
-            {busy && <span className="muted small">{busy}</span>}
-          </div>
-          <input
-            ref={cameraRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            multiple
-            hidden
-            onChange={(e) => addPhotos(e.target.files)}
+      {/* A walk worked a room at a time has no pile to sort, so the capture
+          and grouping screens are not shown: the boxes below are the whole job. */}
+      {walk.mode === "direct" ? (
+        !finished && (
+          <DirectWalk
+            walk={walk}
+            spaces={spaces}
+            onChanged={load}
           />
-          <input
-            ref={libraryRef}
-            type="file"
-            accept="image/*,.heic,.heif"
-            multiple
-            hidden
-            onChange={(e) => addPhotos(e.target.files)}
-          />
-          <details className="walk-help">
-            <summary>How this works</summary>
-            <HowItWorks />
-          </details>
-        </section>
-      )}
-
-      <section className="walk-shots">
-        <div className="walk-shots-head">
-          <h2>Photos not yet grouped {walk.photos.length > 0 && <span className="muted">({walk.photos.length})</span>}</h2>
-          {picked.size > 0 && (
-            <button type="button" className="btn btn-ghost btn-small" onClick={() => setPicked(new Set())}>
-              Clear selection
-            </button>
-          )}
-        </div>
-
-        {walk.photos.length === 0 ? (
-          <p className="empty-state">
-            {finished ? "Everything was grouped into issues." : "No photos yet. Take one and it appears here."}
-          </p>
-        ) : (
-          <ul className="walk-grid">
-            {walk.photos.map((photo) => {
-              const on = picked.has(photo.id);
-              return (
-                <li key={photo.id} className={`walk-shot${on ? " is-picked" : ""}`}>
-                  <button
-                    type="button"
-                    className="walk-shot-hit"
-                    onClick={() => toggle(photo.id)}
-                    aria-pressed={on}
-                    aria-label={on ? "Deselect this photo" : "Select this photo"}
-                  >
-                    <img src={api.photoThumbUrl(photo.id)} alt="" loading="lazy" />
-                    <span className="walk-tick" aria-hidden="true">{on ? "✓" : ""}</span>
-                  </button>
-                  {photo.hasGps && <span className="walk-geo" title="This photo carries its own location">◎</span>}
-                  {!finished && (
-                    <button type="button" className="walk-shot-x" onClick={() => removePhoto(photo.id)} aria-label="Delete this photo">
-                      ×
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+        )
+      ) : (
+        <>
+        {!finished && (
+          <section className="walk-capture">
+            <div className="walk-capture-actions">
+              <button type="button" className="btn btn-primary btn-large" onClick={() => cameraRef.current?.click()} disabled={busy !== null}>
+                Take a photo
+              </button>
+              <button type="button" className="btn btn-secondary btn-large" onClick={() => libraryRef.current?.click()} disabled={busy !== null}>
+                Add from library
+              </button>
+              {busy && <span className="muted small">{busy}</span>}
+            </div>
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              hidden
+              onChange={(e) => addPhotos(e.target.files)}
+            />
+            <input
+              ref={libraryRef}
+              type="file"
+              accept="image/*,.heic,.heif"
+              multiple
+              hidden
+              onChange={(e) => addPhotos(e.target.files)}
+            />
+            <details className="walk-help">
+              <summary>How this works</summary>
+              <HowItWorks />
+            </details>
+          </section>
         )}
-      </section>
+
+        <section className="walk-shots">
+          <div className="walk-shots-head">
+            <h2>Photos not yet grouped {walk.photos.length > 0 && <span className="muted">({walk.photos.length})</span>}</h2>
+            {picked.size > 0 && (
+              <button type="button" className="btn btn-ghost btn-small" onClick={() => setPicked(new Set())}>
+                Clear selection
+              </button>
+            )}
+          </div>
+
+          {walk.photos.length === 0 ? (
+            <p className="empty-state">
+              {finished ? "Everything was grouped into issues." : "No photos yet. Take one and it appears here."}
+            </p>
+          ) : (
+            <ul className="walk-grid">
+              {walk.photos.map((photo) => {
+                const on = picked.has(photo.id);
+                return (
+                  <li key={photo.id} className={`walk-shot${on ? " is-picked" : ""}`}>
+                    <button
+                      type="button"
+                      className="walk-shot-hit"
+                      onClick={() => toggle(photo.id)}
+                      aria-pressed={on}
+                      aria-label={on ? "Deselect this photo" : "Select this photo"}
+                    >
+                      <img src={api.photoThumbUrl(photo.id)} alt="" loading="lazy" />
+                      <span className="walk-tick" aria-hidden="true">{on ? "✓" : ""}</span>
+                    </button>
+                    {photo.hasGps && <span className="walk-geo" title="This photo carries its own location">◎</span>}
+                    {!finished && (
+                      <button type="button" className="walk-shot-x" onClick={() => removePhoto(photo.id)} aria-label="Delete this photo">
+                        ×
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+        </>
+      )}
 
       {walk.issues.length > 0 && (
         <section className="walk-made">

@@ -699,6 +699,21 @@ model Walkthrough {
   /// The name recorded at the time, kept verbatim: a person can leave, and the
   /// record of who walked the building on a given night should not change.
   walkedBy     String
+  /// How the walk is being worked.
+  ///
+  /// "group"  — photograph everything, sort it into issues afterwards. Right when
+  ///            covering ground fast and the findings are not yet obvious.
+  /// "direct" — one named issue at a time, photographs optional. Right when
+  ///            standing in a room working through what is wrong with it.
+  ///
+  /// Stored rather than asked again, because a walk gets put down and picked up,
+  /// and landing somebody in the other screen halfway through loses their place.
+  mode         String      @default("group")
+  /// Where the walk is, when it is being worked a room at a time. The default for
+  /// issues logged next, not a property of the walk itself.
+  spaceId      String?
+  space        Space?      @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  roomName     String?
   /// Which areas were covered, written by the person who covered them.
   areas        String?
   notes        String?
@@ -1067,6 +1082,7 @@ model Space {
   inspections Inspection[]
   assets     Asset[]
   servedBy   AssetRelation[]
+  walkthroughs Walkthrough[]
 
   @@unique([propertyId, parentId, name])
   @@index([propertyId, kind])

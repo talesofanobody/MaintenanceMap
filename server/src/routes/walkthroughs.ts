@@ -39,6 +39,25 @@ const withDetail = {
   },
 } as const;
 
+/**
+ * The room as a person would write it.
+ *
+ * A location chosen from the tree gives an issue its `spaceId`, which is what can
+ * be counted and walked. It does not give it a `roomName`, and `roomName` is what
+ * every issue list in the app actually prints — so an issue filed purely from the
+ * tree would read as having no location at all.
+ *
+ * Slice 4 keeps the two side by side on purpose: the tree is what the app can
+ * query, the free text is what somebody said. Choosing from the tree is somebody
+ * saying it, so the text is filled in from the space. Typed text always wins.
+ */
+async function nameTheRoom(spaceId: string | null, typed: string | null): Promise<string | null> {
+  if (typed) return typed;
+  if (!spaceId) return null;
+  const space = await prisma.space.findUnique({ where: { id: spaceId }, select: { name: true } });
+  return space?.name ?? null;
+}
+
 walkthroughsRouter.get("/", async (req, res) => {
   const propertyId = typeof req.query.propertyId === "string" ? req.query.propertyId : undefined;
   const state = typeof req.query.state === "string" ? req.query.state : undefined;
@@ -72,6 +91,26 @@ walkthroughsRouter.post("/", requires("inspection.run"), async (req, res) => {
   if (!property) return res.status(404).json({ error: "property not found" });
 
   /**
+   * Which way the walk is being worked. Stored rather than asked again: a walk
+   * gets put down and picked up, and landing somebody in the other screen halfway
+   * through loses their place.
+   */
+  const mode = req.body?.mode === "direct" ? "direct" : "group";
+
+  // Where it is, for a walk being worked a room at a time. Both are optional and
+  // both may be set: the tree is what can be counted, the free text is what the
+  // person actually said, and slice 4 deliberately keeps the two side by side.
+  const spaceId = typeof req.body?.spaceId === "string" && req.body.spaceId ? req.body.spaceId : null;
+  if (spaceId) {
+    const space = await prisma.space.findFirst({ where: { id: spaceId, propertyId }, select: { id: true } });
+    if (!space) return res.status(400).json({ error: "That space is not in this property." });
+  }
+  const roomName = await nameTheRoom(
+    spaceId,
+    typeof req.body?.roomName === "string" && req.body.roomName.trim() ? req.body.roomName.trim().slice(0, 120) : null
+  );
+
+  /**
    * Who walked it. A technician login is always themselves; anyone else may be
    * typing up someone else's round, so they say whose it was. The name is stored
    * as written, not looked up later: people leave, and the record of who walked
@@ -93,6 +132,9 @@ walkthroughsRouter.post("/", requires("inspection.run"), async (req, res) => {
       propertyId,
       technicianId,
       walkedBy,
+      mode,
+      spaceId,
+      roomName,
       lat: typeof lat === "number" ? lat : null,
       lng: typeof lng === "number" ? lng : null,
     },
@@ -236,13 +278,136 @@ walkthroughsRouter.post("/:id/group", requires("issue.write"), async (req, res) 
   res.status(201).json(full);
 });
 
+/**
+ * Log one named issue directly, the way somebody works who is standing in a room
+ * rather than covering ground.
+ *
+ * Kept apart from /group rather than folded into it, because the two have
+ * opposite rules about evidence. Grouping turns photographs into a finding, so a
+ * group with no photographs is a mistake — the evidence would still be sitting in
+ * the walk. Here the name is the finding and a photograph is supporting detail: a
+ * light out in a corridor is worth logging whether or not anybody photographed it,
+ * and refusing it would teach people to take a pointless photo to get past the
+ * form.
+ */
+walkthroughsRouter.post("/:id/issues", requires("issue.write"), async (req, res) => {
+  const walk = await prisma.walkthrough.findUnique({
+    where: { id: req.params.id },
+    include: { property: { select: { id: true, name: true, centerLat: true, centerLng: true } } },
+  });
+  if (!walk) return res.status(404).json({ error: "not found" });
+  if (walk.completedAt) return res.status(400).json({ error: "That walk-through is finished. Reopen it to add to it." });
+
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  if (!title) return res.status(400).json({ error: "Give the issue a name." });
+  if (title.length > 200) return res.status(400).json({ error: "That name is too long." });
+
+  // Photographs already uploaded against this walk, if any were taken.
+  const raw: unknown = req.body?.photoIds;
+  const photoIds = Array.isArray(raw) ? [...new Set(raw.map(String))] : [];
+  let photos: { id: string; hasGps: boolean; gpsLat: number | null; gpsLng: number | null }[] = [];
+  if (photoIds.length > 0) {
+    photos = await prisma.photo.findMany({
+      where: { id: { in: photoIds }, walkthroughId: walk.id },
+      select: { id: true, hasGps: true, gpsLat: true, gpsLng: true },
+    });
+    if (photos.length !== photoIds.length) {
+      return res.status(400).json({ error: "Some of those photos are not on this walk-through any more. Reload and try again." });
+    }
+  }
+
+  /**
+   * Position, best first: a photograph that carries its own, then where the walk
+   * started, then the property's centre. Same order as grouping, so an issue does
+   * not land somewhere different depending on which screen made it.
+   */
+  const located = photos.find((p) => p.hasGps && p.gpsLat !== null && p.gpsLng !== null);
+  const lat = located?.gpsLat ?? walk.lat ?? walk.property.centerLat;
+  const lng = located?.gpsLng ?? walk.lng ?? walk.property.centerLng;
+  if (typeof lat !== "number" || typeof lng !== "number") {
+    return res.status(400).json({
+      error: "Nothing here has a position: the photos carry no location and the property has no centre set. Set the property's centre first.",
+    });
+  }
+
+  // The location asked for at the top of the screen, unless this issue overrides it.
+  const spaceId = req.body?.spaceId !== undefined
+    ? (typeof req.body.spaceId === "string" && req.body.spaceId ? req.body.spaceId : null)
+    : walk.spaceId;
+  if (spaceId) {
+    const space = await prisma.space.findFirst({ where: { id: spaceId, propertyId: walk.propertyId }, select: { id: true } });
+    if (!space) return res.status(400).json({ error: "That space is not in this property." });
+  }
+  const roomName = req.body?.roomName !== undefined || req.body?.spaceId !== undefined
+    ? await nameTheRoom(
+        spaceId,
+        typeof req.body?.roomName === "string" && req.body.roomName.trim() ? req.body.roomName.trim().slice(0, 120) : null
+      )
+    : walk.roomName;
+
+  const { responseHours } = await getSettings();
+  const { dueDate, dueAt } = computeDeadline("medium", responseHours, {});
+
+  const issue = await prisma.$transaction(async (tx) => {
+    const created = await tx.issue.create({
+      data: {
+        propertyId: walk.propertyId, walkthroughId: walk.id, title, roomName, spaceId,
+        lat, lng, priority: "medium", status: "pending", dueDate, dueAt,
+      },
+    });
+    if (photoIds.length > 0) {
+      await tx.photo.updateMany({
+        where: { id: { in: photoIds }, walkthroughId: walk.id },
+        data: { issueId: created.id, walkthroughId: null },
+      });
+    }
+    return created;
+  });
+
+  const full = await prisma.issue.findUnique({
+    where: { id: issue.id },
+    include: { photos: true, property: { select: { id: true, name: true } } },
+  });
+  await logActivity(req, {
+    action: "walkthrough.logged", entityType: "issue", entityId: issue.id,
+    summary: `Logged "${title}" on a walk-through${photos.length ? ` with ${photos.length} photo${photos.length === 1 ? "" : "s"}` : ""}`,
+  });
+  res.status(201).json(full);
+});
+
 walkthroughsRouter.put("/:id", requires("inspection.run"), async (req, res) => {
   const walk = await prisma.walkthrough.findUnique({ where: { id: req.params.id }, select: { id: true, walkedBy: true, completedAt: true, property: { select: { name: true } } } });
   if (!walk) return res.status(404).json({ error: "not found" });
 
-  const data: { areas?: string | null; notes?: string | null; completedAt?: Date | null } = {};
+  const data: {
+    areas?: string | null; notes?: string | null; completedAt?: Date | null;
+    spaceId?: string | null; roomName?: string | null;
+  } = {};
   if (req.body?.areas !== undefined) data.areas = typeof req.body.areas === "string" ? req.body.areas.trim() || null : null;
   if (req.body?.notes !== undefined) data.notes = typeof req.body.notes === "string" ? req.body.notes.trim() || null : null;
+
+  /**
+   * The location moves with the walker. Somebody working a room at a time
+   * finishes 214 and starts on 215, and what they log next belongs to 215 — so
+   * this is the default for issues logged from here on, not a fact about the walk.
+   */
+  if (req.body?.spaceId !== undefined) {
+    const spaceId = typeof req.body.spaceId === "string" && req.body.spaceId ? req.body.spaceId : null;
+    if (spaceId) {
+      const full = await prisma.walkthrough.findUnique({ where: { id: walk.id }, select: { propertyId: true } });
+      const space = await prisma.space.findFirst({ where: { id: spaceId, propertyId: full!.propertyId }, select: { id: true } });
+      if (!space) return res.status(400).json({ error: "That space is not in this property." });
+    }
+    data.spaceId = spaceId;
+  }
+  if (req.body?.roomName !== undefined || data.spaceId !== undefined) {
+    const typed = typeof req.body?.roomName === "string" && req.body.roomName.trim()
+      ? req.body.roomName.trim().slice(0, 120)
+      : null;
+    // When the space moves and no text was typed, the name follows the space
+    // rather than being left pointing at the room somebody has walked out of.
+    data.roomName = await nameTheRoom(data.spaceId !== undefined ? data.spaceId ?? null : null, typed);
+  }
 
   if (req.body?.state === "completed") {
     if (!data.areas && !walk.completedAt) {
